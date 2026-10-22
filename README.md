@@ -6,16 +6,27 @@ and a world map with monster spawns, chests, quest locations, ores and plants �
 
 All data is read from **your installed game files** (read-only). Nothing is injected into or written to the game.
 
+## Install on Windows
+
+1. Open the [latest release](https://github.com/calinadrian/rdal/releases/latest).
+2. Expand **Assets** and download **`Dragonwilds-AtlasLoot-Setup-<version>.exe`**.
+3. Double-click the downloaded installer. It installs for your Windows account; administrator access
+   is not required.
+4. Open **Dragonwilds AtlasLoot** from the Start menu or its desktop shortcut.
+5. Launch **RuneScape: Dragonwilds**. Use **Borderless / Windowed** mode if you want the overlay
+   visible over the game. Press **Ctrl+Shift+L** to show or hide AtlasLoot.
+
+The installer is for **64-bit Windows** and includes the app and bundled game data. You do not need
+Node.js or development tools to use it.
+
+**Updates:** the installed app checks on launch and every 6 hours, downloads new versions in the
+background, and offers **Update now** with release notes. Choose **Maybe later** to install when
+the app next quits. Click the version in the bottom-right corner to check for updates or reopen
+a ready update. You can also use **Settings → Check for updates**. Your saved preferences are kept.
+
 ## Use
 
-- Install: download `Dragonwilds-AtlasLoot-Setup-<version>.exe` from
-  [Releases](https://github.com/calinadrian/rdal/releases) and run it (no admin needed). It adds
-  **Dragonwilds AtlasLoot** to the Start menu and desktop. The app checks for a new release on launch
-  (and every 6 hours while it runs), downloads it in the background and offers **Update now** with
-  release notes. Choose **Maybe later** and it installs the next time the app quits. The version in
-  the bottom-right corner shows download progress and reopens the update dialog when ready.
-  You can also use **Settings → Check for updates**.
-  For development, `npm install` once, then `npm start` or `Start AtlasLoot.vbs` runs straight from the source.
+- For development, `npm install` once, then `npm start` or `Start AtlasLoot.vbs` runs straight from the source.
 - It runs as a **separate window** (put it on a second monitor) and notices when the game starts: it opens
   automatically and shows your live position. ⚙ Settings can switch it to an always-on-top **overlay**
   and make it **start with Windows**, waiting in the tray until the game launches.
