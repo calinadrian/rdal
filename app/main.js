@@ -22,7 +22,7 @@ const DEFAULTS = {
 const DUMPER = path.join(ROOT, 'tools', 'Dumper', 'bin', 'out', 'Dumper.exe');
 const GAME_EXES = ['RSDragonwilds-WinGDK-Shipping.exe', 'RSDragonwilds-Win64-Shipping.exe'];
 const ICON = path.join(__dirname, 'icon.png');
-const startHidden = process.argv.includes('--hidden'); // started with Windows: wait for the game
+const startHidden = process.argv.includes('--hidden') && !process.argv.includes('--updated'); // Updates reopen visibly, including a previously hidden startup.
 
 let win;
 let tray;

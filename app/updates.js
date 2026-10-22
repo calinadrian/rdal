@@ -35,6 +35,7 @@ function createUpdates({ current, updater = null, publish = () => {}, beforeInst
   if (updater) {
     updater.autoDownload = true;
     updater.autoInstallOnAppQuit = true;
+    updater.autoRunAppAfterInstall = true;
     updater.on('checking-for-update', () => set({ status: 'checking', message: null }));
     updater.on('update-not-available', () => set({ status: 'latest', checkedAt: Date.now(), version: null, notes: [] }));
     updater.on('update-available', (info) => set({ status: 'downloading', percent: 0,

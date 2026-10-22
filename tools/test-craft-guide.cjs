@@ -7,6 +7,7 @@ app.setPath('userData', require('./test-profile.cjs').testProfile('craft-guide')
 ipcMain.handle('db:get',()=>db);
 ipcMain.handle('settings:get',()=>({mode:'window',hotkey:'Control+Shift+L'}));
 ipcMain.handle('preferences:get',()=>({}));
+ipcMain.handle('update:get',()=>({status:'idle',current:require('../package.json').version}));
 ipcMain.on('preferences:commit',e=>{e.returnValue={ok:true};});
 const timeout=setTimeout(()=>app.exit(1),30000);
 app.whenReady().then(async()=>{
@@ -28,11 +29,11 @@ app.whenReady().then(async()=>{
    await js(`document.querySelector('.craft-guide-button').scrollIntoView({block:'start'});new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
    await new Promise(r=>setTimeout(r,160));
    assert.equal(await js(`document.querySelector('#content').scrollWidth>document.querySelector('#content').clientWidth+1`),false);
-   fs.writeFileSync(path.join(root,`test-fixtures/craft-sequence-bread-${w}.png`),(await win.webContents.capturePage()).toPNG());
+   if(!process.env.ATLAS_NO_CAPTURES)fs.writeFileSync(path.join(root,`test-fixtures/craft-sequence-bread-${w}.png`),(await win.webContents.capturePage()).toPNG());
   }
   await js(`go({type:'journal',arg:'Steel Bar'},{detail:null});document.querySelector('.craft-guide-button').click();`);
   assert.equal(await js(`document.querySelector('[aria-label="Recipe for Steel Bar"]').options.length`),3);
-  await js(`const steel=document.querySelector('[aria-label="Recipe for Steel Bar"]');steel.value='RECIPE_Process_SteelBar';steel.dispatchEvent(new Event('change'));`);
+  await js(`const steel=document.querySelector('[aria-label="Recipe for Steel Bar"]');steel.value=craftRouteKey(craftRoutes('Steel Bar').find(x=>x.recipe.id==='RECIPE_Process_SteelBar').recipe);steel.dispatchEvent(new Event('change'));`);
   assert.deepEqual(await js(`[...document.querySelectorAll('.craft-step-title')].map(e=>e.textContent)`),['Obtain 3 × Iron Ore','Obtain 3 × Coal','Craft 1 × Steel Bar at Advanced Smelter']);
   await js(`document.querySelector('.craft-step-sources').open=true`);
   await new Promise(r=>setTimeout(r,60));
@@ -43,7 +44,7 @@ app.whenReady().then(async()=>{
   const audit=await js(`(()=>{
    let count=0;
    for(const e of Object.values(E))for(const route of craftRoutes(e.name)) {
-    const plan=craftPlan(e.name,1,new Map([[e.name,route.recipe.id]]));
+    const plan=craftPlan(e.name,1,new Map([[e.name,craftRouteKey(route.recipe)]]));
     const inventory=new Map(plan.supplies.map(s=>[s.item,s.qty]));
     for(const step of plan.steps) {
      for(const m of step.materials) {

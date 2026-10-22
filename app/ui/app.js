@@ -1452,7 +1452,7 @@ function craftRoutes(name) {
   const groups=new Map();
   for(const r of ent(name).recipes) {
     if(r.facility?.startsWith('Vendor: ') || r.availability?.status==='unavailable')continue;
-    const key=JSON.stringify([r.id,r.materials,r.outputs]);
+    const key=JSON.stringify([r.id,r.materials,r.outputs,r.stationUpgrade?.name]);
     if(groups.has(key))groups.get(key).stations.add(r.facility);
     else groups.set(key,{recipe:r,stations:new Set([r.facility])});
   }
@@ -1473,6 +1473,7 @@ function craftingGuide(name,preferred) {
 }
 
 // Resolve dependencies first so the guide reads in the order the player acts.
+function craftRouteKey(recipe) { return JSON.stringify([recipe.id,recipe.stationUpgrade?.name||'']); }
 function craftPlan(name,quantity=1,choices=new Map()) {
   const supplies=new Map(),steps=[],spare=new Map();
   const visit=(item,needed,seen)=>{
@@ -1485,7 +1486,7 @@ function craftPlan(name,quantity=1,choices=new Map()) {
       const supply=supplies.get(item)||{item,qty:0,cycle:false};
       supply.qty+=needed;supply.cycle ||= seen.has(item);supplies.set(item,supply);return;
     }
-    const route=routes.find(x=>x.recipe.id===choices.get(item))||routes[0];
+    const route=routes.find(x=>craftRouteKey(x.recipe)===choices.get(item))||routes.find(x=>x.recipe.id===choices.get(item))||routes[0];
     const r=route.recipe;
     const yieldQty=Number(r.outputs.find(o=>o.item===item)?.qty)||1;
     const batches=Math.ceil(needed/yieldQty);
@@ -1527,6 +1528,7 @@ function craftSequence(name,preferred) {
       const use=h('p',{class:'craft-step-use'},'Use ',step.materials.length ? step.materials.flatMap((m,i)=>[i?' + ':null,link(m.item,m.qty)]).filter(Boolean) : 'the materials listed in the recipe (not confirmed in the extracted data)',
         step.batches>1 ? ` · ${step.batches} crafts` : null,'.');
       const main=h('div',{class:'craft-step-main'},h('span',{class:'craft-step-kind craft-kind-make'},'Craft'),title,use);
+      if (r.stationUpgrade) main.append(stationUpgradeInstructions(r));
       const row=h('li',{class:'craft-step craft-make'},icon(step.item),main);
       if(r.manualUnlockOnly || r.unlockKinds?.some(k=>['learning','quest','skill','unconfirmed'].includes(k))) {
         main.append(h('details',{class:'craft-step-sources'},h('summary',{},'Recipe unlock requirement'),recipeUnlock(r,step.item)));
@@ -1536,8 +1538,8 @@ function craftSequence(name,preferred) {
           choices.set(step.item,select.value);renderSteps();
           // Preserve keyboard focus when the dependency list changes.
           [...wrapper.querySelectorAll('select')].find(s=>s.getAttribute('aria-label')===`Recipe for ${step.item}`)?.focus({preventScroll:true});
-        }},step.routes.map(({recipe:option})=>h('option',{value:option.id},option.materials.map(m=>`${m.qty} × ${m.item}`).join(' + '))));
-        select.value=r.id;
+        }},step.routes.map(({recipe:option,stations:places})=>h('option',{value:craftRouteKey(option)},option.materials.map(m=>`${m.qty} × ${m.item}`).join(' + ')+` · ${[...places].join(' or ')}${option.stationUpgrade ? ` + ${option.stationUpgrade.name}` : ''}`)));
+        select.value=craftRouteKey(r);
         main.append(h('label',{class:'craft-route-picker'},`Other ways to make it (${step.routes.length})`,select));
       }
       list.append(row);
@@ -1575,6 +1577,16 @@ function stationButton(station) {
 
 // Reads as three plain answers: what you need, where you make it, how you unlock it.
 // showHead=false when the page already names the item (journal page, item panel).
+function stationUpgradeInstructions(recipe) {
+  const upgrade = recipe.stationUpgrade;
+  if (!upgrade) return null;
+  return h('div', { class: 'recipe-station-upgrade' }, h('strong', {}, `Requires ${upgrade.name}`),
+    h('p', { class: 'small' }, upgrade.placement || `Build ${upgrade.name} next to the ${recipe.facility} to enable this recipe.`),
+    h('p', { class: 'small' }, `Put the listed ingredients into the ${recipe.facility}, then start processing.`),
+    h('details', {}, h('summary', {}, `Build ${upgrade.name} · Build menu`),
+      h('div', { class: 'mats' }, upgrade.materials.map(m => h('button', { type: 'button', class: 'mat', onclick: () => showItem(m.item) },
+        icon(m.item, 'sm'), h('span', { class: 'q' }, `${m.qty}×`), h('span', { class: 'mat-name' }, m.item))))));
+}
 function recipeCard(r, outputName, showEffects = true, showHead = true, showGuide = true) {
   const out = r.outputs.find((o) => o.item === outputName) || r.outputs[0] || { item: outputName };
   const e = ent(out.item);
@@ -1596,7 +1608,7 @@ function recipeCard(r, outputName, showEffects = true, showHead = true, showGuid
     h('div', { class: 'recipe-rows' },
       row('recipe-cost', vendor ? 'Price' : 'You need',
         h('div', { class: 'mats' }, r.materials.length ? r.materials.map((m) => h('button', { type: 'button', class: 'mat', title: `${m.qty} × ${m.item}`, onclick: () => showItem(m.item) }, icon(m.item, 'sm'), h('span', { class: 'q' }, `${m.qty}×`), h('span', { class: 'mat-name' }, m.item))) : h('span', { class: 'muted' }, 'No materials listed'))),
-      row('recipe-where', vendor ? 'Buy from' : 'Make it at', h('div', { class: 'station-chips' }, where), skills ? h('span', { class: 'recipe-skill muted small' }, skills) : null),
+      row('recipe-where', vendor ? 'Buy from' : 'Make it at', h('div', { class: 'station-chips' }, where), stationUpgradeInstructions(r), skills ? h('span', { class: 'recipe-skill muted small' }, skills) : null),
       vendor ? null : row('recipe-unlock-row', 'Unlock', recipeUnlock(r, out.item)),
       r.outputs.length > 1 ? row('recipe-extra', 'Also makes', r.outputs.filter(o => o !== out).map(o => h('button', { type: 'button', class: 'item-link', onclick: () => showItem(o.item) }, `${o.qty} × ${o.item}`))) : null),
     showGuide && !vendor && !unavailable ? craftingGuide(out.item,r.id) : null);
@@ -1768,7 +1780,7 @@ function armourSetPage(id) {
 function pieceCrafting(item) {
   const groups=new Map();
   for(const r of item.recipes.filter(r=>!r.facility?.startsWith('Vendor: '))) {
-    const key=JSON.stringify([r.id,r.materials,r.outputs]);
+    const key=JSON.stringify([r.id,r.materials,r.outputs,r.stationUpgrade?.name]);
     if(groups.has(key)) groups.get(key).stations.add(r.facility);
     else groups.set(key,{recipe:r,stations:new Set([r.facility])});
   }
@@ -1789,7 +1801,7 @@ function journalPage(name) {
   if (artwork) artwork.addEventListener('error', () => artwork.replaceWith(icon(name, 'lg')), { once: true });
   const recipeGroups = new Map();
   for (const r of e.recipes.filter(r => !r.facility?.startsWith('Vendor: '))) {
-    const key = JSON.stringify([r.id, r.materials, r.outputs, r.skills]);
+    const key = JSON.stringify([r.id, r.materials, r.outputs, r.skills, r.stationUpgrade?.name]);
     const existing = recipeGroups.get(key);
     if (existing) existing.facility += ` · ${r.facility}`;
     else recipeGroups.set(key, { ...r });

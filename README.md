@@ -20,8 +20,8 @@ The installer is for **64-bit Windows** and includes the app and bundled game da
 Node.js or development tools to use it.
 
 **Updates:** the installed app checks on launch and every 6 hours, downloads new versions in the
-background, and offers **Update now** with release notes. Choose **Maybe later** to install when
-the app next quits. Click the version in the bottom-right corner to check for updates or reopen
+background, and offers **Update now** with release notes. The app reopens automatically when installation finishes.
+Choose **Maybe later** to install and reopen when the app next quits. Click the version in the bottom-right corner to check for updates or reopen
 a ready update. You can also use **Settings → Check for updates**. Your saved preferences are kept.
 
 ## Use
@@ -44,6 +44,8 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   Melee values name the damage type (such as Slash, Stab or Crush) and show the normal combo range.
   Bows separate full-draw and quick-shot damage; crossbows show shot damage. Magic weapons label their rune damage multiplier.
   These values exclude ammunition, character skills, critical hits and target resistance; they are not live damage predictions.
+- Processing recipes include station-upgrade requirements and the upgrade's build materials.
+  Fine Cloth uses a Loom with a nearby Loom Harness: 3 Fine Thread and 1 Gold Bar make 1 Fine Cloth.
 - Both world and dungeon maps use **Filters**, with a count of settings changed from the defaults and **Reset filters**.
   The map explains when filters, zoom, or missing live creature data leave no markers visible. The Map and Floor selectors identify what you are viewing.
 - Quest and recipe panels label saved progress with its last-read time. Unknown progress stays explicitly unknown; active quests put the current objective and its confirmed locations first.

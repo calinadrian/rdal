@@ -797,6 +797,10 @@ body.quests-mode:not(.map-mode) #detail { padding: 22px 24px; }
 body.quests-mode:not(.map-mode) #detail > :not(.detail-controls) { max-width: 75ch; }
 ol.objectives li > span:last-child { min-width: 0; flex: 1; }
 .quest-step-resources .item-link { white-space: normal; text-align: left; }
+.recipe-station-upgrade { margin-top: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.recipe-station-upgrade strong { color: var(--accent-hover); }
+.recipe-station-upgrade p { margin: 5px 0; }
+.recipe-station-upgrade summary { cursor: pointer; margin: 8px 0; }
 
 /* Quest browsing is a task list: the instruction and its actions stay together. */
 .quest-page-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; margin-bottom: 8px; }

@@ -128,6 +128,15 @@ for (const rows of table(/DT_CraftingStationsDataTable/))
     for (const lab of r.LabeledRecipes || []) for (const c of lab.Collection || []) addWhere(c, words(row));
 for (const rows of table(/DT_ProcessingStationDataTable/))
   for (const [row, r] of Object.entries(rows)) for (const c of r.Recipes || []) addWhere(c, words(row));
+let stationUpgradeBulk = {};
+try { stationUpgradeBulk = load('station-upgrades.json'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+const requiredStationUpgrades = new Map();
+for (const entry of require('./station-upgrades').stationUpgradeRecipes(stationUpgradeBulk, { base, text, item })) {
+  // Base recipes stay available without an upgrade, even if an upgrade also lists them.
+  if (recipeWhere[entry.id]?.includes(entry.facility)) continue;
+  addWhere(entry.id, entry.facility);
+  requiredStationUpgrades.set(entry.id + '|' + entry.facility, entry.upgrade);
+}
 const vendors = new Set();
 const vendorInfo = {};
 for (const rows of table(/DT_VendorDataTable/))
@@ -152,6 +161,8 @@ for (const { id, pkg, ex } of exportsOf(recipeBulk)) {
   const skill = p.SkillUsedToCraft ? words(base(p.SkillUsedToCraft).replace(/^SKILL_/, '')) : null;
   for (const facility of recipeWhere[id] || ['Build menu / other']) {
     const recipe = { id, facility, skills: skill ? [{ skill, xp: null }] : [], materials, outputs, manualUnlockOnly: !!p.bIgnoreAutomaticUnlocks };
+    const upgrade = requiredStationUpgrades.get(id + '|' + facility);
+    if (upgrade) recipe.stationUpgrade = upgrade;
     for (const o of outputs) {
       ensure(o.item, 'item').recipes.push(recipe);
       if (facility.startsWith('Vendor: ')) entities[o.item].shops.includes(facility) || entities[o.item].shops.push(facility);

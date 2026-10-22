@@ -18,6 +18,7 @@ Bulk journal     '/UI/JournalData/.*\.uasset$'
 Bulk armour-bonuses '/Gameplay/GameplayEffects/ArmorSets/.*\.uasset$'
 Bulk journal-combat '/Gameplay/Character/Player/Attacks/(Bow|Crossbow|Shortbow)/.*\.uasset$'
 Bulk weapon-combat '/Gameplay/Character/Player/Attacks/.*\.uasset$'
+Bulk station-upgrades '/Gameplay/World/Stations/Upgrades/.*\.uasset$|/BuildingPieces/Structures/Crafting/BUILDPIECE_(ProcessingStation|StationUpgrade)_[^/]+\.uasset$'
 & node (Join-Path $PSScriptRoot 'export-journal.js')
 if ($LASTEXITCODE -ne 0) { throw 'Journal artwork export failed' }
 Bulk item-stats  '/(DT_(WearableEquipment|PlayerWeaponPowerLevels|PlayerDamageNegation|FoodSustenance|DrinkHydration|RestEndurance|VitalShield(_V2)?|Toxicity_V2|Wither_V2))\.uasset$'
