@@ -1825,6 +1825,7 @@ function updateSummary(u) {
     checking: 'Checking for updates…',
     downloading: `Downloading version ${u.version}: ${u.percent || 0}%`,
     ready: `Version ${u.version} is ready to install`,
+    installing: 'Restarting to install the update…',
     latest: `Up to date${checkedLabel(u)}`,
     error: `${u.message || 'Update check failed'}${checkedLabel(u)}`,
   }[u.status];
@@ -1840,10 +1841,13 @@ function renderUpdate(u) {
     : u.status === 'downloading' ? [`v${u.current} · downloading v${u.version} ${u.percent || 0}%`]
     : u.status === 'checking' ? [`v${u.current} · checking…`]
     : [`v${u.current}${u.status === 'dev' ? ' · dev' : ''}`]));
-  chip.title = ready ? 'Open the update' : `${updateSummary(u)}${u.status === 'dev' ? '' : '. Click to check now.'}`;
+  chip.disabled = ['checking', 'downloading', 'installing'].includes(u.status);
+  chip.title = ready ? 'Open the update' : `${updateSummary(u)}${['dev', 'checking', 'downloading', 'installing'].includes(u.status) ? '' : '. Click to check now.'}`;
   $('#update-meta').textContent = `Version ${u.current} · ${updateSummary(u)}`;
-  $('#update-check').disabled = ['dev', 'checking', 'downloading', 'ready'].includes(u.status);
+  $('#update-check').disabled = ['dev', 'checking', 'downloading', 'ready', 'installing'].includes(u.status);
   $('#update-restart').hidden = !ready;
+  $('#update-now').disabled = !ready;
+  if (u.status !== 'ready' && $('#update-dialog').open) $('#update-dialog').close();
   if (ready && updateOffered !== u.version) { updateOffered = u.version; showUpdateDialog(); }
 }
 
@@ -1858,13 +1862,14 @@ function showUpdateDialog() {
     return items.length ? h('section', {}, s.title && h('h3', {}, s.title), h('ul', {}, items.map((i) => h('li', {}, i)))) : null;
   });
   const rest = notes.reduce((n, s) => n + s.items.length, 0) - shown;
-  $('#update-notes').replaceChildren(...sections, rest > 0 ? h('p', { class: 'update-more' }, `+ ${rest} more change${rest === 1 ? '' : 's'} included.`) : null);
+  $('#update-notes').replaceChildren(...sections.filter(Boolean), ...(rest > 0 ? [h('p', { class: 'update-more' }, `+ ${rest} more change${rest === 1 ? '' : 's'} included.`)] : []));
   $('#update-notes').hidden = !notes.length;
   if (!$('#update-dialog').open) $('#update-dialog').showModal();
 }
 
 async function checkUpdateNow() {
-  renderUpdate(await window.atlas.checkUpdate());
+  try { renderUpdate(await window.atlas.checkUpdate()); }
+  catch { renderUpdate({ ...update, status: 'error', message: 'Could not check for updates. Please try again.' }); }
 }
 
 let lastPlayer = null;

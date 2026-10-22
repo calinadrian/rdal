@@ -654,25 +654,28 @@ dialog input:not([type=range]), dialog select { padding: 8px 10px; border-radius
 dialog label.check input { padding: 0; }
 .statusbar { min-height: 32px; align-items: center; }
 #status-data { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#status-hotkey { white-space: nowrap; }
+#status-hotkey { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#status-data { min-width: 0; }
 /* App version at the right of the status bar; it turns into "Update available" once a release has downloaded. */
-.status-update { display: inline-flex; align-items: center; gap: 7px; margin: -4px -8px -4px 0; padding: 3px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.status-update { display: inline-flex; align-items: center; flex-shrink: 0; gap: 7px; margin: -4px -8px -4px auto; padding: 3px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .status-update:hover { background: var(--hover); color: var(--text); }
 .status-update.ready { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .status-update.ready:hover { color: var(--accent-hover); }
 .update-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(214,167,86,.22); }
-.update-dialog { width: 420px; padding: 32px 36px 24px; text-align: center; }
+.update-dialog { width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 32px 36px 24px; text-align: center; overflow-y: auto; }
+.update-close { position: absolute; top: 10px; right: 10px; padding: 6px; border: 0; background: transparent; color: var(--muted); }
+.update-close svg { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
 .update-dialog form { display: flex; flex-direction: column; align-items: center; }
 .update-mark { width: 64px; height: 64px; margin-bottom: 18px; }
 dialog.update-dialog h2:first-of-type { margin: 0 0 8px; font-size: var(--fs-xl); }
 .update-lede { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }
-.update-notes { align-self: stretch; text-align: left; max-height: 300px; overflow-y: auto; margin-bottom: 22px; }
+.update-notes { align-self: stretch; text-align: left; max-height: min(300px, 32vh); overflow-y: auto; overflow-wrap: anywhere; margin-bottom: 22px; }
 .update-notes section + section { margin-top: 14px; }
 .update-notes h3 { margin: 0 0 6px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .update-notes ul { margin: 0; padding-left: 18px; line-height: 1.55; }
 .update-notes li + li { margin-top: 4px; }
 .update-more { margin: 14px 0 0; color: var(--muted); font-size: var(--fs-xs); text-align: center; }
-.update-now { align-self: stretch; padding: 10px; font-size: var(--fs-md); font-weight: 600; background: var(--accent); border-color: var(--accent); color: #1c1c1c; }
+.update-now.primary { align-self: stretch; padding: 10px; font-size: var(--fs-md); font-weight: 600; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .update-now:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .update-later { margin-top: 10px; border: 0; background: transparent; color: var(--muted); font-weight: 600; }
 .update-later:hover { background: transparent; color: var(--text); }

@@ -11,8 +11,10 @@ All data is read from **your installed game files** (read-only). Nothing is inje
 - Install: download `Dragonwilds-AtlasLoot-Setup-<version>.exe` from
   [Releases](https://github.com/calinadrian/rdal/releases) and run it (no admin needed). It adds
   **Dragonwilds AtlasLoot** to the Start menu and desktop. The app checks for a new release on launch
-  (and every 6 hours while it runs), downloads it in the background and offers **Restart now**; choose
-  Later and it installs the next time the app quits.
+  (and every 6 hours while it runs), downloads it in the background and offers **Update now** with
+  release notes. Choose **Maybe later** and it installs the next time the app quits. The version in
+  the bottom-right corner shows download progress and reopens the update dialog when ready.
+  You can also use **Settings → Check for updates**.
   For development, `npm install` once, then `npm start` or `Start AtlasLoot.vbs` runs straight from the source.
 - It runs as a **separate window** (put it on a second monitor) and notices when the game starts: it opens
   automatically and shows your live position. ⚙ Settings can switch it to an always-on-top **overlay**
@@ -143,10 +145,24 @@ The repo holds only the source. Everything extracted from the game (`data/`, the
 and the built tool binaries ship only inside the installer, so releases are built from a checkout that has them.
 
 1. Commit your changes, then `npm version patch` (or `minor`) to bump the version.
-2. `npm run release`: pushes the commit and its `v<version>` tag, builds the installer and publishes it,
-   with `latest.yml`, as a GitHub release. Needs the GitHub CLI signed in (`gh auth login`).
+2. `npm run release`: checks authentication, builds and verifies the installer, pushes the commit and
+   its `v<version>` tag, uploads the installer, blockmap and `latest.yml` to a draft, then publishes it.
+   Needs the GitHub CLI signed in (`gh auth login`; on Windows the script also finds the standard
+   `C:\Program Files\GitHub CLI\gh.exe` installation). A failed upload leaves a draft that can be
+   retried with the same command. Published versions must be followed by a new version number.
 
 `npm run package` builds the same installer into `dist/` without publishing.
+
+Updater verification (the Electron tests use isolated profiles and never run the installer):
+
+```powershell
+node --test tools/test-updates.cjs
+node node_modules/electron/cli.js tools/test-update-ui.cjs dist/win-unpacked/resources/app
+node node_modules/electron/cli.js tools/test-update-download.cjs
+```
+
+Build with `npm run package` before the last two commands. The download test serves the built installer
+over loopback and checks the real updater's download, SHA-512 verification and ready-to-install state.
 
 ## Tools
 
