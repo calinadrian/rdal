@@ -1812,6 +1812,61 @@ function renderStatus(settings) {
   $('#btn-hide').title = settings.mode === 'overlay' ? 'Hide (Esc)' : 'Minimise';
 }
 
+// App updates (main.js watchUpdates): the version sits at the right of the status bar and turns into
+// "Update available" once a new release has downloaded; clicking it checks again or opens the dialog.
+let update = { status: 'dev', current: '' };
+let updateOffered = null; // the version whose dialog already opened by itself this session
+const MAX_NOTES = 8;
+const checkedLabel = (u) => u.checkedAt ? ` · checked ${new Date(u.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
+function updateSummary(u) {
+  return {
+    dev: 'Updates are available in the installed app only',
+    idle: 'Not checked yet',
+    checking: 'Checking for updates…',
+    downloading: `Downloading version ${u.version}: ${u.percent || 0}%`,
+    ready: `Version ${u.version} is ready to install`,
+    latest: `Up to date${checkedLabel(u)}`,
+    error: `${u.message || 'Update check failed'}${checkedLabel(u)}`,
+  }[u.status];
+}
+
+function renderUpdate(u) {
+  update = u;
+  const chip = $('#status-update');
+  const ready = u.status === 'ready';
+  chip.classList.toggle('ready', ready);
+  chip.replaceChildren(...(ready
+    ? [h('span', { class: 'update-dot', 'aria-hidden': 'true' }), `Update available · v${u.version}`]
+    : u.status === 'downloading' ? [`v${u.current} · downloading v${u.version} ${u.percent || 0}%`]
+    : u.status === 'checking' ? [`v${u.current} · checking…`]
+    : [`v${u.current}${u.status === 'dev' ? ' · dev' : ''}`]));
+  chip.title = ready ? 'Open the update' : `${updateSummary(u)}${u.status === 'dev' ? '' : '. Click to check now.'}`;
+  $('#update-meta').textContent = `Version ${u.current} · ${updateSummary(u)}`;
+  $('#update-check').disabled = ['dev', 'checking', 'downloading', 'ready'].includes(u.status);
+  $('#update-restart').hidden = !ready;
+  if (ready && updateOffered !== u.version) { updateOffered = u.version; showUpdateDialog(); }
+}
+
+function showUpdateDialog() {
+  if (update.status !== 'ready') return;
+  $('#update-lede').textContent = `Dragonwilds AtlasLoot ${update.version} is ready to install. You have ${update.current}.`;
+  const notes = update.notes || [];
+  let shown = 0;
+  const sections = notes.map((s) => {
+    const items = s.items.slice(0, Math.max(0, MAX_NOTES - shown));
+    shown += items.length;
+    return items.length ? h('section', {}, s.title && h('h3', {}, s.title), h('ul', {}, items.map((i) => h('li', {}, i)))) : null;
+  });
+  const rest = notes.reduce((n, s) => n + s.items.length, 0) - shown;
+  $('#update-notes').replaceChildren(...sections, rest > 0 ? h('p', { class: 'update-more' }, `+ ${rest} more change${rest === 1 ? '' : 's'} included.`) : null);
+  $('#update-notes').hidden = !notes.length;
+  if (!$('#update-dialog').open) $('#update-dialog').showModal();
+}
+
+async function checkUpdateNow() {
+  renderUpdate(await window.atlas.checkUpdate());
+}
+
 let lastPlayer = null;
 function onPlayer(p) {
   lastPlayer = p;
@@ -2061,6 +2116,11 @@ async function init() {
   window.atlas.onShown(() => $('#search').focus());
   window.atlas.onPlayer(onPlayer);
   window.atlas.onGame(onGame);
+  window.atlas.onUpdate(renderUpdate);
+  window.atlas.getUpdate().then(renderUpdate);
+  $('#status-update').onclick = () => update.status === 'ready' ? showUpdateDialog() : update.status !== 'dev' && checkUpdateNow();
+  $('#update-check').onclick = checkUpdateNow;
+  $('#update-restart').onclick = $('#update-now').onclick = () => window.atlas.installUpdate();
   // M pressed in the game: open on the map, following the player.
   window.atlas.onShowMap(() => {
     state.module = 'map';
@@ -2076,7 +2136,7 @@ async function init() {
   document.addEventListener('keydown', (ev) => {
     if (ev.ctrlKey && ev.key.toLowerCase() === 'f') { ev.preventDefault(); $('#search').select(); }
     else if (ev.altKey && ev.key === 'ArrowLeft') back();
-    else if (ev.key === 'Escape' && !$('#settings').open) {
+    else if (ev.key === 'Escape' && !$('#settings').open && !$('#update-dialog').open) {
       if ($('#search').value) { $('#search').value = ''; } else if (settingsMode === 'overlay') window.atlas.hide();
     }
   });

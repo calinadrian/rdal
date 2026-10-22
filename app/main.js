@@ -1,5 +1,5 @@
 // App host: a normal window (or an always-on-top overlay) that wakes up when the game runs.
-const { app, BrowserWindow, globalShortcut, ipcMain, shell, Tray, Menu, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, shell, Tray, Menu, nativeImage } = require('electron');
 const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -326,22 +326,64 @@ function ensureShortcuts() {
 }
 
 // Installed copies update from GitHub Releases (npm run release): the new version downloads in the
-// background and installs on restart, or the next time the app quits if you choose Later.
-function watchUpdates() {
-  const { autoUpdater } = require('electron-updater');
-  autoUpdater.on('update-downloaded', async ({ version }) => {
-    const { response } = await dialog.showMessageBox(win, {
-      type: 'info', buttons: ['Restart now', 'Later'], defaultId: 0, cancelId: 1,
-      title: 'Update ready', message: `Dragonwilds AtlasLoot ${version} is ready.`,
-      detail: 'Restart now to update, or it installs the next time the app quits.',
-    });
-    if (response === 0) { app.isQuitting = true; autoUpdater.quitAndInstall(true, true); }
-  });
-  autoUpdater.on('error', (error) => console.warn('Update check failed:', error.message));
-  const check = () => autoUpdater.checkForUpdates().catch(() => {}); // offline: try again later
-  check();
-  setInterval(check, 6 * 60 * 60 * 1000); // the app can wait in the tray for days
+// background, then the status bar and an "Update available" dialog offer to restart into it.
+// Choosing Later installs it the next time the app quits.
+// status: dev (not installed) | idle | checking | downloading | ready | latest | error
+let update = { status: app.isPackaged ? 'idle' : 'dev', current: app.getVersion() };
+let updater = null;
+const setUpdate = (patch) => {
+  update = { ...update, ...patch };
+  win?.webContents.send('update', update);
+};
+
+// GitHub hands over the release body as HTML (from the markdown release.js writes):
+// headings become sections, list items their entries. Plain text is read line by line.
+function releaseSections(raw) {
+  let text = Array.isArray(raw) ? raw.map((r) => r.note || '').join('\n') : raw || '';
+  if (/<[a-z]/i.test(text)) {
+    text = text.replace(/<h\d[^>]*>([\s\S]*?)<\/h\d>/gi, '\n## $1\n').replace(/<li[^>]*>/gi, '\n- ')
+      .replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  }
+  const sections = [];
+  for (const line of text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) {
+    const heading = /^#+\s*(.+)/.exec(line);
+    const entry = /^[-*•]\s*(.+)/.exec(line);
+    if (heading) sections.push({ title: heading[1], items: [] });
+    else {
+      if (!sections.length) sections.push({ title: '', items: [] });
+      sections[sections.length - 1].items.push(entry ? entry[1] : line);
+    }
+  }
+  return sections.filter((s) => s.items.length);
 }
+
+function checkForUpdates() {
+  if (!updater || ['checking', 'downloading', 'ready'].includes(update.status)) return;
+  updater.checkForUpdates().catch(() => {}); // failures arrive as the 'error' event
+}
+
+function watchUpdates() {
+  updater = require('electron-updater').autoUpdater;
+  updater.on('checking-for-update', () => setUpdate({ status: 'checking', message: null }));
+  updater.on('update-not-available', () => setUpdate({ status: 'latest', checkedAt: Date.now() }));
+  updater.on('update-available', (info) => setUpdate({ status: 'downloading', percent: 0, version: info.version, notes: releaseSections(info.releaseNotes), checkedAt: Date.now() }));
+  updater.on('download-progress', (p) => setUpdate({ status: 'downloading', percent: Math.round(p.percent) }));
+  updater.on('update-downloaded', (info) => setUpdate({ status: 'ready', version: info.version, notes: releaseSections(info.releaseNotes) }));
+  updater.on('error', (error) => {
+    console.warn('Update check failed:', error.message);
+    setUpdate({ status: 'error', message: /net::|ENOTFOUND|ETIMEDOUT|ECONNRE/.test(error.message) ? 'No connection to GitHub' : 'Update check failed', checkedAt: Date.now() });
+  });
+  checkForUpdates();
+  setInterval(checkForUpdates, 6 * 60 * 60 * 1000); // the app can wait in the tray for days
+}
+ipcMain.handle('update:get', () => update);
+ipcMain.handle('update:check', () => { checkForUpdates(); return update; });
+ipcMain.on('update:install', () => {
+  if (update.status !== 'ready') return;
+  app.isQuitting = true;
+  updater.quitAndInstall(true, true);
+});
 
 if (!app.requestSingleInstanceLock()) app.quit();
 app.setAppUserModelId('DragonwildsAtlasLoot');

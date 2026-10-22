@@ -52,7 +52,20 @@
     <span id="status-data"></span>
     <span id="status-progress"></span>
     <span id="status-hotkey"></span>
+    <button type="button" id="status-update" class="status-update"></button>
   </footer>
+
+  <dialog id="update-dialog" class="update-dialog" aria-labelledby="update-title">
+    <form method="dialog">
+      <img class="update-mark" src="../icon.png" alt="">
+      <h2 id="update-title">New update available</h2>
+      <p id="update-lede" class="update-lede"></p>
+      <div id="update-notes" class="update-notes"></div>
+      <button type="button" id="update-now" class="primary update-now">Update now</button>
+      <button value="later" class="update-later">Maybe later</button>
+      <p class="update-foot">Choose later and it installs the next time the app quits.</p>
+    </form>
+  </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
@@ -89,6 +102,12 @@
         <progress id="import-progress"></progress>
         <span id="import-text"></span>
         <small class="muted">You can close Settings meanwhile; progress also shows in the status bar.</small>
+      </div>
+      <h2>Updates</h2>
+      <p id="update-meta" class="muted" role="status" aria-live="polite"></p>
+      <div class="row">
+        <button type="button" id="update-check">Check for updates</button>
+        <button type="button" id="update-restart" class="primary" hidden>Restart to update</button>
       </div>
       <p id="settings-msg" class="msg" role="status" aria-live="polite"></p>
       <div class="row end">
