@@ -33,7 +33,7 @@ app.whenReady().then(async () => {
       assert(document.querySelector('#detail').textContent.includes('presence not confirmed'), 'Conditional location must be labelled');
       onQuestLog([{ id: 'Quest_FTUE_RC', s: 1, o: 'Objective2' }, { id: 'Quest_DragonSlayer', s: 1, b: { WOMTempleHidden: false } }]);
       assert(questStatus(ent('Ratcatcher')) === 'active', 'Live current ID must resolve');
-      assert(document.querySelector('#detail .objectives .now').textContent.includes('rat roast'), 'Current objectives must not be overwritten by the old fang quest');
+      assert(document.querySelector('#detail .objectives .now').textContent.toLowerCase().includes('rat roast'), 'Current objectives must not be overwritten by the old fang quest');
       assert(npcPresence(marker) === 'visible' && questMarkerVisible(marker), 'Explicit false flag must keep Vannaka marker');
       onQuestLog([{ id: 'Quest_FTUE_RC', s: 2, o: 'Objective2' }, { id: 'Quest_FTUE_Q5', s: 0 }]);
       assert(questStatus(ent('Ratcatcher')) === 'done', 'An unstarted legacy duplicate must not overwrite current completion');
@@ -72,12 +72,12 @@ app.whenReady().then(async () => {
       const coords = { bubbles: true, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 };
       canvas.dispatchEvent(new MouseEvent('mousemove', coords));
       assert(document.querySelector('#map-tip').textContent.includes('Current · Step 2'), 'Hovered map icon must show its step');
-      assert(document.querySelector('#map-tip').textContent.includes('rat roast'), 'Tooltip must show the actual objective');
+      assert(document.querySelector('#map-tip').textContent.toLowerCase().includes('rat roast'), 'Tooltip must show the actual objective');
       canvas.dispatchEvent(new MouseEvent('mousedown', coords));
       window.dispatchEvent(new MouseEvent('mouseup', coords));
       assert(selectedQuestMarker === windmill, 'Map click must select the exact location');
       assert(document.querySelector('.quest-marker-context').textContent.includes('Windmill'), 'Detail panel must identify the clicked location');
-      assert(document.querySelectorAll('.quest-location').length === 3, 'Quest locations must allow navigation between steps');
+      assert(document.querySelectorAll('.quest-location').length >= 3, 'Original quest locations and added interaction pins must allow navigation between steps');
       await new Promise(r => setTimeout(r, 600));
       return 'PASS: quest identity, visibility, start vs return, current step, unknown links, map tooltip, marker click and location navigation';
     })()`));

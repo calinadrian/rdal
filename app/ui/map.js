@@ -15,7 +15,9 @@ window.MapView = (() => {
   let W = 1, H = 1;            // map image size in px
   let scale = 0.1, ox = 0, oy = 0; // screen = imagePx * scale + offset
   const savedCategories = Preferences.json('mapCategories', null);
-  const enabled = new Set(Array.isArray(savedCategories) ? savedCategories.filter(c => typeof c === 'string') : ['monster', 'chest', 'quest', 'travel', 'shrine', 'agility', 'npc']);
+  const DEFAULT_CATEGORIES = ['monster', 'chest', 'quest', 'travel', 'shrine', 'agility', 'npc'];
+  const enabled = new Set(Array.isArray(savedCategories) ? savedCategories.filter(c => typeof c === 'string') : DEFAULT_CATEGORIES);
+  let visibilityChanged = () => {}, lastVisibility = '';
   const savedVentTypes = Preferences.json('ventTypes', null);
   let ventTypes = Array.isArray(savedVentTypes) ? new Set(savedVentTypes.filter(t => typeof t === 'string')) : null;
   const ventTypeEnabled = type => ventTypes === null || ventTypes.has(type);
@@ -284,11 +286,11 @@ window.MapView = (() => {
     const cw = viewW, ch = viewH;
     // Dungeon plans must fit in the visible area beside the legend, below the controls.
     // Fitting to the raw canvas puts the left-hand rooms behind the legend.
-    const legend = layer && document.getElementById('map-legend');
-    const left = legend && !legend.hidden ? Math.min(cw * 0.6, legend.getBoundingClientRect().width + 32) : layer ? 16 : 0;
-    const tools = layer && document.querySelector('.map-tools');
-    const top = layer ? (tools?.getBoundingClientRect().height || 32) + 32 : 0, bottom = layer ? 52 : 0;
-    const width = Math.max(1, cw - left - (layer ? 16 : 0)), height = Math.max(1, ch - top - bottom);
+    const legend = document.getElementById('map-legend');
+    const left = legend && !legend.hidden ? Math.min(cw * 0.6, legend.getBoundingClientRect().width + 32) : 16;
+    const tools = document.querySelector('.map-tools');
+    const top = tools ? tools.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top + 16 : 16, bottom = 52;
+    const width = Math.max(1, cw - left - 16), height = Math.max(1, ch - top - bottom);
     scale = Math.min(width / W, height / H);
     ox = left + (width - W * scale) / 2; oy = top + (height - H * scale) / 2;
     dirty = true;
@@ -413,6 +415,18 @@ window.MapView = (() => {
 
     // Spawn dots stay subdued; landmarks retain their readable size at any zoom.
     const cw = viewW, ch = viewH;
+    const layerMarkers = map.markers.filter(onLayer);
+    const shown = layerMarkers.filter(visible);
+    const inViewport = m => { const [x, y] = toScreen(m.x, m.y); return x >= -26 && x <= cw + 26 && y >= -26 && y <= ch + 26; };
+    const liveVisible = enabled.has('npc') && playerHere() ? npcs.filter(inViewport).length : 0;
+    const zoomHidden = frame().res / scale >= DENSE_UNITS && layerMarkers.some(m => enabled.has(m.c) && ['ore', 'gather'].includes(m.c));
+    const summary = { visible: shown.filter(inViewport).length + liveVisible,
+      reason: shown.length ? 'No markers in this area. Pan the map or choose Fit map.'
+        : enabled.size === 1 && enabled.has('npc') ? player?.ok ? 'No matching live creatures nearby. Try other creature types.' : 'Live creatures are unavailable. Start the game and load your character.'
+        : zoomHidden ? 'Ores and plants appear when zoomed in. Zoom in to see resource locations.'
+        : layerMarkers.length ? 'No locations match your filters on this map or floor. Change or reset the filters.' : 'No recorded locations on this map or floor. Try another floor or map.' };
+    const visibilityKey = JSON.stringify(summary);
+    if (visibilityKey !== lastVisibility) { lastVisibility = visibilityKey; visibilityChanged(summary); }
     // Current objectives and starts sit above overlapping later quest locations.
     const infos = new Map(map.markers.filter(m => m.c === 'quest' && onLayer(m)).map(m => [m, questInfo(m)]));
     const priority = m => infos.get(m)?.current ? 3 : infos.get(m)?.pickup ? 2 : 1;
@@ -535,6 +549,22 @@ window.MapView = (() => {
     redraw: () => { dirty = true; hover = null; const tip = document.getElementById('map-tip'); if (tip) tip.hidden = true; },
     setEnabled(cat, on) { on ? enabled.add(cat) : enabled.delete(cat); Preferences.setJSON('mapCategories', [...enabled]); dirty = true; },
     isEnabled: (cat) => enabled.has(cat),
+    defaultCategories: () => [...DEFAULT_CATEGORIES],
+    onVisibilityChange(fn) { visibilityChanged = fn; lastVisibility = ''; dirty = true; },
+    navigation() {
+      return { layer: layer?.id || null, level,
+        viewport: W > 1 ? { scale, u: (viewW / 2 - ox) / scale / W, v: (viewH / 2 - oy) / scale / H } : null,
+        highlight: highlight ? { label: highlight.label, markers: [...highlight.markers].map(m => map.markers.indexOf(m)).filter(i => i >= 0) } : null };
+    },
+    restoreNavigation(context) {
+      highlight = context.highlight ? { label: context.highlight.label, markers: new Set(context.highlight.markers.map(i => map.markers[i]).filter(Boolean)) } : null;
+      setLayer(context.layer ? map.dungeons.find(d => d.id === context.layer) : null, context.level);
+      const restore = () => {
+        if (context.viewport) { scale = context.viewport.scale; ox = viewW / 2 - context.viewport.u * W * scale; oy = viewH / 2 - context.viewport.v * H * scale; }
+        dirty = true; saveViewport();
+      };
+      if (W > 1) restore(); else pendingFocus = restore;
+    },
     isVentTypeEnabled: ventTypeEnabled,
     createVentIcon,
     setVentTypes,

@@ -1,0 +1,58 @@
+const { app, BrowserWindow, ipcMain } = require('electron');
+const fs = require('fs'), path = require('path'), assert = require('assert/strict');
+const root = path.resolve(__dirname, '..');
+const target = path.resolve(process.argv.filter(a => !a.startsWith('--'))[2] || root);
+app.setPath('userData', require('./test-profile.cjs').testProfile('quest-guidance'));
+let preferences = {};
+ipcMain.handle('db:get', () => JSON.parse(fs.readFileSync(path.join(target, 'data/db.json'))));
+ipcMain.handle('settings:get', () => ({ mode: 'window', hotkey: 'Control+Shift+L' }));
+ipcMain.handle('preferences:get', () => preferences);
+ipcMain.handle('update:get', () => ({ status: 'idle', current: '0.1.1' }));
+ipcMain.on('preferences:commit', (event, patch) => { Object.assign(preferences, patch); event.returnValue = { ok: true }; });
+const timeout = setTimeout(() => { console.error('Quest guidance UI timed out'); app.exit(1); }, 45000);
+app.whenReady().then(async () => {
+  const win = new BrowserWindow({ width: 1440, height: 1000, show: false,
+    webPreferences: { preload: path.join(target, 'app/preload.js'), sandbox: false, backgroundThrottling: false } });
+  const js = async code => { try { return await win.webContents.executeJavaScript(code); } catch (e) { console.error('Renderer step:', code); throw e; } };
+  const wait = () => new Promise(r => setTimeout(r, 550));
+  const screenshot = async name => { await wait(); fs.writeFileSync(path.join(root, 'test-fixtures', 'quest-guide-' + name + '.png'), (await win.webContents.capturePage()).toPNG()); };
+  try {
+    await win.loadFile(path.join(target, 'app/ui/index.html')); win.showInactive(); await wait();
+    await js(`selectModule('quests'); window.quest=ent('Highlighting the Problem');
+      onQuestLog([{id:quest.id,s:1,o:quest.objectives[0].key}]); showItem(quest.name);`);
+    assert(await js(`$('#detail .current-objective').textContent.includes('Enter Thishepen Kara') && $('#detail .current-objective').textContent.includes('Pthentorok')`));
+    assert(await js(`$('#detail').clientWidth>600 && $('#detail .objectives').children.length===4`));
+    assert(await js(`$('#detail .current-objective .quest-entrance-button').textContent.includes('Thishepen Kara')`));
+    await screenshot('desktop');
+    await js(`window.password=db.map.markers.find(m=>m.questId===quest.id && m.target==='Password statue');
+      $('#detail .current-objective .quest-entrance-button').click();`);
+    await wait();
+    assert(await js(`MapView.layer()===null && MapView.navigation().highlight.markers.some(i=>db.map.markers[i].enter===password.d)`));
+    await js(`back(); state.filter='Highlighting'; renderList(); $('#detail').scrollTop=80; window.savedTop=$('#detail').scrollTop;
+      questMapMode='selected';selectedMapQuests.clear();questMapStepMode='current';saveQuestMapFilter();
+      $('#detail .current-objective .quest-pin-button').click();
+      for(const id of [...db.map.categories.map(c=>c.id),'npc'])MapView.setEnabled(id,false);`);
+    await wait();
+    assert(await js(`MapView.layer()?.id===password.d && selectedQuestMarker===password && selectedMapQuests.has(quest.name)`));
+    assert(await js(`MapView.navigation().highlight.markers.length===1 && db.map.markers[MapView.navigation().highlight.markers[0]]===password && !$('#map-highlight').hidden`));
+    const hovered = await js(`(async()=>{MapView.focusMarker(password);await new Promise(r=>setTimeout(r,150));const c=$('#map'),r=c.getBoundingClientRect();c.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2}));return $('#map-tip').textContent;})()`);
+    assert(hovered.includes('Password statue'), 'The actual painted/pickable dungeon pin must identify the password statue');
+    await screenshot('password-statue');
+    await js(`back()`);
+    assert(await js(`state.module==='quests' && state.detail===quest.name && state.filter==='Highlighting' && $('#detail').scrollTop===savedTop`));
+    await js(`onQuestLog([{id:quest.id,s:1,o:quest.objectives[2].key}]);renderDetail();`);
+    assert(await js(`$('#detail .current-objective').querySelectorAll('.quest-pin-button').length===3`));
+    await js(`$('#detail .current-objective').querySelectorAll('.quest-pin-button')[1].click()`); await wait();
+    assert(await js(`MapView.layer()===null && selectedQuestMarker.target==='Tower pedestal 2'`));
+    await js(`back();onQuestLog([{id:quest.id,s:2}]);renderDetail();focusQuestTarget(quest,password);`); await wait();
+    assert(await js(`MapView.layer()?.id===password.d && questMapStepMode==='all' && questMapMarkerVisible(password,true)`));
+    await js(`back();questLog=null;selectModule('quests');showItem(quest.name);`);
+    assert(await js(`$('#detail').textContent.includes('Progress unknown') && !$('#detail [role=progressbar]').hasAttribute('aria-valuenow')`));
+    win.setSize(900, 780); await wait();
+    await screenshot('compact');
+    assert(await js(`$('#detail').scrollWidth<=$('#detail').clientWidth+1 && $('#detail .detail-navigation').getBoundingClientRect().width>0`));
+    await js(`for(const q of Object.values(E).filter(e=>e.kind==='quest')){showItem(q.name,{push:false});if(!$('#detail .detail-head h1'))throw Error('Missing quest reader: '+q.name)}`);
+    console.log('PASS: all quest readers; clear walkthrough/current objective; entrance vs exact interior pin; map picking with filters off; three pedestals; completed/unknown progress; Back context; desktop/compact layouts');
+    clearTimeout(timeout); app.exit(0);
+  } catch (error) { console.error(error); clearTimeout(timeout); app.exit(1); }
+});

@@ -544,6 +544,9 @@ for(const [facility,info] of Object.entries(vendorInfo)) {
       region:dungeon ? dungeon.name : regionAt(a.x,a.y),...(dungeon&&{d:dungeon.id})});
   }
 }
+const { buildQuestGuidance } = require('./quest-guidance');
+const questGuidanceAudit = buildQuestGuidance({ entities, flows: load('quest-flows.json'),
+  interactions: optionalBulk('quest-interactions.json'), markers, base, text, dungeonAt, regionAt, onMap, npcVisibility });
 acquisition.items=Object.values(entities).filter(e=>e.acquisition?.length).length;
 const zones = [...regions, ...dungeons].map((r) => ({
   name: r.name,
@@ -560,6 +563,7 @@ const db = {
   armourSets,
   acquisition,
   questChain: questOrder,
+  questGuidanceAudit,
   availabilityAudit: { reviewedAt: availabilityAudit.reviewedAt, total: availabilityAudit.total, counts: availabilityAudit.counts },
   vendors: vendorInfo,
   map: {

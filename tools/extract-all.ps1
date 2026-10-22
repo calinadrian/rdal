@@ -77,4 +77,6 @@ $runeGlyphs = 'Air', 'Water', 'Earth', 'Fire1', 'Nature', 'Law', 'Astral' | ForE
 
 & node (Join-Path $PSScriptRoot 'export-quest-npcs.js')
 if ($LASTEXITCODE -ne 0) { throw 'Quest NPC export failed' }
+& node (Join-Path $PSScriptRoot 'export-quest-guidance.js')
+if ($LASTEXITCODE -ne 0) { throw 'Quest interaction export failed' }
 Write-Host "Raw data in $out"

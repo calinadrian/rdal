@@ -277,7 +277,7 @@ ipcMain.handle('db:import', (_, kind) => runImport(kind));
 ipcMain.handle('settings:get', () => settings);
 ipcMain.handle('preferences:get', () => settings.ui || {});
 function commitPreferences(patch) {
-  const allowed = new Set(['wishlist', 'columns', 'mapFollow', 'liveCreaturePool', 'liveCreatureFilter', 'mapCategories', 'mapViewport', 'navigation', 'mapDiscoveryModes', 'mapDiscoverySnapshot', 'mapDiscoveryMarked', 'questMapFilter', 'ventTypes', 'recipeProgressSnapshot', 'armourChoices']);
+  const allowed = new Set(['wishlist', 'columns', 'mapFollow', 'liveCreaturePool', 'liveCreatureFilter', 'mapCategories', 'mapViewport', 'navigation', 'mapDiscoveryModes', 'mapDiscoverySnapshot', 'mapDiscoveryMarked', 'questMapFilter', 'questBrowseMode', 'ventTypes', 'recipeProgressSnapshot', 'armourChoices']);
   const clean = Object.fromEntries(Object.entries(patch || {}).filter(([key, value]) => allowed.has(key) && typeof value === 'string' && value.length < (key==='recipeProgressSnapshot' ? 262144 : 32768)));
   settings.ui = { ...settings.ui, ...clean };
   saveSettings();

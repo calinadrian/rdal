@@ -11,12 +11,20 @@ function h(tag, attrs = {}, ...kids) {
     else el.setAttribute(k, v);
   }
   for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
+  if (attrs.onclick && !['button', 'a', 'input', 'select', 'summary'].includes(tag)) {
+    el.setAttribute('role', 'button'); el.tabIndex = 0;
+    el.addEventListener('keydown', event => {
+      if (event.target === el && ['Enter', ' '].includes(event.key)) { event.preventDefault(); el.click(); }
+    });
+  }
   return el;
 }
 
 let db = null;
 let E = {}; // entities by name
 const state = { module: 'zones', listSel: null, view: null, detail: null, filter: '' };
+let questBrowseMode = ['all', 'active', 'available', 'unknown', 'done'].includes(Preferences.get('questBrowseMode')) ? Preferences.get('questBrowseMode') : 'all';
+let questHubScroll = 0;
 const armourChoices = Preferences.json('armourChoices', {});
 const isJournalView = () => ['journal', 'armourset'].includes(state.view?.type);
 const armourSet = id => db?.armourSets?.find(s => s.id === id);
@@ -41,6 +49,16 @@ function learningTag(status,compact=false) {
   const source=summary.live ? 'Current character · live game data' : summary.known ? 'Last read character · saved game data' : 'Waiting for your character’s recipe progress';
   return h('span',{class:`learning-tag learning-${status}`,title:source+(summary.at ? ' · '+new Date(summary.at).toLocaleString() : '')},label);
 }
+function recipeProgressNote(e) {
+  if (!e.recipes.some(r => !r.facility?.startsWith('Vendor: '))) return null;
+  const summary = RecipeKnowledge.summary();
+  return !summary.live ? h('p', { class: 'progress-context muted small' }, summary.known
+    ? `Saved progress · last updated ${new Date(summary.at).toLocaleString()}`
+    : 'Learning status unknown · load your character to read recipe progress.') : null;
+}
+function journalDescription(e) {
+  return e.desc ? h('details', { class: 'journal-description' }, h('summary', {}, 'Read description'), h('p', { class: 'desc' }, e.desc)) : null;
+}
 function setLearningTag(set) {
   const states=armourSetSummary(set).pieces.map(p=>itemLearningState(p.item)).filter(s=>s && s!=='unavailable');
   if(!states.length || states.includes('unknown'))return null;
@@ -50,6 +68,8 @@ function setLearningTag(set) {
   return tag;
 }
 const history = [];
+let searchOrigin = null;
+let searchTimer;
 const wish = new Set(Preferences.json('wishlist', []));
 const saveWish = () => Preferences.setJSON('wishlist', [...wish]);
 
@@ -93,15 +113,33 @@ function icon(name, size = '') {
 
 /* ---------- Navigation ---------- */
 
-function snapshot() { return { module: state.module, listSel: state.listSel, view: state.view, detail: state.detail }; }
+function snapshot() {
+  return { module: state.module, listSel: state.listSel, view: state.view, detail: state.detail,
+    filter: state.filter, search: $('#search').value, questBrowseMode,
+    scroll: Object.fromEntries(['list', 'content', 'detail'].map(id => [id, $('#' + id).scrollTop])),
+    mapContext: mapReady && state.module === 'map' ? MapView.navigation() : null };
+}
 function saveNavigation() { Preferences.setJSON('navigation', { ...snapshot(), filter: state.filter }); }
 function go(view, { detail, push = true } = {}) {
-  if (push && state.view) history.push(snapshot());
+  clearTimeout(searchTimer);
+  if (push) history.push(snapshot());
   state.view = view;
   if (detail !== undefined) state.detail = detail;
   render();
+  $('#content').scrollTop = 0;
+  $('#detail').scrollTop = 0;
+}
+function navigateTo(module, view, { detail = null, filter = '', listSel = null } = {}) {
+  history.push(snapshot());
+  Object.assign(state, { module, filter, listSel });
+  selectedDiscoveryMarker = null;
+  setMapMode(module === 'map');
+  go(view, { detail, push: false });
 }
 function showItem(name, { push = true } = {}) {
+  const changed = state.detail !== name;
+  if (selectedQuestMarker && selectedQuestMarker.ref !== name) selectedQuestMarker = null;
+  if (changed && state.module === 'quests' && !state.detail) questHubScroll = $('#content').scrollTop;
   if (state.module === 'crafting' && isJournalView()) {
     go({ type: 'journal', arg: name }, { detail: name, push });
     return;
@@ -110,15 +148,84 @@ function showItem(name, { push = true } = {}) {
   if (push && state.detail !== name) history.push(snapshot());
   state.detail = name;
   saveNavigation();
+  if (state.module === 'quests') renderList();
   renderDetail();
   renderContent(); // refresh selection highlight
+  if (changed) {
+    $('#detail').scrollTop = 0;
+    if (state.module === 'quests') { const heading = $('#detail h1'); heading?.setAttribute('tabindex', '-1'); heading?.focus({ preventScroll: true }); }
+  }
 }
 function back() {
   const s = history.pop();
   if (!s) return;
-  Object.assign(state, s);
+  restoreNavigation(s);
+}
+function restoreNavigation(s) {
+  clearTimeout(searchTimer);
+  Object.assign(state, { module: s.module, listSel: s.listSel, view: s.view, detail: s.detail, filter: s.filter || '' });
+  if (s.questBrowseMode) { questBrowseMode = s.questBrowseMode; Preferences.set('questBrowseMode', questBrowseMode); }
+  $('#search').value = s.search ?? (s.view?.type === 'search' ? s.view.arg : '');
+  selectedDiscoveryMarker = null;
+  selectedQuestMarker = null;
   setMapMode(state.module === 'map');
   render();
+  if (s.mapContext && mapReady && state.module === 'map') {
+    MapView.restoreNavigation(s.mapContext);
+    syncMapHighlight();
+  }
+  for (const [id, top] of Object.entries(s.scroll || {})) $('#' + id).scrollTop = top;
+}
+function closeDetail() {
+  const scroll = state.module === 'quests' && state.detail ? questHubScroll : $('#content').scrollTop;
+  state.detail = null;
+  selectedDiscoveryMarker = null;
+  selectedQuestMarker = null;
+  renderDetail(); renderContent(); if (state.module === 'quests') renderList(); saveNavigation();
+  $('#content').scrollTop = scroll;
+  (document.body.classList.contains('map-mode') ? $('#map-navigation button') : $('#content .content-back'))?.focus({ preventScroll: true });
+}
+function selectModule(id) {
+  clearTimeout(searchTimer);
+  searchOrigin = null;
+  history.push(snapshot());
+  Object.assign(state, { module: id, filter: '', listSel: null, view: null, detail: null });
+  selectedDiscoveryMarker = null;
+  selectedQuestMarker = null;
+  $('#search').value = '';
+  setMapMode(id === 'map');
+  if (id === 'quests') state.view = { type: 'questlog', arg: '' };
+  if (id === 'wishlist') state.view = { type: 'wishlist', arg: '' };
+  if (id === 'crafting' && db?.journal?.categories?.length) {
+    const category = db.journal.categories[0];
+    state.listSel = category.id; state.view = journalStart(category);
+  }
+  render();
+  for (const id of ['list', 'content', 'detail']) $('#' + id).scrollTop = 0;
+}
+function navigationBar() {
+  const module = MODULES.find(m => m.id === state.module);
+  const view = state.view;
+  const label = state.module === 'map' ? (mapReady ? MapView.layer()?.name || 'World map' : 'World map')
+    : view?.type === 'search' ? `Search: ${view.arg}` : view?.type === 'armourset' ? armourSet(view.arg)?.name
+    : view?.arg || ({ questlog: 'Quest log', questchain: 'Quest order' }[view?.type]);
+  const detailLabel = state.module === 'map' && selectedQuestMarker?.ref === state.detail && selectedQuestMarker.target ? selectedQuestMarker.target : state.detail;
+  const crumbs = h('nav', { class: 'breadcrumbs', 'aria-label': 'Breadcrumb' },
+    h('button', { type: 'button', onclick: () => selectModule(state.module) }, module?.label || 'AtlasLoot'));
+  if (label) crumbs.append(h('span', { 'aria-hidden': true }, '›'),
+    detailLabel && detailLabel !== label ? h('button', { type: 'button', onclick: closeDetail }, label) : h('span', { 'aria-current': 'page' }, label));
+  if (detailLabel && detailLabel !== label) crumbs.append(h('span', { 'aria-hidden': true }, '›'), h('span', { 'aria-current': 'page' }, detailLabel));
+  return h('div', { class: 'content-navigation' },
+    h('button', { type: 'button', class: 'content-back', disabled: !history.length, onclick: back, title: 'Back (Alt+Left)' }, 'Back'), crumbs);
+}
+function renderNavigation() {
+  $('#btn-back').disabled = !history.length;
+  $('#search-clear').hidden = !$('#search').value;
+  document.body.classList.toggle('search-active', !!$('#search').value);
+  $('#content .content-navigation')?.remove();
+  if (!document.body.classList.contains('map-mode')) $('#content').prepend(navigationBar());
+  $('#map-navigation').replaceChildren(navigationBar());
+  $('#detail .detail-navigation')?.replaceChildren(navigationBar());
 }
 // Open whatever a name refers to: monsters/containers in the middle, items in the detail panel.
 function open(name) {
@@ -140,6 +247,7 @@ const selectedMapQuests = new Set(Array.isArray(savedQuestMapFilter.selected) ? 
 function saveQuestMapFilter() {
   Preferences.setJSON('questMapFilter', { mode: questMapMode, selected: [...selectedMapQuests], steps: questMapStepMode });
   MapView.redraw(); refreshQuestMapHighlight(); renderQuestMapFilter();
+  updateMapFilterCount();
 }
 let liveCreatures = [];
 // null means all types; an empty Set means none. Migrate the old single selection.
@@ -157,6 +265,7 @@ try {
 function saveCreaturePool() {
   Preferences.setJSON('liveCreaturePool', liveCreaturePool === null ? null : [...liveCreaturePool]);
   renderLiveCreatures();
+  updateMapFilterCount();
 }
 
 function creaturePoolDropdown() {
@@ -195,12 +304,34 @@ function filterCreatureChoices() {
 function syncDungeonMapChrome(d = MapView.layer()) {
   const dungeon = !!d && document.body.classList.contains('map-mode');
   document.body.classList.toggle('dungeon-map', dungeon);
-  const open = !dungeon || Preferences.get('dungeonFiltersOpen') === '1';
+  const open = Preferences.get(dungeon ? 'dungeonFiltersOpen' : 'worldFiltersOpen') === '1';
   $('#map-legend').hidden = !open;
   const filters = $('#map-filters');
-  filters.hidden = !dungeon;
+  filters.hidden = false;
   filters.setAttribute('aria-expanded', String(open));
-  filters.classList.toggle('on', dungeon && open);
+  filters.classList.toggle('on', open);
+  updateMapFilterCount();
+}
+
+function updateMapFilterCount() {
+  if (!db?.map || !mapReady) return;
+  const defaults = MapView.defaultCategories();
+  const count = [...db.map.categories.map(c => c.id), 'npc'].filter(id => MapView.isEnabled(id) !== defaults.includes(id)).length
+    + Number(liveCreaturePool !== null) + Number(questMapMode !== 'all') + Number(questMapStepMode !== 'all')
+    + Number(Preferences.json('ventTypes', null) !== null)
+    + ['lore', 'shrine'].filter(id => MapDiscovery.mode(id) !== 'all').length;
+  $('#map-filters').textContent = count ? `Filters (${count})` : 'Filters';
+  $('#map-filters').title = count ? `${count} filter settings differ from defaults` : 'Show map filters';
+}
+function resetMapFilters() {
+  const defaults = MapView.defaultCategories();
+  for (const id of [...db.map.categories.map(c => c.id), 'npc']) MapView.setEnabled(id, defaults.includes(id));
+  MapView.setVentTypes(null);
+  liveCreaturePool = null; saveCreaturePool();
+  questMapMode = 'all'; questMapStepMode = 'all'; selectedMapQuests.clear(); saveQuestMapFilter();
+  for (const id of ['lore', 'shrine']) MapDiscovery.setMode(id, 'all');
+  MapView.setHighlight(null); syncMapHighlight(); MapView.redraw();
+  renderLegend(); updateMapFilterCount();
 }
 
 function setMapMode(on) {
@@ -211,7 +342,7 @@ function setMapMode(on) {
   if (on && db?.map && !mapReady) {
     mapReady = true;
     MapView.init($('#map'), db.map, (m) => {
-      if (m.enter) return MapView.setLayer(db.map.dungeons.find(d => d.id === m.enter));
+      if (m.enter) { history.push(snapshot()); MapView.setLayer(db.map.dungeons.find(d => d.id === m.enter)); renderNavigation(); return; }
       selectedQuestMarker = m.c === 'quest' ? m : null;
       selectedDiscoveryMarker = ['lore', 'shrine'].includes(m.c) ? m : null;
       if (selectedDiscoveryMarker) renderDetail();
@@ -220,6 +351,14 @@ function setMapMode(on) {
     MapView.setQuestStatus((name) => questStatus(ent(name)));
     MapView.setQuestInfo(questMarkerInfo);
     MapView.setQuestVisibility(questMapMarkerVisible);
+    MapView.onVisibilityChange(summary => {
+      const box = $('#map-empty');
+      box.hidden = !!summary.visible;
+      if (!summary.visible) box.replaceChildren(h('p', {}, summary.reason),
+        h('button', { type: 'button', onclick: resetMapFilters }, 'Reset filters'),
+        h('button', { type: 'button', onclick: () => MapView.fit(false) }, 'Fit map'));
+      updateMapFilterCount();
+    });
     // Follow is a remembered toggle: the button shows its state, and it is restored next time.
     MapView.onFollowChange((on) => {
       $('#map-follow').classList.toggle('on', on);
@@ -229,12 +368,16 @@ function setMapMode(on) {
     const picker = $('#map-layer');
     picker.replaceChildren(h('option', { value: '' }, 'World map'),
       ...(db.map.dungeons || []).slice().sort((a, b) => byName(a.name, b.name)).map(d => h('option', { value: d.id }, d.name)));
-    picker.hidden = !db.map.dungeons?.length;
-    picker.onchange = () => MapView.setLayer(db.map.dungeons.find(d => d.id === picker.value));
+    picker.hidden = false;
+    picker.onchange = () => { history.push(snapshot()); MapView.setLayer(db.map.dungeons.find(d => d.id === picker.value)); renderNavigation(); };
     const levels = $('#map-level');
-    levels.onchange = () => MapView.setLayer(MapView.layer(), +levels.value);
+    new ResizeObserver(() => {
+      const tools = $('.map-tools');
+      $('#mapview').style.setProperty('--map-controls-bottom', `${tools.offsetTop + tools.offsetHeight + 12}px`);
+    }).observe($('.map-tools'));
+    levels.onchange = () => { history.push(snapshot()); MapView.setLayer(MapView.layer(), +levels.value); renderNavigation(); };
     $('#map-filters').onclick = () => {
-      Preferences.set('dungeonFiltersOpen', $('#map-legend').hidden ? '1' : '0');
+      Preferences.set(MapView.layer() ? 'dungeonFiltersOpen' : 'worldFiltersOpen', $('#map-legend').hidden ? '1' : '0');
       syncDungeonMapChrome();
       requestAnimationFrame(() => MapView.fit(false));
     };
@@ -243,10 +386,12 @@ function setMapMode(on) {
       picker.value = d?.id || '';
       const count = d?.levels?.length || 0;
       levels.hidden = count < 2;
+      $('#map-level-label').hidden = count < 2;
       $('#map-level-key').hidden = count < 2 || level < 0;
       levels.replaceChildren(...(d?.overview ? [h('option', { value: -1 }, 'All floors')] : []), ...Array.from({ length: count }, (_, i) =>
         h('option', { value: i }, i === 0 ? 'Level 1 (lowest)' : i === count - 1 ? `Level ${i + 1} (top)` : `Level ${i + 1}`)));
       levels.value = level;
+      renderNavigation();
     });
     let saved = null;
     saved = Preferences.get('mapFollow');
@@ -379,6 +524,7 @@ function ventMapControls() {
 
 function renderVentMapFilter() {
   const control = $('#vent-map-key');
+  updateMapFilterCount();
   if (!control || !db?.map) return;
   let selected = 0;
   for (const checkbox of control.querySelectorAll('[data-vent-type]')) {
@@ -409,8 +555,11 @@ function renderLegend() {
     : h('span', { class: 'legend-icon disc', style: `background:${c.style === 'item' ? '#14100c' : c.color};border-color:${c.style === 'item' ? c.color : '#000'}` },
       c.style !== 'circle' && c.icon ? h('img', { src: '../../data/' + c.icon }) : null);
   $('#map-legend').replaceChildren(
+    h('div', { class: 'map-filter-header' }, h('strong', {}, 'Map filters'), h('button', { type: 'button', onclick: resetMapFilters }, 'Reset filters')),
+    h('h3', {}, 'Live nearby'),
     row('npc', h('span', { class: 'legend-icon disc live' }, h('img', { src: '../../data/mapicons/T_Map_Icon_Animal.png' })), 'Live creatures', '–'),
     creaturePoolDropdown(),
+    h('h3', {}, 'Places & resources'),
     ...db.map.categories.flatMap((c) => [row(c.id, swatch(c), c.label, counts[c.id] || 0),
       c.id === 'lore' ? discoveryControls('lore', 'lore') : c.id === 'shrine' ? discoveryControls('shrine', 'shrines & pools')
         : c.id === 'quest' ? questMapControls() : c.id === 'vent' ? ventMapControls() : null]).filter(Boolean),
@@ -428,6 +577,8 @@ function renderLegend() {
   renderDiscoveryProgress();
   renderQuestMapFilter();
   renderVentMapFilter();
+  updateMapFilterCount();
+  $('#map-legend').onchange = updateMapFilterCount;
 }
 
 // Live creatures from the tracker, named from the game data and listed by distance.
@@ -524,7 +675,7 @@ function locationButtons(label,markers,quest=null) {
     return h('button',{type:'button',class:'source-map-button',title:`${quest ? 'Show quest on map' : 'Show on map'} · ${place}`,onclick:()=>{
       if(quest)includeQuestOnMap(quest);
       if(state.module!=='map')history.push(snapshot());
-      state.module='map';renderModules();setMapMode(true);highlightMapMarkers(label,ms);
+      state.module='map';selectedQuestMarker=null;renderModules();setMapMode(true);highlightMapMarkers(label,ms);
       showItem(quest || label,{push:false});
     }},`${place}${ms.length>1 ? ' ('+ms.length+')' : ''}`);
   }));
@@ -534,18 +685,31 @@ function sourceMapLinks(name) {return locationButtons(name,markersFor(name));}
 
 function highlightMapMarkers(name, ms) {
   const hl = MapView.setHighlight(name, ms);
+  syncMapHighlight();
+}
+function syncMapHighlight() {
   const bar = $('#map-highlight');
-  bar.hidden = !hl;
-  if (hl) bar.replaceChildren(`Showing ${ms.length} location${ms.length === 1 ? '' : 's'} for ${name}`, h('button', { onclick: () => { MapView.setHighlight(null); bar.hidden = true; } }, 'Clear'));
+  const context = MapView.navigation();
+  bar.hidden = !context.highlight;
+  if (context.highlight) bar.replaceChildren(`Showing ${context.highlight.markers.length} ${context.highlight.markers.length === 1 ? 'location' : 'locations'} for ${context.highlight.label}`,
+    h('button', { type: 'button', onclick: () => { MapView.setHighlight(null); bar.hidden = true; } }, 'Clear'));
 }
 
 function refreshQuestMapHighlight() {
   const name = MapView.highlightLabel();
   if (!mapReady || E[name]?.kind !== 'quest') return;
+  // Spawn sites are source guidance; a new quest-log snapshot must not replace them with quest NPCs.
+  if (MapView.navigation().highlight?.markers.some(i => db.map.markers[i]?.c === 'creature')) return;
+  const highlighted = MapView.navigation().highlight?.markers || [];
+  if (selectedQuestMarker?.ref === name && highlighted.length === 1 && db.map.markers[highlighted[0]] === selectedQuestMarker
+      && questMapMarkerVisible(selectedQuestMarker, true)) return;
   highlightMapMarkers(name, markersFor(name).filter(m => questMapMarkerVisible(m, true)));
 }
 
 function showOnMap(name) {
+  if (state.module !== 'map') history.push(snapshot());
+  selectedQuestMarker = null;
+  selectedDiscoveryMarker = null;
   if (ent(name).kind === 'quest') includeQuestOnMap(name);
   let ms = markersFor(name).filter(m => ent(name).kind !== 'quest' || questMapMarkerVisible(m, true));
   if(ent(name).kind==='quest' && !ms.length && markersFor(name).length) {
@@ -557,7 +721,7 @@ function showOnMap(name) {
   highlightMapMarkers(name, ms);
   showItem(name, { push: false });
 }
-const mapButton = (name) => (markersFor(name).length ? h('button', { onclick: () => showOnMap(name) }, `Show on map (${markersFor(name).length})`) : null);
+const mapButton = (name) => (markersFor(name).length ? h('button', { type: 'button', onclick: () => showOnMap(name) }, `Show locations (${markersFor(name).length})`) : null);
 
 /* ---------- Modules (left column) ---------- */
 
@@ -599,23 +763,7 @@ function renderModules() {
   nav.replaceChildren(...MODULES.map((m) => h('button', {
     type: 'button', 'aria-current': state.module === m.id ? 'page' : null,
     class: 'nav-item' + (state.module === m.id ? ' sel' : ''),
-    onclick: () => {
-      if (state.view || state.detail) history.push(snapshot());
-      Object.assign(state, { module: m.id, filter: '', listSel: null, view: null, detail: null });
-      selectedDiscoveryMarker = null;
-      $('#search').value = '';
-      setMapMode(m.id === 'map');
-      if (m.id === 'quests') state.view = { type: 'questlog', arg: '' };
-      if (m.id === 'wishlist') state.view = { type: 'wishlist', arg: '' };
-      if (m.id === 'crafting' && db?.journal?.categories?.length) {
-        const category = db.journal.categories[0];
-        state.listSel = category.id;
-        state.view = journalStart(category);
-      }
-      render();
-      $('#content').scrollTop = 0;
-      $('#detail').scrollTop = 0;
-    },
+    onclick: () => selectModule(m.id),
   }, navIcon(m.id), h('span', { class: 'nav-label' }, m.label), m.id === 'wishlist' ? h('span', { class: 'count' }, wish.size || '') : null)));
 }
 
@@ -646,7 +794,9 @@ const isContainer = (e) => e.kind !== 'monster' && e.kind !== 'quest' && e.drops
 const QUEST_STATES = [
   { id: 'active', label: 'In progress', icon: '▶', hint: 'You are doing these right now.', one: 'You are doing this quest right now.' },
   { id: 'available', label: 'Ready to start', icon: '!', hint: 'You have found these. Talk to the quest giver to begin.', one: 'You have found this quest. Talk to the quest giver to begin.' },
-  { id: 'unknown', label: 'Not discovered yet', icon: '?', hint: 'You have not come across these quests yet.', one: 'You have not come across this quest yet.' },
+  { id: 'unknown', get label() { return questLog ? 'No progress recorded' : 'Progress unknown'; }, icon: '?',
+    get hint() { return questLog ? 'These quests have no entry in your saved quest log. Their progress is unknown.' : 'Load your character to read quest progress.'; },
+    get one() { return this.hint; } },
   { id: 'done', label: 'Completed', icon: '✓', hint: 'Finished. Nothing left to do.', one: 'Finished. Nothing left to do.' },
 ];
 let questLog = null; // { at, quests: { id: { s, o } } }
@@ -689,7 +839,7 @@ function questMarkerInfo(marker) {
   const q = E[marker.ref] && questVersion(E[marker.ref]);
   const objectives = q?.objectives || [];
   const keys = new Set(marker.qsteps || []);
-  const steps = objectives.flatMap((o, i) => keys.has(o.key) ? [{ number: i + 1, key: o.key, text: o.text }] : []);
+  const steps = objectives.flatMap((o, i) => keys.has(o.key) ? [{ number: i + 1, key: o.key, text: questStepGuidance(q, o.key)?.instruction || o.text }] : []);
   const status = q ? questStatus(q) : 'unknown';
   const currentKey = questLog?.quests[q?.id]?.o;
   const current = status === 'active' && steps.some(s => s.key === currentKey);
@@ -707,8 +857,8 @@ function questMarkerInfo(marker) {
     .replace(/_(Objective|NPC|Area|Target)(_|$).*$/, '').replace(/NPC$/, '').replace(/(?<=[a-z])(Target|Objective)$/, '').replace(/^WOM(?=_|$)/, 'Wise Old Man');
   // Placed-actor names can carry blueprint prefixes, actor ids and the quest's own name.
   const questPrefix = new RegExp('^' + (q?.name || '').replace(/[^\w ]/g, '').replace(/ /g, ' ?') + ' ', 'i');
-  const location = marker.qnpc ? marker.n.split(' · ')[1] || 'Quest NPC'
-    : words(locationName).replace(/^(BP|DR) /, '').replace(/ C UAID .*$/, '').replace(/\bObjective /g, '').replace(questPrefix, '').trim() || 'Quest area';
+  const location = marker.target || (marker.qnpc ? marker.n.split(' · ')[1] || 'Quest NPC'
+    : words(locationName).replace(/^(BP|DR) /, '').replace(/ C UAID .*$/, '').replace(/\bObjective /g, '').replace(questPrefix, '').trim() || 'Quest area');
   return { title: q?.name || marker.n, location, steps, status, current, start, pickup, color, badge, label };
 }
 
@@ -720,14 +870,7 @@ function questMapLocations(q) {
   const place = (m, info, text) => h('button', { type: 'button', class: 'quest-location' + (selectedQuestMarker === m ? ' sel' : ''),
     title: `Show ${info.location} on the map`,
     onclick: () => {
-      includeQuestOnMap(q.name);
-      if (questMapStepMode === 'current' && !questMapMarkerVisible(m, true)) {
-        questMapStepMode = 'all'; saveQuestMapFilter();
-      }
-      state.module = 'map'; setMapMode(true); renderModules();
-      selectedQuestMarker = m; MapView.focusMarker(m);
-      if (!MapView.highlightLabel()) $('#map-highlight').hidden = true;
-      showItem(q.name);
+      focusQuestTarget(q, m);
     } }, text);
   // Exactly one entry per step, in step order: a place used by several steps is listed under
   // each of them, and steps without a marked place are named so the numbering never jumps.
@@ -772,6 +915,68 @@ function questMapLocations(q) {
   return h('div', { class: 'quest-locations' }, out);
 }
 
+function questStepGuidance(q, key) { return q.guide?.steps.find(step => step.key === key); }
+function questStepMarkers(q, key) {
+  const step = questStepGuidance(q, key);
+  const ids = new Set(step?.targets || []);
+  const markers = db.map.markers.filter(m => m.questId === q.id && questMarkerVisible(m) && (ids.has(m.qlocation) || m.qsteps?.includes(key)));
+  const exact = markers.filter(m => m.precision === 'interaction');
+  return exact.length ? exact : markers;
+}
+function questStepSourceMarkers(q, key) {
+  const names = new Set(questStepGuidance(q, key)?.mapSources || []);
+  return db.map.markers.filter(m => m.c === 'creature' && names.has(m.n));
+}
+function focusQuestTarget(q, marker) {
+  history.push(snapshot());
+  includeQuestOnMap(q.name);
+  if (marker.c === 'quest' && questMapStepMode === 'current' && !questMapMarkerVisible(marker, true)) {
+    questMapStepMode = 'all'; saveQuestMapFilter();
+  }
+  state.module = 'map'; setMapMode(true); renderModules();
+  selectedQuestMarker = marker.c === 'quest' ? marker : null;
+  MapView.setHighlight(q.name, [marker]); MapView.focusMarker(marker); syncMapHighlight();
+  showItem(q.name, { push: false });
+  $('#detail').scrollTop = 0;
+}
+function questStepActions(q, objective) {
+  const markers = questStepMarkers(q, objective.key);
+  const sources = questStepSourceMarkers(q, objective.key);
+  const resources = questStepGuidance(q, objective.key)?.resources || [];
+  const unplaced = sources.length ? 'Use the spawn locations below to find the creatures for this objective. These are recorded spawn sites, not live sightings.'
+    : resources.length ? 'Use the item and creature location buttons below for this objective.'
+    : /\b(plant|water|harvest)\b/i.test(objective.text) ? 'Complete this step at a farming plot you have built.'
+      : /\b(build|place|construct)\b/i.test(objective.text) ? 'Use your chosen building site for this step; it has no fixed quest location.'
+        : /\b(craft|cook)\b/i.test(objective.text) ? 'Use the appropriate crafting or cooking station for this step.'
+          : 'No fixed objective location is confirmed. Quest contacts and dialogue clues may help you find the next action.';
+  const entrances = [...new Set(markers.map(m => m.d).filter(Boolean))].flatMap(id => {
+    const dungeon = db.map.dungeons.find(d => d.id === id);
+    const entrance = db.map.markers.find(m => m.enter === id);
+    return entrance ? [h('button', { type: 'button', class: 'quest-entrance-button', onclick: () => focusQuestTarget(q, entrance) }, `Entrance · ${dungeon.name}`)] : [];
+  });
+  return h('div', { class: 'quest-step-actions' },
+    markers.length ? h('div', { class: 'quest-step-targets' }, markers.map(marker => h('div', { class: 'quest-step-target' },
+      h('button', { type: 'button', class: 'quest-pin-button' + (markers.length === 1 ? ' primary' : ''), 'data-source-id': marker.sourceId || marker.qlocation,
+        onclick: () => focusQuestTarget(q, marker) }, marker.precision === 'interaction' ? `Pin ${marker.target}` : 'Show quest area'),
+      h('span', { class: 'muted small' }, marker.d ? `Inside ${db.map.dungeons.find(d => d.id === marker.d)?.name || marker.region} · opens the correct floor`
+        : marker.precision === 'interaction' ? marker.region || 'World map' : 'General area · exact interaction point not confirmed'))))
+      : h('p', { class: 'muted small quest-location-unknown' }, unplaced),
+    entrances.length ? h('div', { class: 'quest-step-entrances' }, entrances) : null,
+    sources.length ? locationButtons(q.name, sources, q.name) : null,
+    resources.length ? h('div', { class: 'quest-step-resources' }, h('span', { class: 'muted small' }, 'Supplies & creatures · open for recipes and sources'),
+      resources.map(name => h('div', { class: 'quest-step-resource' },
+        h('button', { type: 'button', class: 'item-link', onclick: () => open(name) }, name), mapButton(name)))) : null);
+}
+function questDialogueClues(q) {
+  if (!q.guide?.clues.length) return null;
+  return h('details', { class: 'quest-dialogue-clues' }, h('summary', {}, 'Dialogue clues & quest contacts'),
+    h('p', { class: 'muted small' }, 'From the game’s quest conversations. These include different stages and possible dialogue outcomes.'),
+    q.guide.clues.map(clue => h('details', {}, h('summary', {}, clue.target),
+      clue.lines.map(line => h('p', { class: 'quest-dialogue-line' }, line)),
+      db.map.markers.filter(m => m.questId === q.id && m.sourceId === clue.sourceId && questMarkerVisible(m)).map(marker =>
+        h('button', { type: 'button', onclick: () => focusQuestTarget(q, marker) }, `Pin ${marker.target}`)))));
+}
+
 function questStatus(q) {
   q = questVersion(q);
   const p = questLog?.quests[q.id];
@@ -804,6 +1009,87 @@ function questProgress(q) {
   return { done, total, current: st === 'active' && at >= 0 ? q.objectives[at] : null, step: at + 1 };
 }
 const questRemoved = (e) => e?.availability?.status === 'unavailable';
+const browseQuests = () => Object.values(E).filter(e => e.kind === 'quest' && !e.hidden && !questRemoved(e)).map(questVersion);
+function questMatches(q) {
+  const query = state.filter.trim().toLowerCase();
+  return !query || [q.name, q.region, q.type, ...(q.guide?.steps || []).flatMap(s => [s.instruction, ...(s.notes || [])])].join(' ').toLowerCase().includes(query);
+}
+function filteredQuests() { return browseQuests().filter(q => questMatches(q) && (questBrowseMode === 'all' || questStatus(q) === questBrowseMode)); }
+function setQuestBrowseMode(mode) {
+  questBrowseMode = mode;
+  Preferences.set('questBrowseMode', mode);
+  renderList(); renderContent(); saveNavigation();
+  $('#content').scrollTop = 0;
+  $(`#content .quest-filter[data-mode="${mode}"]`)?.focus({ preventScroll: true });
+}
+function questProgressContext() {
+  return questLog ? gameRunning ? 'Live character progress' : `Saved progress · last updated ${new Date(questLog.at).toLocaleString()}`
+    : 'Progress unknown · load your character to see your current objective.';
+}
+function questNextObjective(q) {
+  const p = questProgress(q), status = questStatus(q);
+  // An unrecognised active objective must not silently fall back to the beginning.
+  const startKey = { Quest_SW_MainQuest: 'AccessSW', Quest_UmS_MainQuest: 'EnterUmS' }[q.id];
+  return p.current || (['unknown', 'available'].includes(status) ? q.objectives?.find(o => o.key === startKey) || q.objectives?.[0] : null);
+}
+function questNextMapButton(q, objective) {
+  if (!objective) return null;
+  const fixed = questStepMarkers(q, objective.key);
+  const markers = fixed.length ? fixed : questStepSourceMarkers(q, objective.key);
+  if (!markers.length) return null;
+  return h('button', { type: 'button', class: 'quest-next-map', onclick: () => {
+    if (markers.length === 1) focusQuestTarget(q, markers[0]);
+    else {
+      history.push(snapshot()); includeQuestOnMap(q.name); state.module = 'map'; setMapMode(true); renderModules();
+      if (questMapStepMode === 'current' && markers.some(m => !questMapMarkerVisible(m, true))) { questMapStepMode = 'all'; saveQuestMapFilter(); }
+      selectedQuestMarker = null; MapView.setHighlight(q.name, markers); syncMapHighlight(); showItem(q.name, { push: false });
+    }
+  } }, !fixed.length ? 'Map · creature spawn locations' : markers.length === 1 && markers[0].precision === 'interaction' ? `Map · ${markers[0].target}` : `Map · ${markers.length} objective location${markers.length === 1 ? '' : 's'}`);
+}
+
+function questOverviewPage() {
+  const quests = browseQuests(), visible = filteredQuests();
+  const count = id => quests.filter(q => questStatus(q) === id).length;
+  const filters = [{ id: 'all', label: 'All quests' }, ...QUEST_STATES];
+  const toolbar = h('div', { class: 'quest-toolbar' }, h('div', { class: 'quest-filters', role: 'group', 'aria-label': 'Filter quests by progress' },
+    filters.map(st => h('button', { type: 'button', class: 'quest-filter', 'data-mode': st.id, 'aria-pressed': questBrowseMode === st.id,
+      onclick: () => setQuestBrowseMode(st.id) }, st.label, h('span', { class: 'quest-filter-count' }, st.id === 'all' ? quests.length : count(st.id))))));
+  const body = [h('header', { class: 'page-head quest-page-head' }, h('div', {}, h('h1', {}, 'Quests'),
+    h('p', { class: 'page-lead progress-context' }, questProgressContext())),
+    db.questChain ? h('button', { type: 'button', onclick: () => go({ type: 'questchain', arg: '' }, { detail: null }) }, 'Story & quest order') : null),
+    h('div', { class: 'quest-summary-bar muted small' }, questLog ? `${count('done')} of ${quests.length} quests completed`
+      : `${quests.length} quests · completion unknown`), toolbar,
+    h('p', { class: 'quest-results-line muted small', role: 'status' }, `${visible.length} quest${visible.length === 1 ? '' : 's'} shown${state.filter ? ` matching “${state.filter}”` : ''}`)];
+  if (!visible.length) body.push(h('div', { class: 'quest-empty' }, h('h2', {}, state.filter ? 'No quests match these filters' : questBrowseMode === 'active' ? 'No quests recorded in progress' : 'No quests in this group'),
+    h('p', { class: 'muted' }, state.filter ? 'Try a quest name, place, item or objective. Clear the filters to browse every quest.'
+      : questLog ? 'Choose All quests to browse the guides or another progress group.' : 'Load your character to read progress, or choose All quests to browse the guides.'),
+    h('button', { type: 'button', onclick: () => { state.filter = ''; setQuestBrowseMode('all'); } }, 'Clear filters')));
+  const tier = q => questTier(q.name, q.id, q.region)?.min ?? 99;
+  for (const st of QUEST_STATES) {
+    const group = visible.filter(q => questStatus(q) === st.id).sort((a, b) => tier(a) - tier(b) || (b.type === 'Main quest') - (a.type === 'Main quest') || byName(a.name, b.name));
+    if (!group.length) continue;
+    body.push(h('section', { class: `quest-task-section q-${st.id}` }, h('div', { class: 'quest-group-heading' }, h('h2', {}, st.label),
+      h('span', { class: 'muted small' }, group.length)), h('p', { class: 'muted small quest-group-hint' }, st.hint),
+      h('div', { class: 'quest-task-list' }, group.map(q => {
+        const objective = questNextObjective(q);
+        const instruction = objective && (questStepGuidance(q, objective.key)?.instruction || objective.text);
+        return h('article', { class: `quest-card quest-task q-${st.id}${state.detail === q.name ? ' sel' : ''}` },
+          h('div', { class: 'quest-task-body' }, h('h3', {}, h('button', { type: 'button', class: 'quest-title-link', onclick: () => showItem(q.name) }, q.name)),
+            h('div', { class: 'quest-tags' }, questTypeTag(q), questTierTag(q.name, q.id, q.region), q.region ? h('span', { class: 'muted small' }, q.region) : null),
+            instruction ? h('p', { class: 'quest-now' }, h('strong', {}, st.id === 'active' ? 'Next: ' : st.id === 'available' ? 'Start: ' : 'Guide starts: '), instruction)
+              : st.id === 'active' ? h('p', { class: 'muted small' }, 'Your current objective was not recorded. Open the guide to find the matching task.')
+                : h('p', { class: 'muted small' }, st.id === 'done' ? 'Quest completed. You can still review the guide and locations.' : q.desc),
+            st.id === 'active' && q.guide?.sequence === 'linear' ? questProgressBar(q) : null),
+          h('div', { class: 'quest-task-buttons' }, h('button', { type: 'button', class: st.id === 'active' ? 'primary' : '', onclick: () => showItem(q.name) }, st.id === 'active' ? 'Continue guide' : 'Open guide'),
+            st.id !== 'done' ? questNextMapButton(q, objective) : null));
+      }))));
+  }
+  const removed = Object.values(E).filter(q => q.kind === 'quest' && !q.hidden && questRemoved(q) && questMatches(q));
+  if (questBrowseMode === 'all' && removed.length) body.push(h('details', { class: 'quest-archive' }, h('summary', {}, `Removed quests (${removed.length})`),
+    h('p', { class: 'muted small' }, 'These quests remain in the game files but cannot be started in the current game.'),
+    removed.map(q => h('button', { type: 'button', class: 'quest-archive-link', onclick: () => showItem(q.name) }, q.name))));
+  return h('div', { class: 'page quest-overview' }, body);
+}
 
 // Quest order from the game's quest scripts: each storyline as a numbered timeline, then stand-alone quests by region.
 function questChainPage() {
@@ -890,7 +1176,7 @@ function questOrderLinks(e) {
   return h('div', { class: 'quest-order-links small' },
     before.length ? h('div', {}, h('span', { class: 'muted' }, 'Comes after: '), links(before)) : null,
     after.length ? h('div', {}, h('span', { class: 'muted' }, 'Leads to: '), links(after)) : null,
-    h('button', { type: 'button', class: 'item-link muted', onclick: () => { state.module = 'quests'; setMapMode(false); renderModules(); go({ type: 'questchain', arg: '' }, { detail: e.name }); } }, 'See the full quest order'));
+    h('button', { type: 'button', class: 'item-link muted', onclick: () => navigateTo('quests', { type: 'questchain', arg: '' }, { detail: e.name }) }, 'See the full quest order'));
 }
 
 // Recommended tier = power level of the map regions a quest sends you to. Quests without map
@@ -914,7 +1200,7 @@ function questTier(name, id, area) {
   const level = levels.get(area) ?? areaTiers.get(area);
   return level != null ? { min: level, max: level, estimated: true, regions: [] } : null;
 }
-const tierText = t => `Tier ${t.min}${t.max !== t.min ? '–' + t.max : ''}`;
+const tierText = t => t ? `Tier ${t.min}${t.max !== t.min ? '–' + t.max : ''}` : '';
 function questTierTag(name, id, area) {
   const t = questTier(name, id, area);
   if (!t) return null;
@@ -930,10 +1216,13 @@ function questProgressBar(q) {
   const p = questProgress(q);
   if (!p.total) return null;
   const st = questStatus(q);
-  const label = st === 'done' ? `All ${p.total} steps done` : p.current ? `Step ${p.step} of ${p.total}` : `${p.total} steps`;
+  const linear = q.guide?.sequence === 'linear';
+  const known = st === 'done' || !!p.current && linear;
+  const label = st === 'done' ? 'Quest completed' : !linear ? p.current ? 'Current objective recorded' : 'Objective progress unknown'
+    : p.current ? `Step ${p.step} of ${p.total}` : `${p.total} steps · progress unknown`;
   return h('div', { class: `quest-progress q-${st}` }, h('span', { class: 'quest-progress-label' }, label),
-    h('span', { class: 'quest-progress-track', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': p.total, 'aria-valuenow': p.done },
-      h('span', { class: 'quest-progress-fill', style: `width:${Math.round(p.done / p.total * 100)}%` })));
+    h('span', { class: 'quest-progress-track', role: 'progressbar', 'aria-label': !known ? 'Progress unknown' : label, 'aria-valuemin': 0, 'aria-valuemax': p.total, 'aria-valuenow': known ? p.done : null },
+      h('span', { class: 'quest-progress-fill', style: `width:${known ? Math.round(p.done / p.total * 100) : 0}%` })));
 }
 
 // Objectives as a checklist: done before the current one, current highlighted, the rest still to do.
@@ -942,11 +1231,23 @@ function questChecklist(q) {
   const st = questStatus(q);
   const cur = questLog?.quests[q.id]?.o;
   const at = q.objectives.findIndex((o) => o.key === cur);
-  return h('ol', { class: 'objectives' }, q.objectives.map((o, i) => {
-    const s = st === 'done' || (at >= 0 && i < at) ? 'done' : st === 'active' && i === at ? 'now' : 'todo';
-    return h('li', { class: s }, h('span', { class: 'tick' }, s === 'done' ? '✓' : String(i + 1)), h('span', {},
-      s === 'now' ? h('span', { class: 'objective-now-label' }, 'Do this now') : null, o.text,
-      o.hint && s === 'now' ? h('div', { class: 'muted small' }, o.hint) : null));
+  const linear = q.guide?.sequence === 'linear';
+  const seen = new Set();
+  const objectives = linear ? q.objectives : q.objectives.filter(o => {
+    const instruction = questStepGuidance(q, o.key)?.instruction || o.text;
+    if (seen.has(instruction)) return false;
+    seen.add(instruction); return true;
+  }).map(o => q.objectives.find(other => other.key === cur && questStepGuidance(q, other.key)?.instruction === questStepGuidance(q, o.key)?.instruction) || o);
+  return h('ol', { class: 'objectives' + (!linear ? ' reference-objectives' : '') }, objectives.map((o) => {
+    const i = q.objectives.indexOf(o);
+    const guide = questStepGuidance(q, o.key);
+    const s = st === 'done' ? 'done' : st === 'active' && i === at ? 'now' : linear && st === 'active' && at >= 0 && i < at ? 'done' : 'unknown';
+    return h('li', { class: s }, h('span', { class: 'tick', 'aria-hidden': 'true' }, s === 'done' ? '✓' : linear ? String(i + 1) : '·'), h('span', {},
+      s === 'now' ? h('span', { class: 'objective-now-label' }, 'Do this now') : null,
+      h('span', { class: 'quest-step-instruction' }, guide?.instruction || o.text),
+      (guide?.notes || (o.hint ? [o.hint] : [])).map(note => h('p', { class: 'quest-step-note muted small' }, note)),
+      questStepActions(q, o),
+      guide?.instruction && guide.instruction !== o.text ? h('details', { class: 'quest-original-objective' }, h('summary', {}, 'In-game objective'), h('p', {}, o.text)) : null));
   }));
 }
 
@@ -986,14 +1287,22 @@ function renderList() {
   let results = list.querySelector('.list-results');
   if (!filter || !results) {
     filter = h('input', {
-      placeholder: 'Filter…', 'aria-label': 'Filter entries', autocomplete: 'off', spellcheck: 'false',
-      oninput: (ev) => { state.filter = ev.target.value; saveNavigation(); renderList(); if (state.module === 'crafting') renderContent(); },
+      id: 'section-filter', placeholder: 'Filter entries…', 'aria-label': 'Filter entries', autocomplete: 'off', spellcheck: 'false',
+      oninput: (ev) => { state.filter = ev.target.value; saveNavigation(); renderList(); if (['crafting', 'wishlist', 'quests'].includes(state.module)) renderContent(); },
     });
     results = h('div', { class: 'list-results' });
-    list.replaceChildren(h('div', { class: 'list-filter' }, filter), results);
+    list.replaceChildren(h('div', { class: 'list-filter' },
+      h('label', { for: 'section-filter', class: 'filter-label' }), filter,
+      h('div', { class: 'filter-summary' }, h('span', { class: 'filter-count', role: 'status' }),
+        h('button', { type: 'button', class: 'filter-clear', onclick: () => { state.filter = ''; renderList(); if (['crafting', 'wishlist', 'quests'].includes(state.module)) renderContent(); saveNavigation(); filter.focus(); } }, 'Clear filter'))), results);
   }
   if (filter.value !== state.filter) filter.value = state.filter;
-  filter.placeholder = 'Filter…';
+  const filterLabel = { zones: 'Filter zones or monsters', monsters: 'Filter monsters', containers: 'Filter chests & packs', quests: 'Filter quests',
+    crafting: 'Filter crafting', types: 'Filter item types', wishlist: 'Filter wishlist' }[state.module] || 'Filter entries';
+  filter.placeholder = filterLabel + '…';
+  filter.setAttribute('aria-label', filterLabel);
+  list.querySelector('.filter-label').textContent = filterLabel;
+  list.querySelector('.filter-clear').hidden = !state.filter;
   let rows = [];
 
   if (state.module === 'zones') {
@@ -1016,21 +1325,20 @@ function renderList() {
     const browse = categories.length ? h('div', { class: 'craft-browse', 'aria-label': 'Browse crafting' },
       h('button', { type: 'button', 'aria-pressed': journalMode, onclick: () => {
         const category = categories.find(c => c.id === state.listSel) || categories[0];
-        state.listSel = category.id; state.filter = '';
-        go(journalStart(category), { detail: null });
+        navigateTo('crafting', journalStart(category), { listSel: category.id });
       } }, 'Journal'),
       h('button', { type: 'button', 'aria-pressed': !journalMode, onclick: () => {
-        state.filter = ''; go({ type: 'facility', arg: [...facilities().keys()].sort(byName)[0] }, { detail: null });
+        navigateTo('crafting', { type: 'facility', arg: [...facilities().keys()].sort(byName)[0] });
       } }, 'Stations')) : null;
     if (journalMode && categories.length) {
       filter.placeholder = 'Find journal item…';
       const category = categories.find(c => c.id === state.listSel) || categories[0];
       const select = h('select', { id: 'journal-category', onchange: event => {
-        const next = categories.find(c => c.id === event.target.value); state.listSel = next.id; state.filter = '';
-        go(journalStart(next), { detail: null });
+        const next = categories.find(c => c.id === event.target.value);
+        navigateTo('crafting', journalStart(next), { listSel: next.id });
       } }, categories.map(c => h('option', { value: c.id }, c.name)));
       select.value = category.id;
-      rows = [browse, h('label', { class: 'journal-category', for: 'journal-category' }, 'Journal category', select)];
+      rows = [browse, h('label', { class: 'journal-category', for: 'journal-category' }, 'Browse category', select)];
       const matching = f ? categories.flatMap(c => c.groups.map(g => ({ ...g, category: c }))) : category.groups.map(g => ({ ...g, category }));
       let count = 0;
       const seenSearchItems=new Set();
@@ -1045,13 +1353,13 @@ function renderList() {
           const set = armourSet(id);
           const first = set.slots.Body[0] || set.slots.Head[0] || set.slots.Legs[0];
           return h('button', { type: 'button', class: `journal-item armour-set-item${state.view.type === 'armourset' && state.view.arg === id ? ' sel' : ''}`,
-            onclick: () => { state.listSel = group.category.id; go({ type: 'armourset', arg: id }, { detail: null }); } },
+            onclick: () => navigateTo('crafting', { type: 'armourset', arg: id }, { listSel: group.category.id, filter: state.filter }) },
             icon(first, 'sm'), h('span', {class:'journal-entry-text'},h('span',{},set.name),setLearningTag(set)));
         });
         rows.push(h('details', { class: 'journal-group', open: !!f || selected },
           h('summary', {}, f ? `${group.category.name} · ${group.name}` : group.name, h('span', { class: 'count' }, setIds.length + names.filter(n=>!E[n]?.armourSet).length)),
           setRows, names.filter(n=>!E[n]?.armourSet).map(n => h('button', { type: 'button', class: `journal-item${state.view.arg === n ? ' sel' : ''}`, 'data-item-name':n, 'aria-current': state.view.arg === n ? 'page' : null,
-            onclick: () => { state.listSel = group.category.id; go({ type: 'journal', arg: n }, { detail: null }); } }, icon(n, 'sm'), h('span',{class:'journal-entry-text'},h('span',{},n),
+            onclick: () => navigateTo('crafting', { type: 'journal', arg: n }, { listSel: group.category.id, filter: state.filter }) }, icon(n, 'sm'), h('span',{class:'journal-entry-text'},h('span',{},n),
               h('span',{class:'journal-entry-tags'},learningTag(itemLearningState(ent(n)),true), E[n]?.journal?.masterwork ? h('span',{class:'entry-kind'},'Masterwork') : null))))));
       }
       if (!count) rows.push(h('p', { class: 'empty' }, 'No journal items match. Try a different item name.'));
@@ -1063,13 +1371,14 @@ function renderList() {
     rows = [...itemTypes()].filter(([t]) => match(t)).sort((a, b) => byName(a[0], b[0]))
       .map(([t, n]) => listItem(t, { type: 'itemtype', arg: t }, n, '', 'item'));
   } else if (state.module === 'wishlist') {
-    rows = [listItem('All wishlist items', { type: 'wishlist', arg: '' }, wish.size)];
+    rows = [...wish].filter(match).sort(byName).map(name => h('button', { type: 'button', class: 'list-item', title: name, onclick: () => showItem(name) }, name));
   } else if (state.module === 'quests') {
     // Grouped by your live progress, like a quest log: active first, completed last.
-    rows.push(listItem('Quest log overview', { type: 'questlog', arg: '' }, questLogAge()));
-    if (db.questChain) rows.push(listItem('Quest order', { type: 'questchain', arg: '' }, ''));
-    const quests = Object.values(E).filter((e) => e.kind === 'quest' && !e.hidden && !questRemoved(e) && match(e.name)).map(questVersion);
-    const removed = Object.values(E).filter((e) => e.kind === 'quest' && !e.hidden && questRemoved(e) && match(e.name));
+    rows.push(h('button', { type: 'button', class: 'list-item quest-overview-link' + (!state.detail && state.view?.type === 'questlog' ? ' sel' : ''),
+      onclick: () => state.view?.type === 'questlog' ? closeDetail() : go({ type: 'questlog', arg: '' }, { detail: null }) }, h('span', { class: 'quest-overview-label' }, 'Quest overview'), h('span', { class: 'count' }, questLogAge())));
+    if (db.questChain) rows.push(h('button', { type: 'button', class: 'list-item', onclick: () => go({ type: 'questchain', arg: '' }, { detail: null }) }, 'Story & quest order'));
+    const quests = filteredQuests();
+    const removed = questBrowseMode === 'all' && f ? Object.values(E).filter((e) => e.kind === 'quest' && !e.hidden && questRemoved(e) && questMatches(e)) : [];
     for (const st of QUEST_STATES) {
       const qs = quests.filter((q) => questStatus(q) === st.id)
         .sort((a, b) => byName(a.region || '~', b.region || '~') || (b.type === 'Main quest') - (a.type === 'Main quest') || byName(a.name, b.name));
@@ -1077,7 +1386,8 @@ function renderList() {
       rows.push(h('div', { class: `list-group q-${st.id}` }, `${st.icon} ${st.label}`, h('span', { class: 'count' }, qs.length)));
       rows.push(...qs.map((q) =>
         h('div', { class: `list-item indent q-${st.id}` + (state.detail === q.name ? ' sel' : ''), title: `${q.type}${q.region ? ' · ' + q.region : ''}`, onclick: () => showItem(q.name) },
-          h('span', { class: 'quest-list-text' }, h('span', { class: 'quest-list-name' }, q.name), h('span', { class: 'quest-tags' }, questTypeTag(q), questTierTag(q.name, q.id, q.region), q.region ? h('span', { class: 'quest-list-region' }, q.region) : null)))));
+          h('span', { class: 'quest-list-text' }, h('span', { class: 'quest-list-name' }, q.name),
+            h('span', { class: 'quest-list-region' }, [q.region, tierText(questTier(q.name, q.id, q.region))].filter(Boolean).join(' · '))))));
     }
     if (removed.length) {
       rows.push(h('div', { class: 'list-group q-removed' }, '✕ Removed from the game', h('span', { class: 'count' }, removed.length)));
@@ -1089,7 +1399,11 @@ function renderList() {
     rows = [h('div', { class: 'empty' }, 'Map')];
   }
   const caption = rows.length && LIST_CAPTIONS[state.module] ? h('div', { class: 'list-caption' }, LIST_CAPTIONS[state.module]) : null;
-  results.replaceChildren(...(rows.length ? [caption, ...rows].filter(Boolean) : [h('div', { class: 'empty' }, 'Nothing here')]));
+  results.replaceChildren(...(rows.length ? [caption, ...rows].filter(Boolean) : []));
+  const count = results.querySelectorAll(state.module === 'quests' ? '.quest-list-text' : '.list-item, .journal-item').length;
+  list.querySelector('.filter-count').textContent = `${count} ${state.module === 'quests' ? 'quests' : 'entries'}${f ? ' found' : ''}`;
+  if (!count && !results.querySelector('.empty')) results.append(h('div', { class: 'empty' },
+    h('p', {}, f ? `No matches for “${state.filter}”. Try a shorter name or clear the filter.` : state.module === 'wishlist' ? 'Add an item to your wishlist from its details.' : 'No entries are available in this section.')));
 }
 
 /* ---------- Middle column ---------- */
@@ -1255,7 +1569,7 @@ function craftProcurement(e,optional=false) {
 
 function stationButton(station) {
   return h('button',{type:'button',class:'station-chip',title:`Show every recipe made at ${station}`,onclick:()=>{
-    state.module='crafting';state.filter='';setMapMode(false);go({type:'facility',arg:station},{detail:null});
+    navigateTo('crafting', {type:'facility',arg:station});
   }},station);
 }
 
@@ -1289,8 +1603,7 @@ function recipeCard(r, outputName, showEffects = true, showHead = true, showGuid
 }
 
 function openQuest(name) {
-  state.module='quests'; state.filter=''; setMapMode(false);
-  go({type:'questlog',arg:''},{detail:name});
+  navigateTo('quests', {type:'questlog',arg:''}, {detail:name});
 }
 
 function recipeUnlock(r,name) {
@@ -1351,7 +1664,7 @@ function acquisitionRoutes(e,depth=0,seen=new Set()) {
   }
   for(const s of e.droppedBy) routes.push(h('div',{class:'acquisition-route'},
     h('button',{type:'button',class:'item-link',onclick:()=>{
-      state.module=ent(s.from).kind==='monster'?'monsters':'containers';setMapMode(false);go({type:'source',arg:s.from},{detail:e.name});
+      navigateTo(ent(s.from).kind==='monster'?'monsters':'containers', {type:'source',arg:s.from}, {detail:e.name});
     }},s.from),h('span',{class:'muted small'},` · ${s.rarity || 'Chance unconfirmed'}${s.qty ? ' · ×'+s.qty : ''}`),
     sourceMapLinks(s.from)));
   if(depth && !routes.length) {
@@ -1482,28 +1795,27 @@ function journalPage(name) {
   const recipes = [...recipeGroups.values()];
   return h('article', { class: 'journal-page' },
     header(e.name, [j?.category, j?.group].filter(Boolean).join(' / ') || e.type),
-    learningTag(itemLearningState(e), true),
+    learningTag(itemLearningState(e)), recipeProgressNote(e),
+    h('div', { class: 'actions' }, mapButton(name), h('button', { type: 'button', onclick: () => {
+      wish.has(name) ? wish.delete(name) : wish.add(name); saveWish(); renderContent(); renderModules();
+    } }, wish.has(name) ? 'Remove from wishlist' : 'Add to wishlist')),
+    acquisitionPanel(e, recipes.length > 0),
     e.armourSet ? h('button', { type: 'button', class: 'set-open', onclick: () => go({ type: 'armourset', arg: e.armourSet }, { detail: null }) }, `View ${armourSet(e.armourSet).name}`) : null,
     h('div', { class: 'journal-overview' },
       h('div', { class: 'journal-illustration' }, artwork || icon(name, 'lg')),
       h('div', { class: 'journal-facts' },
-        e.desc ? h('p', { class: 'desc' }, e.desc) : null,
         recipes.length ? h('section', { class: 'journal-recipes' }, h('h2', {}, e.availability?.status==='unavailable' ? 'Historical recipe' : 'How to make it'),
           recipes.flatMap((r, i) => [recipes.length > 1 ? h('div', { class: 'recipe-option' }, `Option ${i + 1} of ${recipes.length}`) : null, recipeCard(r, name, false, false, false)]))
           : h('p', { class: 'muted' }, 'This item can’t be crafted. See where to find it below.'),
         h('section', { class: 'journal-stat-block' }, h('h2', {}, 'Stats'),
           journalStats(e),
           h('dl', { class: 'journal-stats' }, [['Weight', e.weight], ['Stack', e.stack]].filter(([,v]) => v != null).map(([label,value]) => h('div', { class: 'journal-stat' }, h('dt', {}, label), h('dd', {}, value))))),
-        itemEffectsPanel(e),
-        acquisitionPanel(e, recipes.length > 0),
-        h('div', { class: 'actions' }, mapButton(name), h('button', { type: 'button', onclick: () => {
-          wish.has(name) ? wish.delete(name) : wish.add(name); saveWish(); renderContent(); renderModules();
-        } }, wish.has(name) ? 'Remove from wishlist' : 'Add to wishlist')))),
+        itemEffectsPanel(e), journalDescription(e))),
     // Full width below the overview: the expanded guide is a long tree and needs the room.
     recipes.length && e.availability?.status !== 'unavailable' ? craftingGuide(name, recipes[0].id) : null,
     j?.notes?.length ? h('section', { class: 'journal-notes' }, h('h2', {}, 'Journal notes'), j.notes.flatMap(note => note.split(/\r?\n\s*\r?\n/).map(p => h('p', {}, p)))) : null,
     e.droppedBy.length ? h('section', {}, h('h2', {}, 'Sources'), e.droppedBy.map(s => h('button', { type: 'button', class: 'journal-source', onclick: () => {
-      state.module = ent(s.from).kind === 'monster' ? 'monsters' : 'containers'; go({ type: 'source', arg: s.from }, { detail: name });
+      navigateTo(ent(s.from).kind === 'monster' ? 'monsters' : 'containers', { type: 'source', arg: s.from }, { detail: name });
     } }, `${s.from} · ${s.qty || ''} · ${s.rarity || 'Chance unknown'}`))) : null,
     e.usedIn.length ? h('section', {}, h('h2', {}, 'Used in'), h('div', { class: 'mats' }, [...new Set(e.usedIn.map(u => u.item))].map(n => h('button', { type: 'button', class: 'mat', onclick: () => showItem(n) }, icon(n, 'sm'), n)))) : null);
 }
@@ -1529,14 +1841,14 @@ function renderContent() {
   if (!db) {
     c.replaceChildren(h('div', { class: 'empty' }, h('h1', {}, 'No loot data yet'),
       h('p', {}, 'Open ⚙ Settings and choose "Update from wiki" to download the item, drop and recipe data.')));
-    return;
+    renderNavigation(); return;
   }
   if (!v) {
     const prompts = { monsters: 'Select a monster on the left to see its drops.', containers: 'Select a chest or pack on the left to see its contents.',
       zones: 'Select a zone on the left to explore its loot.', types: 'Select an item type on the left to browse its items.', crafting: 'Select a crafting station on the left to see its recipes.' };
     c.replaceChildren(h('div', { class: 'empty' }, h('h1', {}, MODULES.find(m=>m.id===state.module)?.label || 'Dragonwilds AtlasLoot'),
       h('p', {}, prompts[state.module] || 'Choose an entry on the left to get started.')));
-    return;
+    renderNavigation(); return;
   }
   let body = [];
   if (v.type === 'armourset') {
@@ -1569,71 +1881,40 @@ function renderContent() {
     const items = Object.values(E).filter((e) => e.kind !== 'monster' && (e.type || 'Other') === v.arg).map((e) => e.name).sort(byName);
     body = [header(v.arg, `${items.length} items`), h('div', { class: 'loot' }, items.map((n) => lootRow(n, [sourceHint(n)])))];
   } else if (v.type === 'wishlist') {
-    const items = [...wish].sort(byName);
+    const items = [...wish].filter(name => name.toLowerCase().includes(state.filter.toLowerCase())).sort(byName);
     body = [header('Wishlist', 'Star items in the detail panel to track them here')];
     for (const n of items) {
       body.push(lootRow(n, [sourceHint(n)]));
     }
-    if (!items.length) body.push(h('p', { class: 'muted' }, 'Your wishlist is empty.'));
+    if (!items.length) body.push(h('p', { class: 'muted' }, state.filter && wish.size ? 'No wishlist items match. Clear the filter to see your saved items.' : 'Your wishlist is empty. Add an item from its details to keep it here.'));
   } else if (v.type === 'questchain') {
     body = questChainPage();
   } else if (v.type === 'questlog') {
-    const quests = Object.values(E).filter((e) => e.kind === 'quest' && !e.hidden && !questRemoved(e)).map(questVersion);
-    const count = (id) => quests.filter((q) => questStatus(q) === id).length;
-    const when = questLog ? `${gameRunning ? 'Live from the game' : 'Last read'} · ${new Date(questLog.at).toLocaleString()}` : 'Start the game to read your progress';
-    const sections = new Map();
-    const summary = h('div', { class: 'quest-summary' },
-      h('div', { class: 'quest-summary-bar' }, h('span', { class: 'quest-progress-track' },
-        h('span', { class: 'quest-progress-fill q-done', style: `width:${quests.length ? Math.round(count('done') / quests.length * 100) : 0}%` })),
-        h('span', {}, h('b', {}, count('done')), ` of ${quests.length} quests completed`)),
-      h('div', { class: 'quest-summary-counts' }, QUEST_STATES.map((st) => h('button', { type: 'button', class: `quest-count q-${st.id}`, disabled: !count(st.id),
-        onclick: () => { const s = sections.get(st.id); if (s) { s.open = true; s.scrollIntoView({ block: 'start', behavior: 'smooth' }); } } },
-        h('span', { class: 'quest-count-n' }, count(st.id)), h('span', {}, st.label)))));
-    body = [h('header', { class: 'page-head' }, h('h1', {}, 'Quest log'), h('p', { class: 'page-lead' }, when)), summary,
-      questLog ? null : h('p', { class: 'quest-notice' }, 'Start the game and load your character to see your real progress. Until then every quest shows as “Not discovered yet”.')];
-    for (const st of QUEST_STATES) {
-      const tier = (q) => questTier(q.name, q.id, q.region)?.min ?? 99;
-      const qs = quests.filter((q) => questStatus(q) === st.id).sort((a, b) => tier(a) - tier(b) || (b.type === 'Main quest') - (a.type === 'Main quest') || byName(a.name, b.name));
-      if (!qs.length) continue;
-      const section = h('details', { class: `quest-section q-${st.id}`, open: st.id !== 'done' },
-        h('summary', {}, h('span', { class: 'quest-section-title' }, `${st.icon} ${st.label}`), h('span', { class: 'quest-section-count' }, qs.length),
-          h('span', { class: 'quest-section-hint muted small' }, st.hint)),
-        h('div', { class: 'quest-grid' }, qs.map((q) => {
-          const p = questProgress(q);
-          return h('button', { type: 'button', class: `quest-card q-${st.id}${state.detail === q.name ? ' sel' : ''}`, onclick: () => showItem(q.name) },
-            h('div', { class: 'quest-card-head' }, h('span', { class: 'name' }, q.name),
-              h('span', { class: 'quest-tags' }, questTierTag(q.name, q.id, q.region), questTypeTag(q),
-                q.region ? h('span', { class: 'muted small' }, q.region) : null)),
-            st.id === 'active' && p.current ? h('div', { class: 'quest-now' }, h('span', { class: 'objective-now-label' }, 'Do this now'), p.current.text)
-              : q.desc ? h('div', { class: 'quest-desc muted small' }, q.desc) : null,
-            st.id === 'active' ? questProgressBar(q) : null);
-        })));
-      sections.set(st.id, section);
-      body.push(section);
-    }
-    const removed = Object.values(E).filter((e) => e.kind === 'quest' && !e.hidden && questRemoved(e)).sort((a, b) => byName(a.name, b.name));
-    if (removed.length) body.push(h('details', { class: 'quest-section q-removed' },
-      h('summary', {}, h('span', { class: 'quest-section-title' }, '✕ Removed from the game'), h('span', { class: 'quest-section-count' }, removed.length),
-        h('span', { class: 'quest-section-hint muted small' }, 'Still in the game files, but nothing in the current game gives them to you. They are not counted above.')),
-      h('div', { class: 'quest-grid' }, removed.map((q) => h('button', { type: 'button', class: `quest-card q-removed${state.detail === q.name ? ' sel' : ''}`, onclick: () => showItem(q.name) },
-        h('div', { class: 'quest-card-head' }, h('span', { class: 'name' }, q.name), h('span', { class: 'quest-tags' }, questTypeTag(q), q.region ? h('span', { class: 'muted small' }, q.region) : null)),
-        h('div', { class: 'quest-desc muted small' }, q.availability.reason))))));
-    body = [h('div', { class: 'page' }, ...body.filter(Boolean))];
+    body = [questOverviewPage()];
   } else if (v.type === 'search') {
     const q = v.arg.toLowerCase();
-    const hits = Object.values(E).filter((e) => e.name.toLowerCase().includes(q))
-      .sort((a, b) => (a.name.toLowerCase().startsWith(q) ? 0 : 1) - (b.name.toLowerCase().startsWith(q) ? 0 : 1) || byName(a.name, b.name)).slice(0, 200);
+    if (q.length < 2) {
+      c.replaceChildren(header('Search everything', 'Type at least two characters to find items, creatures, and quests.'));
+      renderNavigation(); return;
+    }
+    const matches = Object.values(E).filter((e) => e.name.toLowerCase().includes(q))
+      .sort((a, b) => (a.name.toLowerCase().startsWith(q) ? 0 : 1) - (b.name.toLowerCase().startsWith(q) ? 0 : 1) || byName(a.name, b.name));
+    const hits = matches.slice(0, 200);
     const mons = hits.filter((e) => e.kind === 'monster' || isContainer(e));
-    const items = hits.filter((e) => !mons.includes(e));
-    body = [header(`Search: “${v.arg}”`, `${hits.length} results`)];
+    const quests = hits.filter(e => e.kind === 'quest');
+    const items = hits.filter((e) => !mons.includes(e) && e.kind !== 'quest');
+    body = [header(`Search: “${v.arg}”`, matches.length > hits.length ? `Showing ${hits.length} of ${matches.length} results · narrow your search to see more` : `${hits.length} results`),
+      !hits.length ? h('p', { class: 'search-empty' }, 'No matches. Try a shorter item, creature, or quest name, or clear the search to return to browsing.') : null];
     if (mons.length) body.push(h('h2', {}, 'Monsters & containers'), h('div', { class: 'loot' }, mons.map((e) =>
       h('div', { class: 'loot-row', onclick: () => go({ type: 'source', arg: e.name }) }, icon(e.name), h('span', { class: 'name' }, e.name), h('span', { class: 'meta' }, `${e.drops.length} drops`)))));
+    if (quests.length) body.push(h('h2', {}, 'Quests'), h('div', { class: 'loot' }, quests.map(e => lootRow(e.name, [questRemoved(e) ? 'Unavailable' : 'Quest']))));
     if (items.length) body.push(h('h2', {}, 'Items'), h('div', { class: 'loot' }, items.map((e) => lootRow(e.name, [sourceHint(e.name)]))));
     // Recipes that use the searched material
     const usedIn = items.length === 1 ? items[0].usedIn : [];
     if (usedIn.length) body.push(h('h2', {}, `Recipes using ${items[0].name}`), ...usedIn.flatMap((u) => ent(u.item).recipes.map((r) => recipeCard(r, u.item))));
   }
   c.replaceChildren(...body.filter(Boolean));
+  renderNavigation();
 }
 
 function sourceHint(name) {
@@ -1649,11 +1930,13 @@ function renderDetail() {
   document.body.classList.toggle('map-detail-open', !!state.detail || !!selectedDiscoveryMarker);
   document.body.classList.toggle('quests-mode', state.module === 'quests');
   const d = $('#detail');
+  const close = () => h('div', { class: 'detail-controls' }, h('div', { class: 'detail-navigation' }, navigationBar()),
+    h('button', { type: 'button', class: 'detail-close', onclick: closeDetail, 'aria-label': 'Close details' }, 'Close details'));
   if (selectedDiscoveryMarker && document.body.classList.contains('map-mode')) {
     const marker = selectedDiscoveryMarker;
     const status = MapDiscovery.state(marker);
     const manual = MapDiscovery.manuallyMarked(marker);
-    d.replaceChildren(h('h1', {}, marker.n), h('div', { class: 'sub' }, marker.region || 'World map'),
+    d.replaceChildren(close(), h('h1', {}, marker.n), h('div', { class: 'sub' }, marker.region || 'World map'),
       h('p', {}, status === 'discovered' ? `Discovered · ${manual ? 'marked by you' : 'game progress'}`
         : status === 'undiscovered' ? 'Undiscovered' : 'Discovery status unconfirmed'),
       status !== 'discovered' || manual ? h('button', { type: 'button', class: 'primary', onclick: () => {
@@ -1666,28 +1949,33 @@ function renderDetail() {
   }
   if (!state.detail) { d.replaceChildren(h('div', { class: 'empty' }, state.module === 'quests' ? 'Select a quest to see its steps, rewards and where to go.' : 'Select an item to see where it comes from.')); return; }
   const e = ent(state.detail);
-  const star = h('button', { class: 'star' + (wish.has(e.name) ? ' on' : ''), title: 'Wishlist',
-    onclick: () => { wish.has(e.name) ? wish.delete(e.name) : wish.add(e.name); saveWish(); renderDetail(); renderModules(); if (state.view?.type === 'wishlist') renderContent(); } }, wish.has(e.name) ? '★' : '☆');
+  const star = h('button', { type: 'button', class: 'wishlist-action' + (wish.has(e.name) ? ' on' : ''),
+    onclick: () => { wish.has(e.name) ? wish.delete(e.name) : wish.add(e.name); saveWish(); renderDetail(); renderModules(); if (state.view?.type === 'wishlist') renderContent(); } }, wish.has(e.name) ? 'Remove from wishlist' : 'Add to wishlist');
 
   const body = [
+    close(),
     h('div', { class: 'detail-head' }, icon(e.name, 'lg'),
-      h('div', { style: 'flex:1;min-width:0' }, h('h1', { class: itemClass(e.name) }, e.name),
-        e.type ? h('span', { class: 'tag' }, e.type) : null), star),
-    e.desc ? h('p', { class: 'desc' }, e.desc) : null,
-    itemEffectsPanel(e),
+      h('div', { style: 'flex:1;min-width:0' }, h('h1', { class: e.kind === 'quest' ? '' : itemClass(e.name) }, e.name),
+        e.type ? h('span', { class: 'tag' }, e.type) : null)),
+    e.kind === 'item' ? learningTag(itemLearningState(e)) : null,
+    e.kind === 'item' ? recipeProgressNote(e) : null,
+    e.kind !== 'quest' ? h('div', { class: 'actions' }, mapButton(e.name), star,
+      e.recipes.length ? h('button', { type: 'button', onclick: () => d.querySelector('.detail-recipes')?.scrollIntoView({ block: 'start' }) }, 'View recipe') : null) : null,
     e.kind==='item' ? acquisitionPanel(e, e.recipes.some(r=>!r.facility?.startsWith('Vendor: '))) : null,
+    e.recipes.length ? h('section', { class: 'detail-recipes' }, h('h2', {}, e.recipes.length > 1 ? `Recipes (${e.recipes.length})` : 'Recipe'), ...e.recipes.map(r => recipeCard(r, e.name, false, false))) : null,
   ];
   if (e.journal?.stats?.length) body.push(h('h2', {}, 'Item stats'),
     h('p', { class: 'muted small' }, [e.journal.armourWeight && `${e.journal.armourWeight} armour`, e.journal.skill, ...e.journal.damageTypes].filter(Boolean).join(' · ') || 'Base values'), journalStats(e));
-  if(e.kind==='item')body.splice(1,0,learningTag(itemLearningState(e)));
   if (e.journal?.id) body.push(h('button', { type: 'button', class: 'journal-open', onclick: () => {
+    history.push(snapshot());
     state.module = 'crafting'; state.filter = '';
     state.listSel = db.journal.categories.find(c => c.groups.some(g => g.items.includes(e.name)))?.id;
-    setMapMode(false); go({ type: 'journal', arg: e.name }, { detail: null });
+    setMapMode(false); go({ type: 'journal', arg: e.name }, { detail: null, push: false });
   } }, 'Read journal entry'));
   if (e.armourSet) body.push(h('button', { type:'button', class:'set-open', onclick:()=>{
+    history.push(snapshot());
     state.module='crafting'; state.filter=''; state.listSel=db.journal.categories.find(c=>c.name==='Armour & Shields')?.id;
-    setMapMode(false); go({type:'armourset',arg:e.armourSet},{detail:null});
+    setMapMode(false); go({type:'armourset',arg:e.armourSet},{detail:null,push:false});
   } }, 'View armour set'));
 
   if (e.kind === 'quest') {
@@ -1695,18 +1983,27 @@ function renderDetail() {
     body.push(questRemoved(e)
       ? h('div', { class: 'quest-status-block q-removed' }, h('div', { class: 'quest-status q-removed' }, '✕ Removed from the game'),
         h('p', {}, 'You can’t get this quest anymore. ', e.availability.reason))
-      : h('div', { class: `quest-status-block q-${st.id}` }, h('div', { class: `quest-status q-${st.id}` }, `${st.icon} ${st.label}`),
-        h('p', { class: 'muted small' }, questLog ? st.one : 'Start the game to read your progress.')));
+      : h('div', { class: `quest-status-block quest-reader-status q-${st.id}` }, h('span', { class: `quest-status q-${st.id}` }, st.label),
+        h('span', { class: 'progress-context muted small' }, questLog ? questProgressContext() : 'Load your character to read progress.')));
+    const current = questProgress(e).current;
+    const next = questNextObjective(e);
+    if (next && !questRemoved(e)) {
+      const guidance = questStepGuidance(e, next.key);
+      body.push(h('section', { class: 'current-objective' }, h('h2', {}, current ? 'What to do next' : st.id === 'available' ? 'Start here' : 'First objective · guide preview'),
+        !current && st.id === 'unknown' ? h('p', { class: 'muted small' }, 'Your current objective is unknown. This previews the beginning of the guide.') : null,
+        h('p', { class: 'quest-current-instruction' }, guidance?.instruction || next.text),
+        (guidance?.notes || (next.hint ? [next.hint] : [])).map(note => h('p', { class: 'muted small' }, note)), questStepActions(e, next)));
+    } else if (st.id === 'active') {
+      body.push(h('section', { class: 'current-objective' }, h('h2', {}, 'Current objective not recorded'),
+        h('p', {}, 'Load your character to refresh this quest, or open the objective guide below to find the task shown in your game.')));
+    }
+    if (e.guide?.preparation.length && st.id !== 'done') body.push(h('p', { class: 'quest-preparation muted small' }, h('strong', {}, 'Bring with you: '), e.guide.preparation.join(' ')));
     const tier = !questRemoved(e) && questTier(e.name, e.id, e.region);
-    if (tier) body.push(h('div', { class: 'quest-tier-block' }, h('div', {}, h('span', { class: 'muted' }, 'Recommended: '), h('b', {}, tierText(tier)), tier.estimated ? ' (estimate)' : ''),
-      h('p', { class: 'muted small' }, tier.estimated ? `This quest has no marked map places, so this is the usual power level of ${e.region}.`
-        : `Matches the power level of the regions it sends you to: ${tier.regions.join(', ')}. Have gear around this power level before you start.`)));
-    const order = db.questChain && questOrderLinks(e);
-    if (order) body.push(order);
+    if (tier) body.push(h('p', { class: 'quest-reader-meta muted small' }, [e.region, `Recommended ${tierText(tier)}${tier.estimated ? ' (estimated)' : ''}`].filter(Boolean).join(' · ')));
     const questLocations=markersFor(e.name);
-    body.push(h('div',{class:'actions'},h('button',{type:'button',class:'primary quest-show-map',disabled:!questLocations.length,
+    body.push(h('div',{class:'actions quest-secondary-actions'},h('button',{type:'button',class:'quest-show-map',disabled:!questLocations.length,
       title:questLocations.length ? 'Show this quest’s confirmed locations' : 'No confirmed map locations in the extracted game data',
-      onclick:()=>{history.push(snapshot());showOnMap(e.name);}},`Show on map${questLocations.length ? ' ('+questLocations.length+')' : ''}`)),
+      onclick:()=>showOnMap(e.name)},`All quest locations${questLocations.length ? ' ('+questLocations.length+')' : ''}`), star),
       !questLocations.length ? h('p',{class:'muted small'},'No confirmed map locations in the extracted game data.') : null);
     if (st.id === 'done' && e.completedDesc && e.completedDesc !== e.desc) body.push(h('p', { class: 'desc' }, e.completedDesc));
     if (selectedQuestMarker?.ref === e.name && document.body.classList.contains('map-mode')) {
@@ -1715,15 +2012,22 @@ function renderDetail() {
         ...info.steps.map(s => h('p', {}, `${s.number}. ${s.text}`)),
         info.steps.length ? null : h('p', {}, 'The game data does not confirm which step uses this location.')));
     }
-    if (e.objectives?.length) body.push(h('h2', {}, 'Steps'), questProgressBar(e), questChecklist(e));
+    if (e.objectives?.length) body.push(questProgressBar(e), h('details', { class: 'quest-walkthrough', open: st.id === 'active' && !current },
+      h('summary', {}, e.guide?.sequence === 'linear' ? 'Full walkthrough' : 'All objective guidance'),
+      e.guide?.sequence !== 'linear' ? h('p', { class: 'muted small' }, 'This quest has alternate objectives or collection counters. Only your current objective and overall quest status are confirmed; this list is a reference, not a completion checklist.') : null,
+      questChecklist(e)));
     if (e.rewards?.length) body.push(h('h2',{},'You get during this quest'),h('div',{class:'quest-rewards mats'},e.rewards.map(r=>
       h('button',{type:'button',class:'mat',onclick:()=>showItem(r.item)},icon(r.item,'sm'),
         r.qty != null && r.kind!=='quest-recipe' ? h('span',{class:'q'},`${r.qty}×`) : null,h('span',{class:'mat-name'},r.item),
         r.kind==='quest-recipe' ? h('span',{class:'reward-kind'},'Recipe') : null))));
     const locations = questMapLocations(e);
-    if (locations) body.push(h('h2', {}, 'Quest locations'), locations);
+    if (locations) body.push(h('details', { class: 'quest-map-overview' }, h('summary', {}, 'All quest locations'), locations));
+    body.push(questDialogueClues(e));
+    if (e.guide?.sources.length) body.push(h('p', { class: 'muted small quest-guide-sources' }, 'Route reference: ',
+      e.guide.sources.map(source => h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer' }, source.title))));
+    const order = db.questChain && questOrderLinks(e);
     const people = questPeople(e);
-    if (people.length) body.push(h('h2', {}, st.id === 'active' ? 'People to talk to' : 'Quest giver'), ...people);
+    if (people.length || order) body.push(h('details', { class: 'quest-background' }, h('summary', {}, 'Related quests & contacts'), order, ...people));
   }
 
   // The creature's 3D model from the game files: drag to turn it, wheel to zoom.
@@ -1733,7 +2037,6 @@ function renderDetail() {
   const stats = [['Health', e.health], ['Weak to', e.weakness], ['Resists', e.resistance], ['Region', e.region],
     ['Found in', e.location.length ? e.location.join(', ') : null], ['Weight', e.weight], ['Stack', e.stack]].filter(([, v]) => v != null && v !== '');
   if (stats.length) body.push(h('dl', { class: 'stats' }, stats.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, String(v))])));
-  if(e.kind!=='quest')body.push(h('div', { class: 'actions' }, mapButton(e.name)));
 
   if (e.drops.length) {
     body.push(h('h2', {}, e.kind === 'container' ? 'Contents' : 'Drops'), h('table', { class: 'src-table' }, e.drops.map((d) => h('tr', {},
@@ -1748,9 +2051,6 @@ function renderDetail() {
       h('td', { onclick: () => open(s.from) }, s.from), h('td', { class: 'num' }, s.qty ? `×${s.qty}` : ''),
       h('td', { class: 'num ' + rarityClass(s.pct, s.rarity) }, s.rarity || '?')))));
   }
-  if (e.recipes.length) {
-    body.push(h('h2', {}, e.recipes.length > 1 ? `Recipes (${e.recipes.length})` : 'Recipe'), ...e.recipes.map((r) => recipeCard(r, e.name, false, false)));
-  }
   if (e.shops.length) {
     body.push(h('h2', {}, 'Sold by'), h('div', {}, e.shops.map((s) => h('div', { class: 'link', onclick: () => open(s) }, s))));
   }
@@ -1760,6 +2060,7 @@ function renderDetail() {
   }
   if (e.kind === 'item' && !e.droppedBy.length && !e.recipes.length && !e.shops.length)
     body.push(h('p', { class: 'muted' }, markersFor(e.name).length ? 'Gathered from the world — see the map.' : 'No source found in the game data (it may be gathered or a quest reward).'));
+  body.push(itemEffectsPanel(e), journalDescription(e));
   d.replaceChildren(...body.filter(Boolean));
 }
 
@@ -2033,11 +2334,32 @@ async function init() {
   render();
   renderStatus(settings);
 
-  let searchTimer;
+  const clearSearch = () => {
+    clearTimeout(searchTimer);
+    $('#search').value = '';
+    if (searchOrigin) {
+      const origin = searchOrigin; searchOrigin = null;
+      restoreNavigation(origin);
+    } else if (state.view?.type === 'search') {
+      state.view = null; state.detail = null; render();
+    } else renderNavigation();
+    $('#search').focus();
+  };
+  $('#search-clear').onclick = clearSearch;
   $('#search').addEventListener('input', (ev) => {
     clearTimeout(searchTimer);
     const q = ev.target.value.trim();
-    searchTimer = setTimeout(() => q.length >= 2 ? go({ type: 'search', arg: q }, { push: state.view?.type !== 'search' }) : null, 150);
+    if (!q) { clearSearch(); return; }
+    renderNavigation();
+    searchTimer = setTimeout(() => {
+      const starting = state.view?.type !== 'search';
+      if (starting) {
+        searchOrigin = snapshot(); searchOrigin.search = '';
+        history.push(searchOrigin);
+      }
+      if (state.module === 'map') { state.module = 'types'; setMapMode(false); }
+      go({ type: 'search', arg: q }, { detail: null, push: false });
+    }, 150);
   });
   $('#btn-back').onclick = back;
   $('#btn-hide').onclick = () => window.atlas.hide();
@@ -2128,9 +2450,11 @@ async function init() {
   $('#update-restart').onclick = $('#update-now').onclick = () => window.atlas.installUpdate();
   // M pressed in the game: open on the map, following the player.
   window.atlas.onShowMap(() => {
+    if (state.module !== 'map') history.push(snapshot());
     state.module = 'map';
     renderModules();
     setMapMode(true);
+    renderNavigation();
     if (lastPlayer?.ok && !MapView.highlightLabel() && Preferences.get('mapFollow') === null) MapView.setFollow(true);
   });
   $('#map-follow').onclick = () => MapView.setFollow(!MapView.isFollowing());
@@ -2140,9 +2464,11 @@ async function init() {
 
   document.addEventListener('keydown', (ev) => {
     if (ev.ctrlKey && ev.key.toLowerCase() === 'f') { ev.preventDefault(); $('#search').select(); }
-    else if (ev.altKey && ev.key === 'ArrowLeft') back();
+    else if (ev.altKey && ev.key === 'ArrowLeft') { ev.preventDefault(); back(); }
     else if (ev.key === 'Escape' && !$('#settings').open && !$('#update-dialog').open) {
-      if ($('#search').value) { $('#search').value = ''; } else if (settingsMode === 'overlay') window.atlas.hide();
+      if ($('#search').value) clearSearch();
+      else if (state.detail || selectedDiscoveryMarker) closeDetail();
+      else if (settingsMode === 'overlay') window.atlas.hide();
     }
   });
 }

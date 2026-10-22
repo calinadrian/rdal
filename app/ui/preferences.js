@@ -1,7 +1,7 @@
 // Hydrate preferences from settings.json before map/app initialization. Browser storage is a mirror
 // and a migration source, so an existing installation keeps its choices on the first upgraded launch.
 (() => {
-  const keys = ['wishlist', 'columns', 'mapFollow', 'liveCreaturePool', 'liveCreatureFilter', 'mapCategories', 'mapViewport', 'navigation', 'mapDiscoveryModes', 'mapDiscoverySnapshot', 'mapDiscoveryMarked', 'questMapFilter', 'ventTypes', 'recipeProgressSnapshot', 'armourChoices'];
+  const keys = ['wishlist', 'columns', 'mapFollow', 'liveCreaturePool', 'liveCreatureFilter', 'mapCategories', 'mapViewport', 'navigation', 'mapDiscoveryModes', 'mapDiscoverySnapshot', 'mapDiscoveryMarked', 'questMapFilter', 'questBrowseMode', 'ventTypes', 'recipeProgressSnapshot', 'armourChoices'];
   const values = {};
   window.Preferences = {
     get(key) { return values[key] ?? null; },

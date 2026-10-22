@@ -73,7 +73,10 @@ app.whenReady().then(async () => {
       onPlayer({ ok: true, world: 'L_World', x: entrance.x, y: entrance.y, z: entrance.z, yaw: 0 });
       assert(MapView.layer() === null, 'Leaving must return to the world map');
       assert(document.querySelector('#map-level-key').hidden, 'World map must hide the floor key');
-      assert(!document.querySelector('#map-legend').hidden && filters.hidden, 'World map must retain its normal legend');
+      assert(document.querySelector('#map-legend').hidden && !filters.hidden && filters.getAttribute('aria-expanded') === 'false', 'World map must use the same collapsed Filters control');
+      filters.click();
+      assert(!document.querySelector('#map-legend').hidden && filters.getAttribute('aria-expanded') === 'true', 'World map filters must remain accessible');
+      filters.click();
       // Opening a dungeon from the picker while outside it.
       const picker = document.querySelector('#map-layer');
       picker.value = takla.id; picker.dispatchEvent(new Event('change'));

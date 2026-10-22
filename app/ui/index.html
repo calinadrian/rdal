@@ -12,7 +12,8 @@
     <div class="brand"><img class="brand-mark" src="../icon.png" alt=""> <span>AtlasLoot<span class="brand-sub">Dragonwilds</span></span></div>
     <div class="search-wrap">
       <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
-      <input id="search" type="search" aria-label="Search items, monsters and recipes" placeholder="Search items, monsters, recipes…" autocomplete="off" spellcheck="false">
+      <input id="search" type="search" aria-label="Search everything" placeholder="Search everything…" autocomplete="off" spellcheck="false">
+      <button id="search-clear" type="button" hidden>Clear search</button>
       <kbd>Ctrl F</kbd>
     </div>
     <div class="win-buttons">
@@ -29,11 +30,12 @@
     <section id="content" class="pane content" aria-label="Selected entry"></section>
     <section id="mapview" class="pane mapview" hidden>
       <canvas id="map"></canvas>
+      <div id="map-navigation" class="map-navigation"></div>
       <div id="map-legend" class="map-legend"></div>
       <div class="map-tools">
-        <select id="map-layer" aria-label="Map" title="World map or a dungeon's floor plan (switches by itself when you go through a dungeon door)" hidden></select>
-        <select id="map-level" aria-label="Dungeon level" title="All floors together, or a single level. Live entry follows your current level." hidden></select>
-        <button id="map-filters" aria-controls="map-legend" aria-expanded="false" hidden>Filters</button>
+        <label class="map-select-label">Map<select id="map-layer" aria-label="Map" title="World map or a dungeon's floor plan (switches by itself when you go through a dungeon door)"></select></label>
+        <label class="map-select-label" id="map-level-label" hidden>Floor<select id="map-level" aria-label="Dungeon level" title="All floors together, or a single level. Live entry follows your current level." hidden></select></label>
+        <button id="map-filters" aria-controls="map-legend" aria-expanded="false">Filters</button>
         <button id="map-follow" title="Keep me in the middle of the map (stays on until you turn it off)">◎ Follow me</button>
         <div class="map-zoom-controls">
           <button id="map-zoom-in" title="Zoom in">+</button>
@@ -42,6 +44,7 @@
         </div>
       </div>
       <div id="map-highlight" class="map-highlight" hidden></div>
+      <div id="map-empty" class="map-empty" role="status" hidden></div>
       <div id="map-level-key" class="map-level-key" hidden><span><i class="floor-swatch current"></i>This floor</span><span><i class="floor-swatch other"></i>Other floors</span></div>
       <div id="map-tip" class="map-tip" hidden></div>
     </section>

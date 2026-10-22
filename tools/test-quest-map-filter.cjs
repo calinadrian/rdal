@@ -78,13 +78,13 @@ app.whenReady().then(async () => {
       let highlighted = [];
       MapView.setHighlight = (name, markers) => { highlighted = markers; return originalHighlight(name, markers); };
       onQuestLog([{ id: 'Quest_FTUE_RC', s: 1, o: 'Objective1' }]);
-      assert(highlighted.length === 1 && highlighted[0] === rat, 'Highlighted results must follow a change to the current objective');
+      assert(highlighted.includes(rat) && highlighted.every(m => m.qsteps.includes('Objective1')), 'Highlighted results must follow the current objective, including its exact interaction pins');
       chooseSteps('all');
-      assert(highlighted.length === 3, 'All steps must expand an existing highlighted quest');
+      assert(highlighted.length >= 3 && highlighted.includes(ratReturn) && highlighted.includes(windmill), 'All steps must retain the original locations alongside new interaction pins');
       chooseSteps('current');
-      assert(highlighted.length === 1, 'Current-only must narrow existing highlighted results');
+      assert(highlighted.includes(rat) && highlighted.every(m => m.qsteps.includes('Objective1')), 'Current-only must narrow existing highlighted results to this objective');
       onQuestLog([{ id: 'Quest_FTUE_RC', s: 1, o: 'Objective2' }]);
-      assert(highlighted.length === 2 && highlighted.includes(windmill), 'New current-step locations must not be trapped behind an older highlight');
+      assert(highlighted.includes(ratReturn) && highlighted.includes(windmill) && !highlighted.includes(rat), 'New current-step locations must not be trapped behind an older highlight');
       MapView.setHighlight = originalHighlight;
       showItem('Ratcatcher'); MapView.focusMarker(windmill); await wait(200);
       return 'PASS: all/selected/active, multiple selections, search, live completion, empty selection, hidden-marker picking, select-all/clear and explicit map navigation';

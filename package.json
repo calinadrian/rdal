@@ -1,6 +1,6 @@
 {
   "name": "dragonwilds-atlasloot",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "productName": "Dragonwilds AtlasLoot",
   "description": "AtlasLoot-style loot, recipe and live map companion for RuneScape: Dragonwilds, built from the game files",
   "main": "app/main.js",
@@ -45,7 +45,7 @@
       "!data/models/**",
       "!data/portraits/**",
       "importer/**/*",
-      "tools/{extract-all.ps1,build.ps1,dungeon-regions.js,export-quest-npcs.js,export-journal.js,export-acquisition-world.js}",
+      "tools/{extract-all.ps1,build.ps1,dungeon-regions.js,export-quest-npcs.js,export-journal.js,export-acquisition-world.js,export-quest-guidance.js}",
       "tools/Dumper/bin/out/**/*",
       "tools/Dumper/out/Mappings.usmap",
       "tools/Extractor/bin/out/**/*",
