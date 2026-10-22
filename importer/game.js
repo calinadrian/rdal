@@ -407,6 +407,7 @@ const CATS = [
   { id: 'agility', label: 'Agility courses', color: '#e08040', icon: 'mapicons/T_Agility_NewCourse.png', style: 'badge' },
   { id: 'ore', label: 'Ores & rocks', color: '#8a8aa0', icon: 'mapicons/T_Map_Icon_Ore.png', style: 'glyph' },
   { id: 'gather', label: 'Plants & gathering', color: '#4caf50', icon: 'mapicons/T_Map_Icon_Plant.png', style: 'glyph' },
+  { id: 'tree', label: 'Trees', color: '#74954a', icon: 'mapicons/T_Map_Icon_Plant.png', style: 'glyph' },
   { id: 'fishing', label: 'Fishing', color: '#40d0d0', icon: iconPath('T_Icon_Fish_Beltfish'), style: 'item' },
   { id: 'lore', label: 'Lore', color: '#d080ff', icon: iconPath('T_Icon_Scroll'), style: 'item' },
   { id: 'recipe', label: 'Recipe learning & vendors', color: '#c9ad75', icon: iconPath('T_Icon_Scroll'), style: 'item' },
@@ -464,6 +465,8 @@ function categorize(a) {
       : { c: 'vent', n: 'Anima vent (type unconfirmed)', color: '#a0a0a0' };
   }
   if (/Salvage/.test(c)) return { c: 'salvage', n: clean(c) };
+  const tree = c.match(/^BP_(?:[A-Z]+_)?Tree_(Ash|Oak|Willow|Maple)(?:_|$)/);
+  if (tree) return { c: 'tree', n: `${tree[1]} tree` };
   if (c === 'BP_HealthShrine_C') return { c: 'shrine', n: 'Health shrine',
     discovery: { kind: 'shrines', ids: [normalizeGuid(a.props.UniqueShrineIdentifier)].filter(Boolean) } };
   if (c === 'BP_CleansingPool_Vines_C') {

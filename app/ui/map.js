@@ -21,6 +21,20 @@ window.MapView = (() => {
   const savedVentTypes = Preferences.json('ventTypes', null);
   let ventTypes = Array.isArray(savedVentTypes) ? new Set(savedVentTypes.filter(t => typeof t === 'string')) : null;
   const ventTypeEnabled = type => ventTypes === null || ventTypes.has(type);
+  const RESOURCE_CATEGORIES = ['ore', 'gather', 'tree'];
+  const savedResources = Preferences.json('resourceTypes', {});
+  const resourceTypes = Object.fromEntries(RESOURCE_CATEGORIES.map(c => [c,
+    Array.isArray(savedResources?.[c]) ? new Set(savedResources[c].filter(n => typeof n === 'string')) : null]));
+  const resourceTypeEnabled = (category, name) => !RESOURCE_CATEGORIES.includes(category)
+    || resourceTypes[category] === null || resourceTypes[category].has(name);
+  function setResourceTypes(category, names) {
+    if (!RESOURCE_CATEGORIES.includes(category)) return;
+    resourceTypes[category] = names === null ? null : new Set(names);
+    Preferences.setJSON('resourceTypes', Object.fromEntries(RESOURCE_CATEGORIES.map(c => [c,
+      resourceTypes[c] === null ? null : [...resourceTypes[c]]])));
+    dirty = true; hover = null;
+    const tip = document.getElementById('map-tip'); if (tip) tip.hidden = true;
+  }
   function setVentTypes(types) {
     ventTypes = types === null ? null : new Set(types);
     Preferences.setJSON('ventTypes', ventTypes === null ? null : [...ventTypes]);
@@ -234,10 +248,10 @@ window.MapView = (() => {
   let questVisibility = (m, highlighted) => highlighted || !m.ref || questStatus(m.ref) !== 'done';
   let questInfo = () => null;
   // Vent type, discovery and quest filters, which the minimap applies too.
-  const filtered = (m, highlighted) => (m.c !== 'vent' || ventTypeEnabled(m.ventType || 'unknown')) && MapDiscovery.visible(m) && (m.c !== 'quest' || questVisibility(m, highlighted));
+  const filtered = (m, highlighted) => resourceTypeEnabled(m.c, m.n) && (m.c !== 'vent' || ventTypeEnabled(m.ventType || 'unknown')) && MapDiscovery.visible(m) && (m.c !== 'quest' || questVisibility(m, highlighted));
   // Tracked quest targets stay on the map whatever the filters or highlight, like WoW's quest areas.
   const visible = (m) => onLayer(m) && (tracked.has(m) || filtered(m, !!highlight?.markers.has(m)) && (highlight ? highlight.markers.has(m)
-    : enabled.has(m.c) && (frame().res / scale < DENSE_UNITS || !['ore', 'gather'].includes(m.c))));
+    : enabled.has(m.c) && (frame().res / scale < DENSE_UNITS || !RESOURCE_CATEGORIES.includes(m.c))));
   // Ring around quest markers: blue for quests in progress, gold for givers of quests you can still take.
   const questRing = (m) => {
     if (m.c !== 'quest' || !m.ref) return null;
@@ -393,11 +407,11 @@ window.MapView = (() => {
     const shown = layerMarkers.filter(visible);
     const inViewport = m => { const [x, y] = toScreen(m.x, m.y); return x >= -26 && x <= cw + 26 && y >= -26 && y <= ch + 26; };
     const liveVisible = enabled.has('npc') && playerHere() ? npcs.filter(inViewport).length : 0;
-    const zoomHidden = frame().res / scale >= DENSE_UNITS && layerMarkers.some(m => enabled.has(m.c) && ['ore', 'gather'].includes(m.c));
+    const zoomHidden = frame().res / scale >= DENSE_UNITS && layerMarkers.some(m => enabled.has(m.c) && RESOURCE_CATEGORIES.includes(m.c) && filtered(m, false));
     const summary = { visible: shown.filter(inViewport).length + liveVisible,
       reason: shown.length ? 'No markers in this area. Pan the map or choose Fit map.'
         : enabled.size === 1 && enabled.has('npc') ? player?.ok ? 'No matching live creatures nearby. Try other creature types.' : 'Live creatures are unavailable. Start the game and load your character.'
-        : zoomHidden ? 'Ores and plants appear when zoomed in. Zoom in to see resource locations.'
+        : zoomHidden ? 'Ores, plants and trees appear when zoomed in. Zoom in to see resource locations.'
         : layerMarkers.length ? 'No locations match your filters on this map or floor. Change or reset the filters.' : 'No recorded locations on this map or floor. Try another floor or map.' };
     const visibilityKey = JSON.stringify(summary);
     if (visibilityKey !== lastVisibility) { lastVisibility = visibilityKey; visibilityChanged(summary); }
@@ -532,6 +546,15 @@ window.MapView = (() => {
       if (W > 1) restore(); else pendingFocus = restore;
     },
     isVentTypeEnabled: ventTypeEnabled,
+    resourceCategories: () => RESOURCE_CATEGORIES.slice(),
+    isResourceTypeEnabled: resourceTypeEnabled,
+    isResourceFiltered: category => resourceTypes[category] !== null,
+    setResourceTypes,
+    setResourceType(category, name, on) {
+      const names = resourceTypes[category] === null
+        ? new Set((map?.markers || []).filter(m => m.c === category).map(m => m.n)) : new Set(resourceTypes[category]);
+      on ? names.add(name) : names.delete(name); setResourceTypes(category, names);
+    },
     createVentIcon: icons.createVentIcon,
     setVentTypes,
     setVentType(type, on) {

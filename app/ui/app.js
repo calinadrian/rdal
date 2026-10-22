@@ -285,7 +285,7 @@ function creaturePoolDropdown() {
   return dropdown;
 }
 document.addEventListener('pointerdown', ev => {
-  for (const selector of ['#live-creature-filter', '#quest-map-picker']) {
+  for (const selector of ['#live-creature-filter', '#quest-map-picker', ...MapView.resourceCategories().map(c => `#resource-filter-${c}`)]) {
     const dropdown = $(selector);
     if (dropdown && !dropdown.contains(ev.target)) dropdown.open = false;
   }
@@ -319,6 +319,7 @@ function updateMapFilterCount() {
   const count = [...db.map.categories.map(c => c.id), 'npc'].filter(id => MapView.isEnabled(id) !== defaults.includes(id)).length
     + Number(liveCreaturePool !== null) + Number(questMapMode !== 'all') + Number(questMapStepMode !== 'all')
     + Number(Preferences.json('ventTypes', null) !== null)
+    + MapView.resourceCategories().filter(c => MapView.isResourceFiltered(c)).length
     + ['lore', 'shrine'].filter(id => MapDiscovery.mode(id) !== 'all').length;
   $('#map-filters').textContent = count ? `Filters (${count})` : 'Filters';
   $('#map-filters').title = count ? `${count} filter settings differ from defaults` : 'Show map filters';
@@ -327,6 +328,7 @@ function resetMapFilters() {
   const defaults = MapView.defaultCategories();
   for (const id of [...db.map.categories.map(c => c.id), 'npc']) MapView.setEnabled(id, defaults.includes(id));
   MapView.setVentTypes(null);
+  for (const c of MapView.resourceCategories()) MapView.setResourceTypes(c, null);
   liveCreaturePool = null; saveCreaturePool();
   questMapMode = 'all'; questMapStepMode = 'all'; selectedMapQuests.clear(); saveQuestMapFilter();
   for (const id of ['lore', 'shrine']) MapDiscovery.setMode(id, 'all');
@@ -544,6 +546,55 @@ function renderVentMapFilter() {
   control.querySelector('.vent-type-summary').textContent = selected ? `${shown} vent locations` : 'Select a vent type to show.';
 }
 
+function resourceMapControls(category) {
+  const names = [...new Set(db.map.markers.filter(m => m.c === category).map(m => m.n))].sort(byName);
+  const label = { ore: 'ores & rocks', gather: 'plants & gathering', tree: 'trees' }[category];
+  const update = () => renderResourceMapFilter(category);
+  const picker = h('details', { id: `resource-filter-${category}`, class: 'live-creature-filter', hidden: !MapView.isEnabled(category) },
+    h('summary', { 'aria-label': `Choose ${label}` }, `All ${label}`),
+    h('div', { class: 'creature-pool-menu' },
+      h('div', { class: 'creature-pool-actions' },
+        h('button', { type: 'button', onclick: () => { MapView.setResourceTypes(category, null); update(); } }, 'Select all'),
+        h('button', { type: 'button', onclick: () => { MapView.setResourceTypes(category, []); update(); } }, 'Clear')),
+      h('input', { type: 'search', placeholder: 'Find a resource…', 'aria-label': `Find ${label}`, oninput: ev => {
+        const query = ev.target.value.trim().toLowerCase();
+        let matches = 0;
+        for (const row of picker.querySelectorAll('[data-resource]')) {
+          row.hidden = !row.dataset.resource.toLowerCase().includes(query);
+          if (!row.hidden) matches++;
+        }
+        picker.querySelector('.creature-pool-empty').hidden = matches > 0;
+      } }),
+      h('div', { class: 'creature-pool-options' }, names.map(name => h('label', { 'data-resource': name },
+        h('input', { type: 'checkbox', checked: MapView.isResourceTypeEnabled(category, name), onchange: ev => {
+          MapView.setResourceType(category, name, ev.target.checked); update();
+        } }), h('span', {}, name)))),
+      h('p', { class: 'small muted creature-pool-empty', hidden: true }, 'No matching resources')));
+  picker.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') { picker.open = false; picker.querySelector('summary').focus(); }
+  });
+  return picker;
+}
+
+function renderResourceMapFilter(category) {
+  const picker = $(`#resource-filter-${category}`);
+  if (!picker) return;
+  let selected = 0;
+  for (const row of picker.querySelectorAll('[data-resource]')) {
+    const checked = MapView.isResourceTypeEnabled(category, row.dataset.resource);
+    row.querySelector('input').checked = checked;
+    if (checked) selected++;
+  }
+  const label = { ore: 'ores & rocks', gather: 'plants & gathering', tree: 'trees' }[category];
+  picker.querySelector('summary').textContent = !MapView.isResourceFiltered(category) ? `All ${label}`
+    : selected === 1 ? picker.querySelector('input:checked').closest('label').dataset.resource
+      : `${selected} types selected`;
+  const markers = db.map.markers.filter(m => m.c === category);
+  const shown = markers.filter(m => MapView.isResourceTypeEnabled(category, m.n)).length;
+  $(`#count-${category}`).textContent = MapView.isResourceFiltered(category) ? `${shown}/${markers.length}` : markers.length;
+  updateMapFilterCount();
+}
+
 function renderLegend() {
   const counts = {};
   for (const m of db.map.markers) counts[m.c] = (counts[m.c] || 0) + 1;
@@ -553,6 +604,7 @@ function renderLegend() {
       if (id === 'vent' && $('#vent-map-key')) $('#vent-map-key').hidden = !ev.target.checked;
       if (['lore', 'shrine'].includes(id)) $(`#discovery-${id}`).hidden = !ev.target.checked;
       if (id === 'quest') $('#quest-map-filter').hidden = !ev.target.checked;
+      if (MapView.resourceCategories().includes(id)) $(`#resource-filter-${id}`).hidden = !ev.target.checked;
     } });
     box.checked = MapView.isEnabled(id);
     return h('label', {}, box, icon, label, h('span', { class: 'count', id: `count-${id}` }, count));
@@ -569,7 +621,8 @@ function renderLegend() {
     h('h3', {}, 'Places & resources'),
     ...db.map.categories.flatMap((c) => [row(c.id, swatch(c), c.label, counts[c.id] || 0),
       c.id === 'lore' ? discoveryControls('lore', 'lore') : c.id === 'shrine' ? discoveryControls('shrine', 'shrines & pools')
-        : c.id === 'quest' ? questMapControls() : c.id === 'vent' ? ventMapControls() : null]).filter(Boolean),
+        : c.id === 'quest' ? questMapControls() : c.id === 'vent' ? ventMapControls()
+          : MapView.resourceCategories().includes(c.id) ? resourceMapControls(c.id) : null]).filter(Boolean),
     // Drawn like the map's own quest markers, so the key matches what you see.
     h('div', { class: 'quest-map-key', 'aria-label': 'Quest marker key' },
       h('span', { class: 'quest-map-key-title' }, 'Quest markers'),
@@ -577,13 +630,14 @@ function renderLegend() {
       h('span', {}, h('i', { class: 'qk qk-current' }, '2'), 'Your current step'),
       h('span', {}, h('i', { class: 'qk' }, '3'), 'Quest step number'),
       h('span', {}, h('i', { class: 'qk' }, '·'), 'Step not confirmed')),
-    h('div', { class: 'muted small' }, 'Ores & plants show when zoomed in'),
+    h('div', { class: 'muted small' }, 'Ores, plants & trees show when zoomed in'),
     h('div', { id: 'nearby', class: 'nearby' }),
   );
   renderLiveCreatures();
   renderDiscoveryProgress();
   renderQuestMapFilter();
   renderVentMapFilter();
+  for (const c of MapView.resourceCategories()) renderResourceMapFilter(c);
   updateMapFilterCount();
   $('#map-legend').onchange = updateMapFilterCount;
 }
