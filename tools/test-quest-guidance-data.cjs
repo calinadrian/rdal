@@ -28,6 +28,9 @@ for (const marker of db.map.markers.filter(m => m.c === 'quest' && m.precision =
 }
 const q = db.entities['Highlighting the Problem'];
 const hunt = db.entities['The Wild Hunt'];
+assert(db.entities.Ratcatcher.guide.steps.find(s=>s.key==='Objective2').mapSources.includes('Giant Rat'), 'Rat kills use real Giant Rat spawns');
+assert(db.entities['Dragon Slayer'].guide.steps.find(s=>s.key==='Find and hunt a deer').mapSources.includes('Deer'), 'Monster-category prey must be linked too');
+for(const quest of quests)for(const step of quest.guide.steps)for(const name of step.mapSources)assert(db.map.markers.some(m=>['monster','creature'].includes(m.c)&&m.n===name), 'Every target must have recorded spawn data');
 assert(hunt.rewards.some(r=>r.kind==='quest-mount' && r.item==='Terrorbird mount'), 'Extract the completion mount unlock, not just item rewards');
 const hunting = hunt.guide.steps.find(s=>s.key==='HuntBeast');
 assert.equal(hunting.targets.length, 0, 'Hunting must not direct the player back to Vannaka');
@@ -77,4 +80,8 @@ const fixture = {
 };
 const context = flowInteractions(fixture, base, value => value?.LocalizedString).get('Test.Entry');
 assert.deepEqual([...context.quests], ['Quest_Actual'], 'Prerequisite quests must not acquire every downstream interaction');
+const combatFixture={name:'Combat test',kind:'quest',id:'Quest_CombatTest',objectives:[{key:'kill',text:'Defeat Goblin Warriors.'},{key:'return',text:'Return to the hunter to unlock your Terrorbird mount.'}]};
+require('../importer/quest-guidance').buildQuestGuidance({entities:{'Combat test':combatFixture},flows:{},interactions:[],markers:[{c:'monster',n:'Goblin Warrior'},{c:'creature',n:'Terrorbird'}],base,text:v=>v,dungeonAt:()=>null,regionAt:()=>'',onMap:()=>true});
+assert.deepEqual(combatFixture.guide.steps[0].mapSources,['Goblin Warrior'],'Plural kill targets resolve automatically across monster-category spawns');
+assert.deepEqual(combatFixture.guide.steps[1].mapSources,[],'Reward mentions must not become hunt targets');
 console.log(`PASS: ${quests.length} quest entries and all versions have ordered guidance; exact pins use real actor coordinates; dungeon statue, three pedestals and quest-ID isolation`);

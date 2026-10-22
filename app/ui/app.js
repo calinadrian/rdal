@@ -672,13 +672,15 @@ function locationButtons(label,markers,quest=null) {
   return h('div',{class:'source-map-links'},h('span',{class:'source-map-label'},quest ? 'Show quest on map:' : 'Show on map:'),[...groups].map(([key,ms])=>{
     const dungeon=db.map.dungeons.find(d=>d.id===key);
     const place=dungeon?.name || key;
-    return h('button',{type:'button',class:'source-map-button',title:`${quest ? 'Show quest on map' : 'Show on map'} · ${place}`,onclick:()=>{
-      if(quest)includeQuestOnMap(quest);
-      if(state.module!=='map')history.push(snapshot());
-      state.module='map';selectedQuestMarker=null;renderModules();setMapMode(true);highlightMapMarkers(label,ms);
-      showItem(quest || label,{push:false});
-    }},`${place}${ms.length>1 ? ' ('+ms.length+')' : ''}`);
+    return h('button',{type:'button',class:'source-map-button',title:`${quest ? 'Show quest on map' : 'Show on map'} · ${place}`,onclick:()=>showMapLocations(label,ms,quest)},`${place}${ms.length>1 ? ' ('+ms.length+')' : ''}`);
   }));
+}
+function showMapLocations(label,markers,quest=null) {
+  if(state.module!=='map')history.push(snapshot());
+  if(quest)includeQuestOnMap(quest);
+  state.module='map';selectedQuestMarker=null;selectedDiscoveryMarker=null;
+  renderModules();setMapMode(true);highlightMapMarkers(label,markers);
+  showItem(quest || label,{push:false});
 }
 
 function sourceMapLinks(name) {return locationButtons(name,markersFor(name));}
@@ -699,7 +701,7 @@ function refreshQuestMapHighlight() {
   const name = MapView.highlightLabel();
   if (!mapReady || E[name]?.kind !== 'quest') return;
   // Spawn sites are source guidance; a new quest-log snapshot must not replace them with quest NPCs.
-  if (MapView.navigation().highlight?.markers.some(i => db.map.markers[i]?.c === 'creature')) return;
+  if (MapView.navigation().highlight?.markers.some(i => ['creature','monster'].includes(db.map.markers[i]?.c))) return;
   const highlighted = MapView.navigation().highlight?.markers || [];
   if (selectedQuestMarker?.ref === name && highlighted.length === 1 && db.map.markers[highlighted[0]] === selectedQuestMarker
       && questMapMarkerVisible(selectedQuestMarker, true)) return;
@@ -707,6 +709,10 @@ function refreshQuestMapHighlight() {
 }
 
 function showOnMap(name) {
+  const quest = ent(name);
+  const objective = quest.kind === 'quest' && questNextObjective(quest);
+  const spawns = objective ? questStepSourceMarkers(quest,objective.key) : [];
+  if(spawns.length) { showMapLocations(name,spawns,name);return; }
   if (state.module !== 'map') history.push(snapshot());
   selectedQuestMarker = null;
   selectedDiscoveryMarker = null;
@@ -924,8 +930,9 @@ function questStepMarkers(q, key) {
   return exact.length ? exact : markers;
 }
 function questStepSourceMarkers(q, key) {
-  const names = new Set(questStepGuidance(q, key)?.mapSources || []);
-  return db.map.markers.filter(m => m.c === 'creature' && names.has(m.n));
+  const step=questStepGuidance(q,key);
+  const names = new Set(step?.mapSources || []);
+  return db.map.markers.filter(m => ['creature','monster'].includes(m.c) && names.has(m.n) && (!step.sourceRegions || step.sourceRegions.includes(m.region)));
 }
 function focusQuestTarget(q, marker) {
   history.push(snapshot());
@@ -955,6 +962,8 @@ function questStepActions(q, objective) {
     return entrance ? [h('button', { type: 'button', class: 'quest-entrance-button', onclick: () => focusQuestTarget(q, entrance) }, `Entrance · ${dungeon.name}`)] : [];
   });
   return h('div', { class: 'quest-step-actions' },
+    sources.length ? h('div',{},h('button',{type:'button',class:'quest-targets-map primary',onclick:()=>showMapLocations(q.name,sources,q.name)},`Show targets on map (${sources.length})`),
+      h('p',{class:'muted small'},`Targets: ${[...new Set(sources.map(m=>m.n))].join(', ')}. Recorded spawn locations; enemies may move or respawn.`)) : null,
     markers.length ? h('div', { class: 'quest-step-targets' }, markers.map(marker => h('div', { class: 'quest-step-target' },
       h('button', { type: 'button', class: 'quest-pin-button' + (markers.length === 1 ? ' primary' : ''), 'data-source-id': marker.sourceId || marker.qlocation,
         onclick: () => focusQuestTarget(q, marker) }, marker.precision === 'interaction' ? `Pin ${marker.target}` : 'Show quest area'),
@@ -2016,10 +2025,11 @@ function renderDetail() {
     if (e.guide?.preparation.length && st.id !== 'done') body.push(h('p', { class: 'quest-preparation muted small' }, h('strong', {}, 'Bring with you: '), e.guide.preparation.join(' ')));
     const tier = !questRemoved(e) && questTier(e.name, e.id, e.region);
     if (tier) body.push(h('p', { class: 'quest-reader-meta muted small' }, [e.region, `Recommended ${tierText(tier)}${tier.estimated ? ' (estimated)' : ''}`].filter(Boolean).join(' · ')));
-    const questLocations=markersFor(e.name);
+    const currentSpawns=next ? questStepSourceMarkers(e,next.key) : [];
+    const questLocations=currentSpawns.length ? currentSpawns : markersFor(e.name);
     body.push(h('div',{class:'actions quest-secondary-actions'},h('button',{type:'button',class:'quest-show-map',disabled:!questLocations.length,
       title:questLocations.length ? 'Show this quest’s confirmed locations' : 'No confirmed map locations in the extracted game data',
-      onclick:()=>showOnMap(e.name)},`All quest locations${questLocations.length ? ' ('+questLocations.length+')' : ''}`), star),
+      onclick:()=>showOnMap(e.name)},`${currentSpawns.length ? 'Show current targets' : 'All quest locations'}${questLocations.length ? ' ('+questLocations.length+')' : ''}`), star),
       !questLocations.length ? h('p',{class:'muted small'},'No confirmed map locations in the extracted game data.') : null);
     if (st.id === 'done' && e.completedDesc && e.completedDesc !== e.desc) body.push(h('p', { class: 'desc' }, e.completedDesc));
     if (selectedQuestMarker?.ref === e.name && document.body.classList.contains('map-mode')) {

@@ -158,7 +158,7 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
   let steps = 0, mapped = 0, exact = 0, clarified = 0;
   const resourceEntities = Object.values(entities).filter(e => e.name.length >= 4 && ['item', 'monster'].includes(e.kind))
     .sort((a, b) => b.name.length - a.name.length);
-  const sourceNames = [...new Set(markers.filter(m => m.c === 'creature').map(m => m.n))].sort((a, b) => b.length - a.length);
+  const sourceNames = [...new Set(markers.filter(m => ['creature','monster'].includes(m.c)).map(m => m.n))].sort((a, b) => b.length - a.length);
   const mentions = (content, name) => [' ' + normal(name) + ' ', ' ' + normal(name) + 's '].find(form => content.includes(form));
   for (const [id, versions] of quests) {
     const q = versions[0], targets = targetMarkers.get(id) || [];
@@ -192,15 +192,18 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
           if (form) { resources.push(entity.name); remaining = remaining.split(form).join(' '); }
         }
         const mapSources = (reviewed?.mapSources || []).filter(name => sourceNames.includes(name));
-        let sourceContent = ' ' + content + ' ';
-        for (const name of sourceNames) if (mentions(sourceContent, name)) {
+        // Only the task names its prey. Supporting notes can mention unrelated mounts or enemies.
+        let sourceContent = ' ' + normal([objective.text, reviewed?.instruction].filter(Boolean).join(' ')) + ' ';
+        const hunting = /\b(kill|kills|killing|defeat|hunt|hunting|slay|fight|challenge)\b/.test(sourceContent);
+        for (const name of sourceNames) if (hunting && !reviewed?.mapSources && mentions(sourceContent, name)) {
           if (!mapSources.includes(name)) mapSources.push(name);
           for (const suffix of ['', 's']) sourceContent = sourceContent.split(' ' + normal(name) + suffix + ' ').join(' ');
         }
         return { key: objective.key, instruction: reviewed?.instruction || sentence(objective.text),
           notes: reviewed?.notes || (objective.hint ? [sentence(objective.hint)] : []),
           targets: (exactLocations.length ? exactLocations : locations).map(m => m.qlocation),
-          resources: reviewed?.resources || resources, mapSources };
+          resources: reviewed?.resources || resources, mapSources,
+          ...(reviewed?.sourceRegions && {sourceRegions:reviewed.sourceRegions}) };
       }), clues: [...new Map((clues.get(id) || []).map(c => [c.target + '|' + c.lines.join('|'), c])).values()] };
     for (const version of versions) version.guide = guide;
   }

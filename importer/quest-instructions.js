@@ -24,7 +24,7 @@ const instructions = {
   Quest_DragonSlayer: {
     'Claim a bed': step('Build a shelter in Bramblemead Village, place a bed inside it and claim the bed.'),
     'Return to the Wise old man after claimed bed': step('Return to the Wise Old Man in Bramblemead Village after claiming your bed.', [], ['FTUEQuests.FTUEQ1EntryWOM']),
-    'Find and hunt a deer': step('Hunt a Deer, collect one Deer Antler and bring it to the Wise Old Man in Bramblemead Village.', [], ['FTUEQuests.FTUEQ1EntryWOM']),
+    'Find and hunt a deer': { ...step('Hunt a Deer, collect one Deer Antler and bring it to the Wise Old Man in Bramblemead Village.', [], ['FTUEQuests.FTUEQ1EntryWOM']), mapSources: ['Deer Brynmoor','Deer'] },
     'Investigate the castle': step('Fight your way into the goblin castle and look for Cathan.'),
     'Locate cathan in the vault': step('Find the blue-flame door in Bloodblight Swamp, enter the vault and look for Cathan.'),
     'Return to the Wise old man': step('Return to the Wise Old Man in Bramblemead Village and tell him what you found.', [], ['FTUEQuests.FTUEQ1EntryWOM']),
@@ -58,7 +58,7 @@ const instructions = {
   },
   Quest_FTUE_RC: {
     Objective1: step('Speak to Vannaka near the Windmill.', [], ['FTUEQuests.FTUERCEntryVannaka']),
-    Objective2: step('Kill rats for their meat, then cook one Rat Roast successfully.', ['Open Rat Roast below for its cooking recipe. A failed or burnt attempt does not complete this objective.']),
+    Objective2: { ...step('Kill rats for their meat, then cook one Rat Roast successfully.', ['Open Rat Roast below for its cooking recipe. A failed or burnt attempt does not complete this objective.']), mapSources: ['Giant Rat'], sourceRegions: ['Bramblemead Valley'] },
   },
   Quest_FTUE_RtftJ: {
     Objective1: step('Collect Dirty Water from the nearby ponds, then bring it back to Doric outside the temple.', [], ['FTUEQuests.FTUERtftJEntryDoric']),
