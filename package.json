@@ -1,6 +1,6 @@
 {
   "name": "dragonwilds-atlasloot",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "productName": "Dragonwilds AtlasLoot",
   "description": "AtlasLoot-style loot, recipe and live map companion for RuneScape: Dragonwilds, built from the game files",
   "main": "app/main.js",

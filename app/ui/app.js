@@ -2001,6 +2001,8 @@ function renderDetail() {
         h('span', { class: 'progress-context muted small' }, questLog ? questProgressContext() : 'Load your character to read progress.')));
     const current = questProgress(e).current;
     const next = questNextObjective(e);
+    const mounts = e.rewards?.filter(r=>r.kind==='quest-mount') || [];
+    if (mounts.length) body.push(h('p',{class:'quest-preparation'},h('strong',{},'Completion reward: '),mounts.map(r=>r.item).join(', '),'. Hold your Mount key (Alt by default on PC) after completing the quest.'));
     if (next && !questRemoved(e)) {
       const guidance = questStepGuidance(e, next.key);
       body.push(h('section', { class: 'current-objective' }, h('h2', {}, current ? 'What to do next' : st.id === 'available' ? 'Start here' : 'First objective · guide preview'),
@@ -2030,7 +2032,9 @@ function renderDetail() {
       h('summary', {}, e.guide?.sequence === 'linear' ? 'Full walkthrough' : 'All objective guidance'),
       e.guide?.sequence !== 'linear' ? h('p', { class: 'muted small' }, 'This quest has alternate objectives or collection counters. Only your current objective and overall quest status are confirmed; this list is a reference, not a completion checklist.') : null,
       questChecklist(e)));
-    if (e.rewards?.length) body.push(h('h2',{},'You get during this quest'),h('div',{class:'quest-rewards mats'},e.rewards.map(r=>
+    if (e.rewards?.some(r=>r.kind!=='quest-mount')) body.push(h('h2',{},'You get during this quest'),
+      e.id==='Quest_FH_WitherBeast' ? h('p',{class:'muted small'},'After unlocking the mount, Vannaka offers 50 Soul Fragments for another 3 Primordial Hearts. This is a repeatable exchange for extra hearts.') : null,
+      h('div',{class:'quest-rewards mats'},e.rewards.filter(r=>r.kind!=='quest-mount').map(r=>
       h('button',{type:'button',class:'mat',onclick:()=>showItem(r.item)},icon(r.item,'sm'),
         r.qty != null && r.kind!=='quest-recipe' ? h('span',{class:'q'},`${r.qty}×`) : null,h('span',{class:'mat-name'},r.item),
         r.kind==='quest-recipe' ? h('span',{class:'reward-kind'},'Recipe') : null))));

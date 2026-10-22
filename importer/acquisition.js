@@ -54,11 +54,18 @@ function buildAcquisition({ itemBulk, recipeBulk, flows, entities, item, base, q
       return quest ? {quest:questName[quest],questId:quest,objective,completed} : null;
     };
     for (const node of exports) {
-      if (!['QFT_GiveItemToPlayer_C','QFT_GiveItemsToPlayer_C','QFT_GiveCraftingRecipe_C'].includes(node.Type)) continue;
+      if (!['QFT_GiveItemToPlayer_C','QFT_GiveItemsToPlayer_C','QFT_GiveCraftingRecipe_C','QFT_UnlockMount_C'].includes(node.Type)) continue;
       const p=node.Properties || {};
       const ctx=context(node);
       if (!ctx) { unresolved++; continue; }
-      if (node.Type==='QFT_GiveCraftingRecipe_C') {
+      if (node.Type==='QFT_UnlockMount_C') {
+        // This is an ability unlock, not an inventory item or a recipe.
+        const mount=base(p['Mount ToUnlock']);
+        if (mount==='DA_Mount_Terrorbird_00_00' && ctx.completed) {
+          const rewards=entities[ctx.quest].rewards ||= [];
+          if (!rewards.some(r=>r.kind==='quest-mount' && r.asset===mount)) rewards.unshift({item:'Terrorbird mount',kind:'quest-mount',asset:mount,objective:ctx.objective,qty:null});
+        }
+      } else if (node.Type==='QFT_GiveCraftingRecipe_C') {
         for (const ref of p['Summon Item Recipes'] || []) for (const output of recipeOutputs.get(base(ref)) || [])
           add(output,{kind:'quest-recipe',recipe:base(ref),...ctx});
       } else {

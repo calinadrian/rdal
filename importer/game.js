@@ -264,6 +264,7 @@ for (const [pkg, ex] of Object.entries(aiBulk)) {
   const row = lootComp && lootComp.Properties.EnemyTableRowHandle.RowName;
   const dataId = cdo && cdo.Properties.AIDataClass && base(cdo.Properties.AIDataClass);
   let name = (dataId && aiName[dataId]) || (row && words(row)) || words(base(pkg).replace(/^BP_AI_|_Character$/g, ''));
+  if (row === 'WitherBeast_QuestNPC') name = 'Nature Spirit';
   const image = journalImageOf(base(pkg), name);
   if (image) npcImages[base(pkg)] = image;
   if (!row) { monsterOf[base(pkg)] = name; continue; }
@@ -417,6 +418,7 @@ const clean = (cls) => words(cls.replace(/^BP_/, '').replace(/_C$/, '')
 function categorize(a) {
   const c = a.cls;
   if (c.startsWith('BP_SpawnPoint_')) {
+    if (c === 'BP_SpawnPoint_WitherBeast_C') return { c: 'creature', n: 'Nature Spirit', ref: 'Nature Spirit' };
     const m = monsterOf[spawnAI[base(c)]] || words(c.replace(/^BP_SpawnPoint_|_C$/g, ''));
     // Monsters have loot tables; wildlife without one gets the creature icon.
     return entities[m] ? { c: 'monster', n: m, ref: m } : { c: 'creature', n: m };

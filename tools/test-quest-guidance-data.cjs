@@ -27,6 +27,17 @@ for (const marker of db.map.markers.filter(m => m.c === 'quest' && m.precision =
   assert.deepEqual([marker.x, marker.y, marker.z], [source.x, source.y, source.z], 'Interaction coordinates must match the game actor');
 }
 const q = db.entities['Highlighting the Problem'];
+const hunt = db.entities['The Wild Hunt'];
+assert(hunt.rewards.some(r=>r.kind==='quest-mount' && r.item==='Terrorbird mount'), 'Extract the completion mount unlock, not just item rewards');
+const hunting = hunt.guide.steps.find(s=>s.key==='HuntBeast');
+assert.equal(hunting.targets.length, 0, 'Hunting must not direct the player back to Vannaka');
+assert.deepEqual(hunting.mapSources, ['Nature Spirit']);
+assert.deepEqual(hunting.resources, ['Primordial Heart'], 'Ordinary Terrorbirds are not the quest spirits');
+const spirits = db.map.markers.filter(m=>m.c==='creature' && m.n==='Nature Spirit');
+assert.equal(spirits.length, 5);
+assert(spirits.every(m=>originalActors.size && [...originalActors.values()].some(a=>a.cls==='BP_SpawnPoint_WitherBeast_C' && a.x===m.x && a.y===m.y)), 'Use actual spirit spawn coordinates');
+assert(db.entities['Primordial Heart'].droppedBy.some(d=>d.from==='Nature Spirit'));
+assert(hunt.guide.steps.find(s=>s.key==='BringHeart').targets.some(id=>db.map.markers.some(m=>m.sourceId===id && m.target==='Vannaka')));
 assert.equal(q.guide.steps.length, 4);
 assert(q.guide.steps[0].instruction.includes('Pthentorok'));
 assert.equal(q.guide.steps[2].targets.length, 3);

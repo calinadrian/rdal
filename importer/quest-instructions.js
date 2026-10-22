@@ -116,9 +116,13 @@ const instructions = {
     BackToZanikNotSpokenToZanik: step('Find Zanik in Fellhollow and tell her about the spirits you encountered.'),
   },
   Quest_FH_WitherBeast: {
-    HuntBeast: step('Hunt Nature Spirits in the willow groves west of Vannaka in Fellhollow. Collect three hearts and bring them to him.'),
-    BringHeart: step('Bring three Primordial Hearts to Vannaka in Fellhollow.'),
-    BringHeartNotStarted: step('Take the Primordial Heart to Vannaka in Fellhollow and ask about the Wild Hunt.'),
+    HuntBeast: { ...step('Defeat Nature Spirits in Fellhollow’s willow groves and loot 3 Primordial Hearts.', [
+      'Already spoken to Vannaka? Leave his camp and look for white, glowing terrorbirds beside willow-grove ponds. Each drops 1 Primordial Heart; loot it after the fight.',
+      'Look in southern Witchwillow Range, northwest of the druid circle near Emberwood, or around Dragon’s Run. Use the region buttons below to highlight the recorded spawn sites. The game data also includes sites in Hope’s Fall and Silverthorn Keep.',
+      'Once you have 3 hearts in your inventory, return to Vannaka in Bleakfields Valley, west of Cathan, and finish his dialogue to unlock the Terrorbird mount.',
+    ]), sourceOnly: true, resources: ['Primordial Heart'], mapSources: ['Nature Spirit'] },
+    BringHeart: step('Return to Vannaka in Bleakfields Valley with 3 Primordial Hearts and finish his dialogue to unlock the Terrorbird mount.', ['His camp is west of Cathan. After the ritual, hold your Mount key (Alt by default on PC) to summon your Terrorbird.'], ['FHWitherBeast.Vannaka']),
+    BringHeartNotStarted: step('Take the Primordial Heart you found to Vannaka at his camp west of Cathan in Bleakfields Valley.', ['This is the alternate start if you found a heart before speaking to him. You need 3 Primordial Hearts in total to finish the hunt and unlock the Terrorbird mount.'], ['FHWitherBeast.Vannaka']),
   },
   Quest_Heartstrings: { 'follow the blue-leafed trees': step('Follow the blue-leaved trees east through Ghornfell and read each memorial along the path.', ['The memorial on the mesa points to a single blue tree to the east. Continue reading the memorials along the route; keep inventory space free for the final reward.'], ['Heartstrings.MemorialTree2', 'Heartstrings.MemorialTree3', 'Heartstrings.MemorialMesa', 'Heartstrings.MemorialFinal']) },
   Quest_GoblinDiplomacy: {

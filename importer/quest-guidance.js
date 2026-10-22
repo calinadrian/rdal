@@ -164,7 +164,7 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
     const q = versions[0], targets = targetMarkers.get(id) || [];
     const guide = { sequence: [HTP, 'Quest_GraniteMauled', 'Quest_FH_WitherWard', 'Quest_RestlessGhosts', 'Quest_DogDays', 'Quest_AnimalMagnetism'].includes(id) ? 'linear' : 'reference',
       preparation: id === HTP ? ['Bring Windstep to reach the password statue and the tower pedestals. Keep one inventory slot free for the orb.'] : [],
-      sources: id === HTP ? [{ title: 'Quest walkthrough', url: 'https://dragonwilds.runescape.wiki/w/Highlighting_the_Problem' }] : [],
+      sources: id === HTP ? [{ title: 'Quest walkthrough', url: 'https://dragonwilds.runescape.wiki/w/Highlighting_the_Problem' }] : id === 'Quest_FH_WitherBeast' ? [{ title: 'The Wild Hunt walkthrough', url: 'https://dragonwilds.runescape.wiki/w/The_Wild_Hunt' }] : [],
       steps: (q.objectives || []).map(objective => {
         const reviewed = reviewedFor(id, objective);
         const content = normal([objective.text, objective.hint, reviewed?.instruction, ...(reviewed?.notes || [])].filter(Boolean).join(' '));
@@ -173,7 +173,9 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
           return label.length >= 4 && !/^(statue|book|note|letter|shrine|memorial|pedestal|quest giver|ghost|door|chest|scroll|altar)$/.test(label)
             && (' ' + content + ' ').includes(' ' + label + ' ');
         };
-        const bound = targets.filter(m => reviewed?.entries?.length
+        // Hunting destinations come from spawn data, not the quest giver's area pin.
+        if (reviewed?.sourceOnly) for (const marker of markers.filter(m => m.questId === id)) marker.qsteps = (marker.qsteps || []).filter(key => key !== objective.key);
+        const bound = reviewed?.sourceOnly ? [] : targets.filter(m => reviewed?.entries?.length
           ? reviewed.entries.some(entry => entry === m.entry || entry === m.entry?.split('.').pop()) : matchesLabel(m));
         for (const m of bound) if (!m.qsteps.includes(objective.key)) m.qsteps.push(objective.key);
         const locations = markers.filter(m => m.questId === id && m.qsteps?.includes(objective.key));
@@ -189,16 +191,16 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
           const form = mentions(remaining, entity.name);
           if (form) { resources.push(entity.name); remaining = remaining.split(form).join(' '); }
         }
-        const mapSources = [];
+        const mapSources = (reviewed?.mapSources || []).filter(name => sourceNames.includes(name));
         let sourceContent = ' ' + content + ' ';
         for (const name of sourceNames) if (mentions(sourceContent, name)) {
-          mapSources.push(name);
+          if (!mapSources.includes(name)) mapSources.push(name);
           for (const suffix of ['', 's']) sourceContent = sourceContent.split(' ' + normal(name) + suffix + ' ').join(' ');
         }
         return { key: objective.key, instruction: reviewed?.instruction || sentence(objective.text),
           notes: reviewed?.notes || (objective.hint ? [sentence(objective.hint)] : []),
           targets: (exactLocations.length ? exactLocations : locations).map(m => m.qlocation),
-          resources, mapSources };
+          resources: reviewed?.resources || resources, mapSources };
       }), clues: [...new Map((clues.get(id) || []).map(c => [c.target + '|' + c.lines.join('|'), c])).values()] };
     for (const version of versions) version.guide = guide;
   }
