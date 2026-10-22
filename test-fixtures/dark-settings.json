@@ -1,0 +1,28 @@
+{
+  "width": 1180,
+  "overflow": false,
+  "panes": [
+    {
+      "id": "modules",
+      "width": 175,
+      "scrollWidth": 175
+    },
+    {
+      "id": "list",
+      "width": 235,
+      "scrollWidth": 235
+    },
+    {
+      "id": "content",
+      "width": 445,
+      "scrollWidth": 445
+    },
+    {
+      "id": "detail",
+      "width": 296,
+      "scrollWidth": 296
+    }
+  ],
+  "selectedNav": "Monsters",
+  "dialog": true
+}

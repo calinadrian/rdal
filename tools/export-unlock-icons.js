@@ -1,0 +1,12 @@
+const fs=require('fs');
+const path=require('path');
+const {spawnSync}=require('child_process');
+const root=path.resolve(__dirname,'..');
+const raw=path.join(__dirname,'Extractor/out/raw');
+const bulk=JSON.parse(fs.readFileSync(path.join(raw,'unlock-items.json')));
+const icons=[...new Set(Object.values(bulk).flat().map(e=>e.Properties?.Icon?.AssetPathName).filter(p=>p&&p!=='None'))];
+const list=path.join(raw,'unlock-icons.txt');fs.writeFileSync(list,icons.join('\n'));
+const result=spawnSync(path.join(__dirname,'Extractor/bin/out/Extractor.exe'),['texture',path.join(root,'data/icons'),'--max=64','@'+list],{encoding:'utf8',maxBuffer:8*1024*1024});
+if(result.error||result.status!==0)throw result.error||Error(result.stderr);
+const errors=result.stderr.split(/\r?\n/).filter(s=>s.startsWith('ERR '));
+console.log(`Unlock icons: ${icons.length} references, ${errors.length} unavailable`);

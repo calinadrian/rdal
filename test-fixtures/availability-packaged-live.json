@@ -1,0 +1,17 @@
+{
+  "characterDataLive": true,
+  "recipes": 427,
+  "club": "unavailable",
+  "staff": "learned",
+  "adamant": "not-learned",
+  "unlearnedVisible": 81,
+  "audit": {
+    "reviewedAt": "2026-10-22",
+    "total": 1462,
+    "counts": {
+      "unavailable": 16,
+      "source-recorded": 1254,
+      "unconfirmed": 192
+    }
+  }
+}

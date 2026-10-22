@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: https: data: blob:; connect-src 'self' blob:; style-src 'self' 'unsafe-inline'">
+  <title>Dragonwilds AtlasLoot</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="titlebar">
+    <div class="brand"><img class="brand-mark" src="../icon.png" alt=""> <span>AtlasLoot<span class="brand-sub">Dragonwilds</span></span></div>
+    <div class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+      <input id="search" type="search" aria-label="Search items, monsters and recipes" placeholder="Search items, monsters, recipes…" autocomplete="off" spellcheck="false">
+      <kbd>Ctrl F</kbd>
+    </div>
+    <div class="win-buttons">
+      <button id="btn-back" title="Back (Alt+←)" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 5-7 7 7 7M5 12h14"/></svg></button>
+      <button id="btn-settings" title="Settings & data" aria-label="Settings and data"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 3-.6 2.4-2 .9L5 5.6 3 9l1.8 1.7v2.6L3 15l2 3.4 2.4-.7 2 .9L10 21h4l.6-2.4 2-.9 2.4.7 2-3.4-1.8-1.7v-2.6L21 9l-2-3.4-2.4.7-2-.9L14 3Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button id="btn-hide" title="Minimise" aria-label="Minimise"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button id="btn-quit" title="Close" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 14 14M5 19 19 5"/></svg></button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <nav id="modules" class="pane modules" aria-label="AtlasLoot sections"></nav>
+    <section id="list" class="pane list" aria-label="Browse entries"></section>
+    <section id="content" class="pane content" aria-label="Selected entry"></section>
+    <section id="mapview" class="pane mapview" hidden>
+      <canvas id="map"></canvas>
+      <div id="map-legend" class="map-legend"></div>
+      <div class="map-tools">
+        <select id="map-layer" aria-label="Map" title="World map or a dungeon's floor plan (switches by itself when you go through a dungeon door)" hidden></select>
+        <select id="map-level" aria-label="Dungeon level" title="All floors together, or a single level. Live entry follows your current level." hidden></select>
+        <button id="map-filters" aria-controls="map-legend" aria-expanded="false" hidden>Filters</button>
+        <button id="map-follow" title="Keep me in the middle of the map (stays on until you turn it off)">◎ Follow me</button>
+        <div class="map-zoom-controls">
+          <button id="map-zoom-in" title="Zoom in">+</button>
+          <button id="map-zoom-out" title="Zoom out">−</button>
+          <button id="map-fit" title="Whole map">⤢</button>
+        </div>
+      </div>
+      <div id="map-highlight" class="map-highlight" hidden></div>
+      <div id="map-level-key" class="map-level-key" hidden><span><i class="floor-swatch current"></i>This floor</span><span><i class="floor-swatch other"></i>Other floors</span></div>
+      <div id="map-tip" class="map-tip" hidden></div>
+    </section>
+    <aside id="detail" class="pane detail" aria-label="Item details"></aside>
+  </main>
+
+  <footer class="statusbar">
+    <span id="status-data"></span>
+    <span id="status-progress"></span>
+    <span id="status-hotkey"></span>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <label>Display
+        <select id="set-mode">
+          <option value="window">Separate window (e.g. on your second monitor)</option>
+          <option value="overlay">Overlay on top of the game</option>
+        </select>
+      </label>
+      <label class="check"><input id="set-showongame" type="checkbox"> Open automatically when the game starts</label>
+      <label class="check"><input id="set-autostart" type="checkbox"> Start with Windows (stays in the tray until the game starts)</label>
+      <label class="check"><input id="set-maponm" type="checkbox"> Open the map when I press <b>M</b> in the game</label>
+      <label for="set-hotkey">Show / hide hotkey</label>
+      <div class="hotkey-field">
+        <input id="set-hotkey" readonly aria-describedby="hotkey-hint" title="Click, then press the new key combination">
+        <button type="button" id="hotkey-reset">Reset</button>
+      </div>
+      <small id="hotkey-hint" class="hotkey-hint" aria-live="polite"></small>
+      <label>Overlay opacity <span id="opacity-val"></span>
+        <input id="set-opacity" type="range" min="0.5" max="1" step="0.02">
+      </label>
+      <h2>Data</h2>
+      <p id="data-meta" class="muted"></p>
+      <div class="row">
+        <button type="button" id="import-game" class="primary">Update from game files</button>
+        <button type="button" id="import-wiki">Update from wiki</button>
+      </div>
+      <p class="muted small">"Update from game files" reads your installed game (read-only) — run it after a game patch,
+        ideally with the game running so the type mappings refresh too.</p>
+      <div id="import-status" class="import-status" role="status" aria-live="polite" hidden>
+        <progress id="import-progress"></progress>
+        <span id="import-text"></span>
+        <small class="muted">You can close Settings meanwhile; progress also shows in the status bar.</small>
+      </div>
+      <p id="settings-msg" class="msg" role="status" aria-live="polite"></p>
+      <div class="row end">
+        <button value="cancel" id="settings-cancel">Cancel</button>
+        <button type="button" id="settings-save" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="preferences.js"></script>
+</body>
+</html>

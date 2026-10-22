@@ -1,0 +1,17 @@
+{
+  "title": "Black Knight set",
+  "pieces": [
+    {
+      "materials": "4 × Black Metal Bar2 × Mithril Bar4 × Cursed Leather1 × Mystic Cloth1 × Demonic Oil",
+      "station": "Crafted atArmour Bench"
+    },
+    {
+      "materials": "10 × Black Metal Bar2 × Mithril Bar6 × Cursed Leather2 × Mystic Cloth3 × Demonic Oil",
+      "station": "Crafted atArmour Bench"
+    },
+    {
+      "materials": "6 × Black Metal Bar2 × Mithril Bar4 × Cursed Leather3 × Mystic Cloth2 × Demonic Oil",
+      "station": "Crafted atArmour Bench"
+    }
+  ]
+}

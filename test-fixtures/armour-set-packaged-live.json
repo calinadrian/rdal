@@ -1,0 +1,38 @@
+{
+  "sets": 38,
+  "title": "Bronze set",
+  "pieces": 3,
+  "stats": [
+    {
+      "label": "Defence",
+      "value": 50,
+      "unit": ""
+    },
+    {
+      "label": "Melee resistance",
+      "value": 10,
+      "unit": ""
+    },
+    {
+      "label": "Ranged resistance",
+      "value": -5,
+      "unit": ""
+    },
+    {
+      "label": "Magic resistance",
+      "value": -10,
+      "unit": ""
+    },
+    {
+      "label": "Vital shield",
+      "value": 0,
+      "unit": ""
+    },
+    {
+      "label": "Weight",
+      "value": 36,
+      "unit": ""
+    }
+  ],
+  "bonuses": 3
+}

@@ -1,0 +1,71 @@
+{
+  "name": "dragonwilds-atlasloot",
+  "version": "0.1.0",
+  "productName": "Dragonwilds AtlasLoot",
+  "description": "AtlasLoot-style loot, recipe and live map companion for RuneScape: Dragonwilds, built from the game files",
+  "main": "app/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder --win --publish never",
+    "release": "node tools/release.js",
+    "import:wayback": "node importer/cli.js --source=wayback",
+    "import:wiki": "node importer/cli.js --source=wiki",
+    "test": "node importer/test-parse.js"
+  },
+  "dependencies": {
+    "cheerio": "1.0.0",
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "allowScripts": {
+    "electron@33.2.1": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/calinadrian/rdal.git"
+  },
+  "build": {
+    "appId": "com.calinadrian.dragonwilds-atlasloot",
+    "productName": "Dragonwilds AtlasLoot",
+    "directories": {
+      "output": "dist"
+    },
+    "asar": false,
+    "electronLanguages": [
+      "en-US"
+    ],
+    "files": [
+      "package.json",
+      "app/**/*",
+      "data/**/*",
+      "!data/models/**",
+      "!data/portraits/**",
+      "importer/**/*",
+      "tools/{extract-all.ps1,build.ps1,dungeon-regions.js,export-quest-npcs.js,export-journal.js,export-acquisition-world.js}",
+      "tools/Dumper/bin/out/**/*",
+      "tools/Dumper/out/Mappings.usmap",
+      "tools/Extractor/bin/out/**/*",
+      "tools/Extractor/out/{world_actors.json,files.txt}"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "app/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "Dragonwilds-AtlasLoot-Setup-${version}.${ext}",
+      "shortcutName": "Dragonwilds AtlasLoot"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "calinadrian",
+      "repo": "rdal",
+      "releaseType": "release"
+    }
+  }
+}

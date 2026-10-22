@@ -1,0 +1,232 @@
+// Streams the local player's position as JSON lines (read-only, ~10 Hz).
+// GWorld -> OwningGameInstance -> LocalPlayers[0] -> PlayerController -> AcknowledgedPawn -> RootComponent
+using System.Buffers.Binary;
+using System.Text.Json;
+
+namespace Dumper;
+
+public sealed class Tracker
+{
+    readonly Engine _e;
+    readonly Layout _l;
+    readonly Memory _m;
+    readonly Action<string> _log;
+    ulong _gworld; // address of the GWorld global
+    int _oGameInstance, _oLocalPlayers, _oPlayerController, _oPawn, _oRoot, _oRelLoc, _oControlRot, _oPersistentLevel;
+    DiscoveryReader? _discovery;
+
+    public Tracker(Engine e, Layout l, Action<string> log) { _e = e; _l = l; _m = e.M; _log = log; }
+
+    // Offset of a property, searching up the class chain.
+    int Prop(string classPath, string name)
+    {
+        for (ulong c = _e.FindObject(classPath); c != 0; c = _m.Ptr(c + (ulong)_l.SuperStruct))
+            for (ulong f = _m.Ptr(c + (ulong)_l.ChildProperties); f != 0; f = _m.Ptr(f + (ulong)_l.FieldNext))
+                if (_e.FName(f + (ulong)_l.FieldName) == name) return _m.I32(f + (ulong)_l.PropOffset);
+        throw new Exception($"{classPath}.{name} not found");
+    }
+
+    public void Init(byte[] module)
+    {
+        _oGameInstance = Prop("/Script/Engine.World", "OwningGameInstance");
+        _oPersistentLevel = Prop("/Script/Engine.World", "PersistentLevel");
+        _oLocalPlayers = Prop("/Script/Engine.GameInstance", "LocalPlayers");
+        _oPlayerController = Prop("/Script/Engine.Player", "PlayerController");
+        _oPawn = Prop("/Script/Engine.PlayerController", "AcknowledgedPawn");
+        _oControlRot = Prop("/Script/Engine.Controller", "ControlRotation");
+        _oRoot = Prop("/Script/Engine.Actor", "RootComponent");
+        _oRelLoc = Prop("/Script/Engine.SceneComponent", "RelativeLocation");
+        try { _oAlert = Prop("/Script/Dominion.DominionAICharacter", "CurrentAlertnessState"); } catch { }
+        try
+        {
+            _oPlayerState = Prop("/Script/Engine.Pawn", "PlayerState");
+            _oPlayerName = Prop("/Script/Engine.PlayerState", "PlayerNamePrivate");
+            _oRelRot = Prop("/Script/Engine.SceneComponent", "RelativeRotation");
+        }
+        catch { }
+        try
+        {
+            _oQuestComp = Prop("/Script/Dominion.QuestUIAPI", "LocalPlayerQuestProgressComponent");
+            _oQuests = Prop("/Script/Dominion.QuestProgressComponent", "Quests");
+        }
+        catch { _oQuestComp = -1; }
+        _discovery = new DiscoveryReader(_e, Prop);
+
+        // GWorld: the module global that points at a live World with a game instance.
+        var worlds = _e.Objects().Select(x => x.Obj)
+            .Where(o => _e.ObjName(_e.ClassOf(o)) == "World" && (_m.I32(o + Engine.OFlags) & 0x10) == 0
+                        && _m.Ptr(o + (ulong)_oPersistentLevel) != 0 && _m.Ptr(o + (ulong)_oGameInstance) != 0)
+            .ToHashSet();
+        for (int o = 0; o + 8 <= module.Length && _gworld == 0; o += 8)
+            if (worlds.Contains(BinaryPrimitives.ReadUInt64LittleEndian(module.AsSpan(o)))) _gworld = _m.ModuleBase + (ulong)o;
+        if (_gworld == 0) throw new Exception("GWorld not found (load into a world first)");
+        _log($"GWorld at module+0x{_gworld - _m.ModuleBase:X}");
+    }
+
+    // ULevel.Actors is a native TArray (not reflected): find the TArray whose first entries are actors owned by the level.
+    int _oLevelActors = -1;
+    int LevelActorsOffset(ulong level)
+    {
+        for (int o = 0x28; o < 0xC0; o += 8)
+        {
+            ulong data = _m.Ptr(level + (ulong)o);
+            int num = _m.I32(level + (ulong)o + 8), max = _m.I32(level + (ulong)o + 12);
+            if (data == 0 || num < 8 || num > max || max > 2_000_000) continue;
+            int owned = 0;
+            for (int i = 0; i < 8; i++)
+            {
+                ulong a = _m.Ptr(data + (ulong)(i * 8));
+                if (a != 0 && _m.Ptr(a + Engine.OOuter) == level) owned++;
+            }
+            if (owned >= 6) return o;
+        }
+        return -1;
+    }
+
+    // Class pointer -> class name if it is a character (creature/NPC), "" otherwise.
+    readonly Dictionary<ulong, string> _pawnClass = new();
+    string PawnClass(ulong cls)
+    {
+        if (_pawnClass.TryGetValue(cls, out var n)) return n;
+        n = "";
+        for (ulong c = cls; c != 0; c = _m.Ptr(c + (ulong)_l.SuperStruct))
+            if (_e.ObjName(c) == "Character") { n = _e.ObjName(cls); break; }
+        return _pawnClass[cls] = n;
+    }
+
+    // Other people's characters (co-op): player pawns share the native DominionPlayerCharacter base.
+    readonly Dictionary<ulong, bool> _isPlayer = new();
+    bool IsPlayerClass(ulong cls)
+    {
+        if (_isPlayer.TryGetValue(cls, out var p)) return p;
+        p = false;
+        for (ulong c = cls; c != 0 && !p; c = _m.Ptr(c + (ulong)_l.SuperStruct)) p = _e.ObjName(c) == "DominionPlayerCharacter";
+        return _isPlayer[cls] = p;
+    }
+
+    // FString: TCHAR* data, int count (including the terminator).
+    string FString(ulong addr)
+    {
+        ulong data = _m.Ptr(addr);
+        int count = _m.I32(addr + 8);
+        if (data == 0 || count <= 1 || count > 256) return "";
+        var bytes = _m.Bytes(data, (count - 1) * 2);
+        return System.Text.Encoding.Unicode.GetString(bytes);
+    }
+
+    // Every pawn in the loaded world except the player: class, position, alertness.
+    // Other players go to `players` (name, position, facing) instead of the creature list.
+    List<object> Npcs(ulong world, ulong player, List<object> players)
+    {
+        var res = new List<object>();
+        ulong level = _m.Ptr(world + (ulong)_oPersistentLevel);
+        if (level == 0) return res;
+        if (_oLevelActors < 0) _oLevelActors = LevelActorsOffset(level);
+        if (_oLevelActors < 0) return res;
+        ulong data = _m.Ptr(level + (ulong)_oLevelActors);
+        int num = Math.Min(_m.I32(level + (ulong)_oLevelActors + 8), 200_000);
+        var actors = _m.Bytes(data, num * 8);
+        for (int i = 0; i + 8 <= actors.Length && res.Count < 400; i += 8)
+        {
+            ulong a = BitConverter.ToUInt64(actors, i);
+            if (a == 0 || a == player) continue;
+            var cls = PawnClass(_e.ClassOf(a));
+            if (cls.Length == 0 || (_m.I32(a + Engine.OFlags) & 0x10) != 0) continue;
+            ulong root = _m.Ptr(a + (ulong)_oRoot);
+            if (root == 0) continue;
+            double x = _m.Read<double>(root + (ulong)_oRelLoc), y = _m.Read<double>(root + (ulong)_oRelLoc + 8), z = _m.Read<double>(root + (ulong)_oRelLoc + 16);
+            if (x == 0 && y == 0) continue;
+            if (IsPlayerClass(_e.ClassOf(a)))
+            {
+                ulong state = _oPlayerState > 0 ? _m.Ptr(a + (ulong)_oPlayerState) : 0;
+                string name = state != 0 && _oPlayerName > 0 ? FString(state + (ulong)_oPlayerName) : "";
+                double yaw = _oRelRot > 0 ? _m.Read<double>(root + (ulong)_oRelRot + 8) : 0;
+                players.Add(new { n = name, x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1) });
+                continue;
+            }
+            res.Add(new { c = cls, x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), alert = _oAlert > 0 ? _m.Bytes(a + (ulong)_oAlert, 1)[0] : 0 });
+        }
+        return res;
+    }
+    int _oAlert = -1, _oPlayerState = -1, _oPlayerName = -1, _oRelRot = -1;
+    int _tick;
+
+    // Quest log: QuestUIAPI.LocalPlayerQuestProgressComponent -> Quests (TArray<FQuestProgress>, 0x38 each:
+    // Data @0, State @8 (Ungiven/Given/Complete), CurrentObjective FName @0xC).
+    int _oQuestComp = -1, _oQuests = -1;
+    ulong _questApi;
+    DateTime _questScan;
+    List<object>? Quests()
+    {
+        if (_oQuestComp < 0) return null;
+        ulong comp = _questApi == 0 ? 0 : _m.Ptr(_questApi + (ulong)_oQuestComp);
+        if (comp == 0 || _e.ObjName(_e.ClassOf(comp)) != "QuestProgressComponent")
+        {
+            // The UI API object is recreated with the world: look it up again (a full object scan, so at most every 20 s).
+            if (DateTime.Now < _questScan) return null;
+            _questScan = DateTime.Now.AddSeconds(20);
+            _questApi = _e.Objects().Select(x => x.Obj)
+                .FirstOrDefault(o => (_m.I32(o + Engine.OFlags) & 0x10) == 0 && _e.ObjName(_e.ClassOf(o)) == "QuestUIAPI"
+                                     && _m.Ptr(o + (ulong)_oQuestComp) != 0);
+            comp = _questApi == 0 ? 0 : _m.Ptr(_questApi + (ulong)_oQuestComp);
+            if (comp == 0) return null;
+        }
+        ulong data = _m.Ptr(comp + (ulong)_oQuests);
+        int num = Math.Clamp(_m.I32(comp + (ulong)_oQuests + 8), 0, 2000);
+        var res = new List<object>();
+        for (int i = 0; i < num; i++)
+        {
+            ulong q = data + (ulong)(i * 0x38);
+            ulong qd = _m.Ptr(q);
+            if (qd == 0) continue;
+            // FQuestProgress.QuestBools @0x28, TArray<FQuestBool> (FName @0, bool @8, stride12).
+            ulong boolData = _m.Ptr(q + 0x28);
+            int boolCount = _m.I32(q + 0x30);
+            Dictionary<string, bool>? bools = null;
+            if (boolCount >= 0 && boolCount <= 4096 && (boolCount == 0 || boolData != 0))
+            {
+                bools = new Dictionary<string, bool>();
+                for (int j = 0; j < boolCount; j++)
+                {
+                    ulong entry = boolData + (ulong)(j * 12);
+                    var name = _e.FName(entry);
+                    if (!string.IsNullOrEmpty(name) && name != "None") bools[name] = _m.Bytes(entry + 8, 1)[0] != 0;
+                }
+            }
+            res.Add(new { id = _e.ObjName(qd), s = _m.Bytes(q + 8, 1)[0], o = _e.FName(q + 0xC), b = bools });
+        }
+        return res;
+    }
+
+    public object Sample()
+    {
+        _m.ClearCache();
+        ulong world = _m.Ptr(_gworld);
+        ulong gi = world == 0 ? 0 : _m.Ptr(world + (ulong)_oGameInstance);
+        ulong lps = gi == 0 ? 0 : _m.Ptr(gi + (ulong)_oLocalPlayers);
+        ulong lp = lps == 0 ? 0 : _m.Ptr(lps);
+        ulong pc = lp == 0 ? 0 : _m.Ptr(lp + (ulong)_oPlayerController);
+        ulong pawn = pc == 0 ? 0 : _m.Ptr(pc + (ulong)_oPawn);
+        ulong root = pawn == 0 ? 0 : _m.Ptr(pawn + (ulong)_oRoot);
+        if (root == 0) return new { ok = false, world = world == 0 ? null : _e.ObjName(world) };
+        double x = _m.Read<double>(root + (ulong)_oRelLoc), y = _m.Read<double>(root + (ulong)_oRelLoc + 8), z = _m.Read<double>(root + (ulong)_oRelLoc + 16);
+        double yaw = _m.Read<double>(pc + (ulong)_oControlRot + 8);
+        // Creatures around the player, refreshed about twice a second.
+        List<object>? players = _tick % 4 == 0 ? new() : null;
+        var npcs = players != null ? Npcs(world, pawn, players) : null;
+        // Quest log, every ~3 s (it only changes when a quest moves on).
+        var quests = _tick % 20 == 0 ? Quests() : null;
+        var discovery = _tick % 20 == 0 ? _discovery?.Read(pc, world) : null;
+        _tick++;
+        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), npcs, players, quests, discovery };
+    }
+
+    public void Run(int intervalMs, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(Sample()));
+            Thread.Sleep(intervalMs);
+        }
+    }
+}

@@ -1,0 +1,17 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const values={};
+const context={window:{},Preferences:{json:(k,f)=>values[k]??f,setJSON:(k,v)=>values[k]=structuredClone(v)}};
+vm.runInNewContext(fs.readFileSync(require('path').join(__dirname,'../app/ui/recipe-progress.js'),'utf8'),context);
+const progress=context.window.RecipeKnowledge;
+const a='A'.repeat(32),b='B'.repeat(32);
+progress.connection(true);assert.equal(progress.status('R1'),'unknown');
+progress.ingest({character:a,session:'1',recipes:['R1']});
+assert.equal(progress.status('R1'),'learned');assert.equal(progress.status('R2'),'not-learned');
+progress.ingest({character:a,session:'1',recipes:null});assert.equal(progress.status('R1'),'learned');assert.equal(progress.summary().live,false);
+progress.ingest({character:b,session:'1',recipes:null});assert.equal(progress.status('R1'),'unknown');
+assert.equal(values.recipeProgressSnapshot.character,b);assert.equal(values.recipeProgressSnapshot.recipes,null);
+progress.ingest({character:b,session:'1',recipes:[]});assert.equal(progress.status('R1'),'not-learned');
+progress.ingest({character:b,session:'2',recipes:null});assert.equal(progress.status('R1'),'unknown');
+progress.connection(false);assert.equal(progress.summary().live,false);
+progress.connection(true);assert.equal(progress.status('R1'),'unknown');
+console.log('PASS: learned/unlearned, unreadable vs empty, session reset, saved snapshots and character isolation');

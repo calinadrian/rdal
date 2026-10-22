@@ -1,0 +1,618 @@
+// World map: the game's own map image with extracted markers, regions and the live player.
+// Dungeons are separate layers: their floor plans (drawn from the game geometry) replace the world image
+// while you are inside one, or when you open one from its entrance or the dungeon picker.
+window.MapView = (() => {
+  const MARKER_SIZE = 26;
+  const markerSize = marker => marker.c === 'monster' ? 10 : MARKER_SIZE;
+  const DENSE_UNITS = 147;     // ores & plants show once a screen pixel covers fewer world units than this
+  let canvas, ctx, img, map, onSelect;
+  let layer = null;            // null = world map, else one of map.dungeons
+  let playerLayer = null;      // the dungeon the player is in (null = outside)
+  let level = 0;               // storey of the dungeon on show (0 = lowest)
+  let playerLevel = 0;         // storey the player is on
+  let layerChanged = () => {};
+  const layerViews = {};       // dungeon id -> { scale, u, v } while the app is open
+  let W = 1, H = 1;            // map image size in px
+  let scale = 0.1, ox = 0, oy = 0; // screen = imagePx * scale + offset
+  const savedCategories = Preferences.json('mapCategories', null);
+  const enabled = new Set(Array.isArray(savedCategories) ? savedCategories.filter(c => typeof c === 'string') : ['monster', 'chest', 'quest', 'travel', 'shrine', 'agility', 'npc']);
+  const savedVentTypes = Preferences.json('ventTypes', null);
+  let ventTypes = Array.isArray(savedVentTypes) ? new Set(savedVentTypes.filter(t => typeof t === 'string')) : null;
+  const ventTypeEnabled = type => ventTypes === null || ventTypes.has(type);
+  function setVentTypes(types) {
+    ventTypes = types === null ? null : new Set(types);
+    Preferences.setJSON('ventTypes', ventTypes === null ? null : [...ventTypes]);
+    dirty = true; hover = null;
+    const tip = document.getElementById('map-tip'); if (tip) tip.hidden = true;
+  }
+  function saveViewport() {
+    if (!fitted || W <= 1 || !canvas?.width || !canvas?.height) return;
+    const view = { scale, u: (viewW / 2 - ox) / scale / W, v: (viewH / 2 - oy) / scale / H };
+    if (layer) layerViews[layer.id] = view;
+    else Preferences.setJSON('mapViewport', view);
+  }
+  let highlight = null;        // { label, markers:Set }
+  let player = null;
+  let npcs = [];               // live creatures around the player: { n, ref, hostile, alert, x, y }
+  let others = [];             // other players in your world (co-op): { n, x, y, z, yaw }
+  let follow = false;          // keep the player centred (stays on until toggled off)
+  let followPause = 0;         // a drag pauses following until this time, then it glides back
+  let followChanged = () => {};
+  let hover = null;
+  let dirty = true;
+
+  // World units per image pixel and the image origin of the current layer.
+  const frame = () => layer ? layer.frame : { minX: map.bounds.minX, minY: map.bounds.minY, res: map.bounds.size / W };
+  const toImg = (x, y) => { const f = frame(); return [(x - f.minX) / f.res, (y - f.minY) / f.res]; };
+  // Which storey of dungeon d a position is on: the level whose floor under it is nearest in height.
+  function levelAt(d, p) {
+    const levels = d?.levels || [];
+    if (levels.length < 2) return 0;
+    const u = (p.x - d.frame.minX) / d.frame.res, v = (p.y - d.frame.minY) / d.frame.res;
+    let best = 0, bestGap = Infinity;
+    levels.forEach((l, i) => {
+      const g = l.heights, cx = Math.floor(u / g.cell), cy = Math.floor(v / g.cell);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const x = cx + dx, y = cy + dy;
+        const z = x >= 0 && y >= 0 && x < g.w && y < g.h ? g.z[y * g.w + x] : null;
+        // Standing on a floor (or a little above it, e.g. a chest or a torch on the wall) beats being below one.
+        const gap = z == null ? Infinity : p.z >= z - 100 ? p.z - z : (z - p.z) * 3;
+        if (gap < bestGap) { bestGap = gap; best = i; }
+      }
+    });
+    if (bestGap === Infinity) { // nowhere near any drawn floor: go by the storeys' height ranges
+      levels.forEach((l, i) => { const gap = p.z < l.zLo ? l.zLo - p.z : p.z > l.zHi ? p.z - l.zHi : 0; if (gap < bestGap) { bestGap = gap; best = i; } });
+    }
+    return best;
+  }
+  const markerLevel = (m) => m._level ??= levelAt(map.dungeons.find(d => d.id === m.d), m);
+  const onLayer = (m) => (m.d || null) === (layer?.id || null) && (!layer || level < 0 || markerLevel(m) === level);
+  const dungeonAt = (p) => (map?.dungeons || []).find(({ bounds: b }) =>
+    p.x >= b.minX && p.x <= b.maxX && p.y >= b.minY && p.y <= b.maxY && p.z >= b.minZ && p.z <= b.maxZ) || null;
+  const playerHere = () => player?.ok && playerLayer === layer && (!layer || level < 0 || playerLevel === level);
+  // Another player is drawn on whichever map (world, dungeon, storey) they are standing on.
+  const otherHere = (o) => dungeonAt(o) === layer && (!layer || level < 0 || levelAt(layer, o) === level);
+  const layerImage = () => layer ? level < 0 && layer.overview ? layer.overview : layer.levels?.[level]?.image || layer.image : map.image;
+  const toScreen = (x, y) => { const [u, v] = toImg(x, y); return [u * scale + ox, v * scale + oy]; };
+  const cat = (c) => map.categories.find((k) => k.id === c) || {};
+
+  // Icons extracted from the game (data/mapicons, data/icons), loaded on first use.
+  const images = {};
+  function image(p) {
+    if (!images[p]) {
+      images[p] = new Image();
+      images[p].onload = () => { dirty = true; };
+      images[p].src = '../../data/' + p;
+    }
+    return images[p].complete && images[p].naturalWidth ? images[p] : null;
+  }
+
+  // One map icon centred on (sx, sy) with size s, in the category's style.
+  function drawIcon(sx, sy, s, c, iconPath, ring, markerColor) {
+    const k = cat(c);
+    const tint = markerColor || k.color;
+    const style = k.style === 'circle' ? 'circle' : iconPath && iconPath !== k.icon && iconPath.startsWith('mapicons/T_NavIcons') ? 'badge' : k.style;
+    const img = style === 'circle' ? null : image(iconPath || k.icon);
+    if (style !== 'badge' || !img) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, s / 2, 0, Math.PI * 2);
+      ctx.fillStyle = style === 'item' ? 'rgba(20,16,12,0.9)' : tint || '#888';
+      ctx.fill();
+      ctx.lineWidth = ring ? 2.5 : 1.5;
+      ctx.strokeStyle = ring || (style === 'item' ? tint : 'rgba(0,0,0,0.85)');
+      ctx.stroke();
+      if (img) { const g = s * (style === 'item' ? 0.82 : 0.62); ctx.drawImage(img, sx - g / 2, sy - g / 2, g, g); }
+    } else {
+      ctx.drawImage(img, sx - s / 2, sy - s / 2, s, s);
+      if (ring) {
+        ctx.lineWidth = 2.5; ctx.strokeStyle = ring;
+        if (iconPath?.startsWith('mapicons/T_NavIcons_Atlas')) {
+          ctx.beginPath(); ctx.arc(sx, sy, s / 2 - 1, 0, Math.PI * 2); ctx.stroke();
+        } else ctx.strokeRect(sx - s / 2, sy - s / 2, s, s);
+      }
+    }
+  }
+
+  const ventGlyphs = {};
+  function ventGlyph(marker) {
+    const key = marker.i + '|' + marker.color;
+    if (ventGlyphs[key]) return ventGlyphs[key];
+    const source = marker.ventType && image(marker.i);
+    if (!source) return null;
+    const probe = document.createElement('canvas');
+    probe.width = source.naturalWidth; probe.height = source.naturalHeight;
+    const p = probe.getContext('2d'); p.drawImage(source, 0, 0);
+    const pixels = p.getImageData(0, 0, probe.width, probe.height).data;
+    let left = probe.width, top = probe.height, right = -1, bottom = -1;
+    for (let y = 0; y < probe.height; y++) for (let x = 0; x < probe.width; x++) {
+      if (pixels[(y * probe.width + x) * 4 + 3] <= 8) continue;
+      left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x); bottom = Math.max(bottom, y);
+    }
+    if (right < left) return null;
+    const width = right - left + 1, height = bottom - top + 1;
+    const glyph = document.createElement('canvas'); glyph.width = glyph.height = 64;
+    glyph.dataset.ventType = marker.ventType;
+    const g = glyph.getContext('2d');
+    const ratio = 64 / Math.max(width, height);
+    g.drawImage(source, left, top, width, height, (64 - width * ratio) / 2, (64 - height * ratio) / 2, width * ratio, height * ratio);
+    g.globalCompositeOperation = 'source-in'; g.fillStyle = marker.color || '#a0a0a0'; g.fillRect(0, 0, 64, 64);
+    return ventGlyphs[key] = glyph;
+  }
+
+  function createVentIcon(marker) {
+    const icon = document.createElement('canvas'); icon.width = icon.height = 44;
+    icon.className = 'vent-rune-icon'; icon.setAttribute('aria-hidden', 'true');
+    const draw = () => { const g = icon.getContext('2d'); g.clearRect(0, 0, 44, 44); paintVent(g, 22, 22, 40, marker, false); };
+    draw();
+    if (!ventGlyphs[marker.i + '|' + marker.color]) images[marker.i]?.addEventListener('load', draw, { once: true });
+    return icon;
+  }
+
+  // A transparent circle frames the rune. A neutral hairline keeps the colored
+  // outline readable over both light terrain and dark water without a solid disc.
+  function paintVent(g, sx, sy, size, marker, hovered) {
+    const rune = ventGlyph(marker);
+    g.save();
+    g.beginPath(); g.arc(sx, sy, size / 2, 0, Math.PI * 2);
+    g.lineWidth = 4; g.strokeStyle = 'rgba(12,16,14,.85)'; g.stroke();
+    g.lineWidth = hovered ? 2 : 1.5; g.strokeStyle = hovered ? '#fff' : marker.color || '#a0a0a0'; g.stroke();
+    const glyphSize = Math.round(size * 0.66);
+    if (rune) {
+      g.shadowColor = 'rgba(0,0,0,.75)'; g.shadowBlur = 2; g.shadowOffsetY = 1;
+      g.drawImage(rune, sx - glyphSize / 2, sy - glyphSize / 2, glyphSize, glyphSize);
+    } else if (!marker.ventType) {
+      g.beginPath(); g.arc(sx, sy, 2, 0, Math.PI * 2); g.fillStyle = '#aaa'; g.fill();
+    }
+    g.restore();
+  }
+
+  function drawVent(sx, sy, marker, hovered) {
+    paintVent(ctx, sx, sy, MARKER_SIZE, marker, hovered);
+  }
+
+  function init(cnv, mapData, selectFn) {
+    canvas = cnv;
+    ctx = canvas.getContext('2d');
+    map = mapData;
+    onSelect = selectFn;
+    loadLayerImage();
+
+    let drag = null;
+    canvas.addEventListener('mousedown', (e) => { drag = { x: e.clientX, y: e.clientY, ox, oy, moved: false }; });
+    window.addEventListener('mouseup', (e) => {
+      if (drag && !drag.moved && hover) onSelect(hover);
+      if (drag?.moved) { followPause = performance.now() + 3000; saveViewport(); } // look around, then glide back to the player
+      drag = null;
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (drag) {
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; followPause = Infinity; }
+        ox = drag.ox + dx; oy = drag.oy + dy; dirty = true;
+        return;
+      }
+      if (e.target === canvas) pick(e);
+    });
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const r = canvas.getBoundingClientRect();
+      const f = e.deltaY < 0 ? 1.25 : 0.8;
+      // While following, zoom around the player so it stays in the middle.
+      if (following()) zoomAt(r.width / 2, r.height / 2, f);
+      else zoomAt(e.clientX - r.left, e.clientY - r.top, f);
+    }, { passive: false });
+    new ResizeObserver(() => { resize(); }).observe(canvas.parentElement);
+    requestAnimationFrame(loop);
+  }
+
+  function loadLayerImage() {
+    const next = new Image();
+    img = next;
+    next.onload = () => { if (img !== next) return; W = next.naturalWidth; H = next.naturalHeight; fitted = false; resize(); };
+    next.src = '../../data/' + layerImage();
+    W = H = 1; dirty = true;
+  }
+
+  // Switch between the world map (null) and a dungeon's floor plan.
+  function setLayer(d, storey) {
+    d = d || null;
+    storey = d ? storey ?? (d === playerLayer ? playerLevel : d.overview ? -1 : 0) : 0;
+    if (d === layer && storey === level) return;
+    hover = null;
+    const tip = document.getElementById('map-tip'); if (tip) tip.hidden = true;
+    if (d === layer) {
+      // Another storey of the same dungeon: same frame, so keep the view and just swap the picture.
+      level = storey;
+      const keep = { W, H }, next = new Image();
+      img = next; next.onload = () => {
+        if (img !== next) return;
+        W = next.naturalWidth; H = next.naturalHeight;
+        // Switching to Overview before the first floor finishes loading must establish
+        // the image dimensions too; otherwise the pending view remains a 1x1 blank map.
+        if (keep.W <= 1 || keep.H <= 1 || !fitted) { fitted = false; resize(); }
+        dirty = true;
+      };
+      next.src = '../../data/' + layerImage();
+      ({ W, H } = keep);
+    } else {
+      saveViewport();
+      layer = d; level = storey;
+      loadLayerImage();
+    }
+    dirty = true;
+    layerChanged(layer, level);
+  }
+
+  function resize() {
+    const r = canvas.parentElement.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const oldWidth = viewW, oldHeight = viewH;
+    viewW = r.width; viewH = r.height;
+    canvas.width = r.width * devicePixelRatio;
+    canvas.height = r.height * devicePixelRatio;
+    canvas.style.width = r.width + 'px';
+    canvas.style.height = r.height + 'px';
+    if (fitted) { ox += (r.width - oldWidth) / 2; oy += (r.height - oldHeight) / 2; }
+    dirty = true;
+    // First real size after the image loaded: frame the whole map.
+    if (!fitted && W > 1 && r.width > 0) {
+      fitted = true;
+      const savedViewport = layer ? layerViews[layer.id] : Preferences.json('mapViewport', null);
+      if (savedViewport && Number.isFinite(savedViewport.scale) && savedViewport.scale > 0
+        && Number.isFinite(savedViewport.u) && Number.isFinite(savedViewport.v)) {
+        scale = Math.min(4, Math.max(0.05, savedViewport.scale));
+        ox = r.width / 2 - savedViewport.u * W * scale;
+        oy = r.height / 2 - savedViewport.v * H * scale;
+      } else {
+        fit(false);
+        // Opening the dungeon you are standing in: start on yourself.
+        if (layer && playerHere() && follow) centerOn(player.x, player.y, 0.6);
+      }
+      pendingFocus?.(); pendingFocus = null;
+    }
+  }
+  let fitted = false;
+  // The view's exact CSS size. canvas.width is a whole number of device pixels, so deriving the view
+  // size from it lost fractions on every resize and nudged the centre (and the saved viewport) a little.
+  let viewW = 0, viewH = 0;
+  let pendingFocus = null; // centring requested before the layer's image had loaded
+
+  function fit(persist = true) {
+    if (!fitted) return resize();
+    // Whole map must stay framed instead of Follow immediately pulling it off centre again.
+    if (persist && follow) { follow = false; followChanged(false); }
+    const cw = viewW, ch = viewH;
+    // Dungeon plans must fit in the visible area beside the legend, below the controls.
+    // Fitting to the raw canvas puts the left-hand rooms behind the legend.
+    const legend = layer && document.getElementById('map-legend');
+    const left = legend && !legend.hidden ? Math.min(cw * 0.6, legend.getBoundingClientRect().width + 32) : layer ? 16 : 0;
+    const tools = layer && document.querySelector('.map-tools');
+    const top = layer ? (tools?.getBoundingClientRect().height || 32) + 32 : 0, bottom = layer ? 52 : 0;
+    const width = Math.max(1, cw - left - (layer ? 16 : 0)), height = Math.max(1, ch - top - bottom);
+    scale = Math.min(width / W, height / H);
+    ox = left + (width - W * scale) / 2; oy = top + (height - H * scale) / 2;
+    dirty = true;
+    if (persist) saveViewport();
+  }
+
+  function zoomAt(sx, sy, f) {
+    const ns = Math.min(4, Math.max(0.05, scale * f));
+    ox = sx - ((sx - ox) * ns) / scale;
+    oy = sy - ((sy - oy) * ns) / scale;
+    scale = ns;
+    dirty = true;
+    saveViewport();
+  }
+
+  function centerOn(x, y, minScale) {
+    const cw = viewW, ch = viewH;
+    if (minScale && scale < minScale) scale = minScale;
+    const [u, v] = toImg(x, y);
+    ox = cw / 2 - u * scale; oy = ch / 2 - v * scale;
+    dirty = true;
+  }
+
+  // Dense categories only appear once zoomed in, unless they are highlighted.
+  // Completed quests drop off the map (like Questie); highlighted results always show.
+  let questStatus = () => 'unknown';
+  let questVisibility = (m, highlighted) => highlighted || !m.ref || questStatus(m.ref) !== 'done';
+  let questInfo = () => null;
+  const visible = (m) => onLayer(m) && (m.c !== 'vent' || ventTypeEnabled(m.ventType || 'unknown')) && MapDiscovery.visible(m) && (m.c !== 'quest' || questVisibility(m, !!highlight?.markers.has(m))) && (highlight ? highlight.markers.has(m)
+    : enabled.has(m.c) && (frame().res / scale < DENSE_UNITS || !['ore', 'gather'].includes(m.c)));
+  // Ring around quest markers: blue for quests in progress, gold for givers of quests you can still take.
+  const questRing = (m) => {
+    if (m.c !== 'quest' || !m.ref) return null;
+    const s = questStatus(m.ref);
+    return s === 'active' ? '#4fc3ff' : m.qnpc && s !== 'done' ? '#ffd040' : null;
+  };
+
+  function pick(e) {
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    let best = null, bd = 100;
+    const live = [...(enabled.has('npc') && playerHere() ? npcs : []), ...others.filter(otherHere)];
+    for (const m of [...live, ...map.markers]) {
+      if (!m.live && !visible(m)) continue;
+      const [sx, sy] = toScreen(m.x, m.y);
+      const d = (sx - mx) ** 2 + (sy - my) ** 2;
+      const info = m.c === 'quest' ? questInfo(m) : null;
+      const hit = d < (markerSize(m) / 2 + 1) ** 2;
+      const priority = info?.current ? 30 : info?.pickup ? 15 : 0;
+      const score = d - priority;
+      if (hit && (!best || score < bd)) { bd = score; best = m; }
+    }
+    if (best !== hover) { hover = best; dirty = true; }
+    const tip = document.getElementById('map-tip');
+    if (hover) {
+      tip.hidden = false;
+      tip.style.left = mx + 14 + 'px';
+      tip.style.top = my + 10 + 'px';
+      const dist = hover.live && player?.ok ? ` · ${Math.round(Math.hypot(hover.x - player.x, hover.y - player.y) / 100)} m away` : '';
+      const qs = hover.c === 'quest' && hover.ref ? questStatus(hover.ref) : null;
+      const mood = hover.combat ? ' · in combat' : hover.alert ? ' · suspicious'
+        : qs ? { active: ' · in progress', available: ' · not started', unknown: ' · not found yet', done: ' · completed' }[qs] : '';
+      const info = hover.c === 'quest' ? questInfo(hover) : null;
+      if (info) {
+        tip.textContent = `${info.title}\n${info.label} · ${info.location}\n`
+          + (info.steps.length ? info.steps.map(s => `${s.number}. ${s.text}`).join('\n') : 'Objective link not confirmed in game data.')
+          + '\nClick for quest details';
+      } else {
+        const discovery = ['lore', 'shrine'].includes(hover.c) ? `\n${{ discovered: 'Discovered', undiscovered: 'Undiscovered', unknown: 'Discovery status not yet confirmed' }[MapDiscovery.state(hover)]}` : '';
+        const action = hover.enter ? '  (click to open its map)' : hover.ref || ['lore', 'shrine'].includes(hover.c) ? '  (click for details)' : '';
+        tip.textContent = `${hover.live ? '● ' : ''}${hover.n}${mood}${dist}${hover.region ? ' · ' + hover.region : ''}${discovery}${action}`;
+      }
+      tip.style.left = Math.max(8, Math.min(mx + 14, r.width - tip.offsetWidth - 8)) + 'px';
+      tip.style.top = Math.max(8, Math.min(my + 10, r.height - tip.offsetHeight - 8)) + 'px';
+    } else tip.hidden = true;
+  }
+
+  const following = () => follow && playerHere() && performance.now() > followPause;
+
+  function loop() {
+    if (following()) {
+      // Glide towards the player instead of snapping, so movement and returning from a drag look smooth.
+      const cw = viewW, ch = viewH;
+      const [u, v] = toImg(player.x, player.y);
+      const dx = cw / 2 - u * scale - ox, dy = ch / 2 - v * scale - oy;
+      if (Math.abs(dx) + Math.abs(dy) > 0.5) {
+        const k = Math.abs(dx) + Math.abs(dy) > 2000 ? 1 : 0.2;
+        ox += dx * k; oy += dy * k; dirty = true;
+      }
+    }
+    if (dirty) draw();
+    requestAnimationFrame(loop);
+  }
+
+  function draw() {
+    dirty = false;
+    const dpr = devicePixelRatio;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#0b0a08';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (img.complete && W > 1) ctx.drawImage(img, ox, oy, W * scale, H * scale);
+
+    // Region outlines + names (world map only)
+    ctx.lineWidth = 1;
+    ctx.font = `${scale > 0.3 ? 13 : 11}px Segoe UI`;
+    ctx.textAlign = 'center';
+    for (const r of layer ? [] : map.regions) {
+      ctx.beginPath();
+      r.poly.forEach(([x, y], i) => { const [sx, sy] = toScreen(x, y); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
+      ctx.closePath();
+      ctx.strokeStyle = 'rgba(255,230,170,0.35)';
+      ctx.stroke();
+      if (scale > 0.12) {
+        const cx = r.poly.reduce((a, p) => a + p[0], 0) / r.poly.length, cy = r.poly.reduce((a, p) => a + p[1], 0) / r.poly.length;
+        const [sx, sy] = toScreen(cx, cy);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillText(`${r.name}${r.level ? ' (' + r.level + ')' : ''}`, sx + 1, sy + 1);
+        ctx.fillStyle = '#ffe6aa';
+        ctx.fillText(`${r.name}${r.level ? ' (' + r.level + ')' : ''}`, sx, sy);
+      }
+    }
+
+    // Spawn dots stay subdued; landmarks retain their readable size at any zoom.
+    const cw = viewW, ch = viewH;
+    // Current objectives and starts sit above overlapping later quest locations.
+    const infos = new Map(map.markers.filter(m => m.c === 'quest' && onLayer(m)).map(m => [m, questInfo(m)]));
+    const priority = m => infos.get(m)?.current ? 3 : infos.get(m)?.pickup ? 2 : 1;
+    const nonQuests = map.markers.filter(m => m.c !== 'quest' && onLayer(m));
+    const ordered = nonQuests.filter(m=>m.c==='monster').concat(nonQuests.filter(m=>m.c!=='monster'), [...infos.keys()].sort((a, b) => priority(a) - priority(b)));
+    for (const m of ordered) {
+      if (!visible(m)) continue;
+      const [sx, sy] = toScreen(m.x, m.y);
+      if (sx < -20 || sy < -20 || sx > cw + 20 || sy > ch + 20) continue;
+      const info = infos.get(m);
+      if (info) {
+        ctx.font = info.pickup ? '700 17px Segoe UI' : '600 11px Segoe UI';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        const metrics = ctx.measureText(info.badge);
+        ctx.beginPath();
+        ctx.arc(sx, sy, MARKER_SIZE / 2, 0, Math.PI * 2);
+        ctx.fillStyle = info.current ? '#16384f' : info.pickup ? '#3b321f' : '#252525'; ctx.fill();
+        ctx.lineWidth = m === hover || info.current || info.pickup ? 2 : 1;
+        ctx.strokeStyle = m === hover ? '#fff' : info.color; ctx.stroke();
+        ctx.fillStyle = info.color;
+        ctx.fillText(info.badge, sx + (metrics.actualBoundingBoxLeft - metrics.actualBoundingBoxRight) / 2,
+          sy + (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2);
+        ctx.textAlign = 'center';
+      } else if (m.c === 'vent') {
+        drawVent(sx, sy, m, m === hover);
+      } else drawIcon(sx, sy, markerSize(m), m.c, m.i, m === hover ? '#fff' : questRing(m), m.color);
+    }
+
+    // Live creatures around the player: amber, turning red with a pulsing ring when alerted/in combat.
+    if (enabled.has('npc') && playerHere()) {
+      const t = performance.now() / 300;
+      for (const n of npcs) {
+        const [sx, sy] = toScreen(n.x, n.y);
+        if (sx < -20 || sy < -20 || sx > cw + 20 || sy > ch + 20) continue;
+        const s = MARKER_SIZE;
+        ctx.save();
+        ctx.shadowColor = n.combat ? '#ff3020' : '#ffd060';
+        ctx.shadowBlur = 10;
+        if (n.alert) {
+          ctx.beginPath();
+          ctx.arc(sx, sy, s / 2 + 4 + 2 * Math.sin(t), 0, Math.PI * 2);
+          ctx.strokeStyle = n.combat ? 'rgba(255,60,40,0.9)' : 'rgba(255,190,60,0.9)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.arc(sx, sy, s / 2, 0, Math.PI * 2);
+        ctx.fillStyle = n.combat ? '#d03030' : '#e8a020';
+        ctx.fill();
+        ctx.restore();
+        ctx.lineWidth = n === hover ? 3 : 2;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        // The creature's journal picture when there is one, else the paw glyph.
+        const face = n.face && image(n.face);
+        if (face) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(sx, sy, s / 2 - 1.5, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.fillStyle = '#2a2016';
+          ctx.fill();
+          // Journal art is full-body and not square: fit it whole, keeping its proportions.
+          const k = (s * 0.92) / Math.max(face.naturalWidth || face.width, face.naturalHeight || face.height);
+          const fw = (face.naturalWidth || face.width) * k, fh = (face.naturalHeight || face.height) * k;
+          ctx.drawImage(face, sx - fw / 2, sy - fh / 2, fw, fh);
+          ctx.restore();
+        } else {
+          const img = image('mapicons/T_Map_Icon_Animal.png');
+          if (img) ctx.drawImage(img, sx - s * 0.32, sy - s * 0.32, s * 0.64, s * 0.64);
+        }
+      }
+      if (npcs.some((n) => n.alert)) dirty = true; // keep the pulse animating
+    }
+
+    // Other players: a green arrow the way their character faces, with their name above it.
+    ctx.font = '600 12px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    for (const o of others) {
+      if (!otherHere(o)) continue;
+      const [sx, sy] = toScreen(o.x, o.y);
+      if (sx < -40 || sy < -40 || sx > cw + 40 || sy > ch + 40) continue;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(((o.yaw + 90) * Math.PI) / 180);
+      ctx.shadowColor = '#6f6'; ctx.shadowBlur = o === hover ? 12 : 6;
+      ctx.beginPath();
+      ctx.moveTo(0, -11); ctx.lineTo(-8, 9); ctx.lineTo(0, 4); ctx.lineTo(8, 9); ctx.closePath();
+      ctx.fillStyle = '#5fe36a'; ctx.fill();
+      ctx.shadowBlur = 0; ctx.lineWidth = o === hover ? 2.5 : 1.5; ctx.strokeStyle = o === hover ? '#fff' : '#0b2a0e'; ctx.stroke();
+      ctx.restore();
+      if (o.n) {
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.strokeText(o.n, sx, sy - 16);
+        ctx.fillStyle = '#b8ffbe'; ctx.fillText(o.n, sx, sy - 16);
+      }
+    }
+
+    // Player: the game's own arrow, pointing where the camera looks (yaw 0 = +X = right).
+    if (playerHere()) {
+      const [sx, sy] = toScreen(player.x, player.y);
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(((player.yaw + 90) * Math.PI) / 180);
+      const img = image('mapicons/T_NavIcons_Player_Self.png');
+      ctx.shadowColor = '#3cf';
+      ctx.shadowBlur = 8;
+      if (img) ctx.drawImage(img, -MARKER_SIZE / 2, -MARKER_SIZE / 2, MARKER_SIZE, MARKER_SIZE);
+      else {
+        ctx.beginPath();
+        ctx.moveTo(0, -12); ctx.lineTo(-7, 8); ctx.lineTo(0, 4); ctx.lineTo(7, 8); ctx.closePath();
+        ctx.fillStyle = '#3cf';
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  return {
+    init,
+    resize: () => { resize(); },
+    redraw: () => { dirty = true; hover = null; const tip = document.getElementById('map-tip'); if (tip) tip.hidden = true; },
+    setEnabled(cat, on) { on ? enabled.add(cat) : enabled.delete(cat); Preferences.setJSON('mapCategories', [...enabled]); dirty = true; },
+    isEnabled: (cat) => enabled.has(cat),
+    isVentTypeEnabled: ventTypeEnabled,
+    createVentIcon,
+    setVentTypes,
+    setVentType(type, on) {
+      const types = ventTypes === null ? new Set((map?.markers || []).filter(m => m.c === 'vent').map(m => m.ventType || 'unknown')) : new Set(ventTypes);
+      on ? types.add(type) : types.delete(type); setVentTypes(types);
+    },
+    setHighlight(label, markers) {
+      highlight = markers && markers.length ? { label, markers: new Set(markers) } : null;
+      if (highlight && follow) { follow = false; followChanged(false); } // framing the results beats following
+      if (highlight) {
+        // Results can sit in dungeons: stay on this layer if it has any, else open the one with the most.
+        if (!markers.some(onLayer)) {
+          const counts = {};
+          for (const m of markers) { const k = m.d ? m.d + '|' + markerLevel(m) : ''; counts[k] = (counts[k] || 0) + 1; }
+          const [best, storey] = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0].split('|');
+          setLayer(best ? map.dungeons.find(d => d.id === best) : null, +storey || 0);
+        }
+        const here = markers.filter(onLayer);
+        const frameResults = () => {
+          // Frame all highlighted markers on this layer.
+          const xs = here.map((m) => m.x), ys = here.map((m) => m.y);
+          const [u1, v1] = toImg(Math.min(...xs), Math.min(...ys)), [u2, v2] = toImg(Math.max(...xs), Math.max(...ys));
+          const cw = viewW, ch = viewH;
+          scale = Math.min(1.2, Math.max(0.08, Math.min(cw / (u2 - u1 + 400), ch / (v2 - v1 + 400))));
+          ox = cw / 2 - ((u1 + u2) / 2) * scale; oy = ch / 2 - ((v1 + v2) / 2) * scale;
+          dirty = true;
+        };
+        // A layer that just switched frames once its image (and so its scale) is known.
+        if (W > 1) frameResults(); else pendingFocus = frameResults;
+      }
+      dirty = true;
+      return highlight;
+    },
+    highlightLabel: () => highlight?.label || null,
+    setPlayer(p) {
+      player = p;
+      // Going through a dungeon door (either way) takes the map with you.
+      const now = p?.ok ? dungeonAt(p) : playerLayer;
+      const storey = now && p?.ok ? levelAt(now, p) : playerLevel;
+      // Going through a dungeon door, or up/down to another storey, takes the map with you.
+      if (now !== playerLayer || storey !== playerLevel) {
+        const follows = now !== playerLayer || (layer === playerLayer && level >= 0);
+        playerLayer = now; playerLevel = storey;
+        if (canvas && follows) setLayer(now, storey);
+      }
+      dirty = true;
+    },
+    setLayer(d, storey) { setLayer(d, storey); },
+    layer: () => layer,
+    level: () => level,
+    dungeons: () => map?.dungeons || [],
+    playerDungeon: () => playerLayer,
+    onLayerChange(fn) { layerChanged = fn; },
+    setNpcs(list) { npcs = list; dirty = true; },
+    setOthers(list) { others = list.map(o => ({ ...o, live: true, c: 'player', n: o.n || 'Another player' })); dirty = true; },
+    setQuestStatus(fn) { questStatus = fn; dirty = true; },
+    setQuestVisibility(fn) { questVisibility = fn; dirty = true; },
+    setQuestInfo(fn) { questInfo = fn; dirty = true; },
+    focusMarker(marker) {
+      if (highlight && !highlight.markers.has(marker)) highlight = null;
+      hover = null;
+      document.getElementById('map-tip').hidden = true;
+      setLayer(marker.d ? map.dungeons.find(d => d.id === marker.d) : null, marker.d ? markerLevel(marker) : 0);
+      follow = false; followChanged(false);
+      const focus = () => { centerOn(marker.x, marker.y, 0.45); saveViewport(); };
+      if (W > 1) focus(); else pendingFocus = focus;
+    },
+    image,
+    setFollow(on, { restore = false } = {}) {
+      follow = on;
+      followPause = 0;
+      if (on && !restore && scale < 0.5) { scale = 0.5; dirty = true; saveViewport(); }
+      followChanged(on);
+    },
+    isFollowing: () => follow,
+    onFollowChange(fn) { followChanged = fn; },
+    zoom(f) { zoomAt(viewW / 2, viewH / 2, f); },
+    fit,
+  };
+})();

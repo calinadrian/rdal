@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html class="client-nojs" lang="en-GB" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<title>Goblin Warrior - RuneScape: Dragonwilds Wiki</title>
+<script>(function(){var className="client-js";var cookie=document.cookie.match(/(?:^|; )wgmwclientpreferences=([^;]+)/);if(cookie){cookie[1].split('%2C').forEach(function(pref){className=className.replace(new RegExp('(^| )'+pref.replace(/-clientpref-\w+$|[^\w-]+/g,'')+'-clientpref-\\w+( |$)'),'$1'+pref+'$2');});}document.documentElement.className=className;}());RLCONF={"wgBreakFrames":false,"wgSeparatorTransformTable":["",""],"wgDigitTransformTable":["",""],"wgDefaultDateFormat":"dmy","wgMonthNames":["","January","February","March","April","May","June","July","August","September","October","November","December"],"wgRequestId":"47a6af922deee743e27f84a67437a201","wgCanonicalNamespace":"","wgCanonicalSpecialPageName":false,"wgNamespaceNumber":0,"wgPageName":"Goblin_Warrior","wgTitle":"Goblin Warrior","wgCurRevisionId":71160,"wgRevisionId":71160,"wgArticleId":174,"wgIsArticle":true,"wgIsRedirect":false,"wgAction":"view","wgUserName":null,"wgUserGroups":["*"],"wgCategories":["Pages with image sizes containing extra px","Monsters","Needs health information","Needs power level information","Weak to Fire","Goblins"],"wgPageViewLanguage":"en-gb","wgPageContentLanguage":"en-gb","wgPageContentModel":"wikitext","wgRelevantPageName":"Goblin_Warrior","wgRelevantArticleId":174,"wgTempUserName":null,"wgIsProbablyEditable":true,"wgRelevantPageIsProbablyEditable":true,"wgRestrictionEdit":[],"wgRestrictionMove":[],"simpleBatchUploadMaxFilesPerBatch":{"*":1000},"wgMediaViewerOnClick":true,"wgMediaViewerEnabledByDefault":true,"wgCiteReferencePreviewsActive":true,"wgVisualEditor":{"pageLanguageCode":"en-GB","pageLanguageDir":"ltr","pageVariantFallbacks":"en-gb"},"wgMFDisplayWikibaseDescriptions":{"search":false,"watchlist":false,"tagline":false},"wgPopupsFlags":0,"wgEditSubmitButtonLabelPublish":false,"wgCheckUserClientHintsHeadersJsApi":["brands","architecture","bitness","fullVersionList","mobile","model","platform","platformVersion"]};
+RLSTATE={"ext.gadget.switch-infobox-styles":"ready","ext.gadget.stickyTableHeaders":"ready","site.styles":"ready","user.styles":"ready","user":"ready","user.options":"loading","mediawiki.page.gallery.styles":"ready","skins.vector.styles.legacy":"ready","skins.vector.search.codex.styles":"ready","jquery.tablesorter.styles":"ready","ext.visualEditor.desktopArticleTarget.noscript":"ready","ext.embedVideo.styles":"ready"};RLPAGEMODULES=["site","mediawiki.page.ready","jquery.tablesorter","mediawiki.toc","skins.vector.legacy.js","mmv.bootstrap","ext.gadget.rsw-util","ext.gadget.switch-infobox","ext.gadget.topIcons","ext.gadget.maps","ext.gadget.autocollapse","ext.gadget.articlefeedback","ext.gadget.syncedtabbers","ext.gadget.highlightTable","ext.gadget.Username","ext.gadget.checkboxList","ext.gadget.countdown","ext.gadget.sectionAnchors","ext.gadget.sidebar-tracking","ext.gadget.Charts","ext.gadget.calc","ext.gadget.infoboxQty","ext.gadget.dropDisplay","ext.gadget.contributions","ext.gadget.dropdown","ext.gadget.fileDownload","ext.gadget.newPage","ext.gadget.purge","ext.gadget.recipePrefix","ext.visualEditor.desktopArticleTarget.init","ext.visualEditor.targetLoader","ext.embedVideo.overlay","ext.checkUser.clientHints","ext.popups"];</script>
+<script>(RLQ=window.RLQ||[]).push(function(){mw.loader.impl(function(){return["user.options@12s5i",function($,jQuery,require,module){mw.user.tokens.set({"patrolToken":"+\\","watchToken":"+\\","csrfToken":"+\\"});
+}];});});</script>
+<link rel="stylesheet" href="/load.php?lang=en-gb&amp;modules=ext.embedVideo.styles%7Cext.visualEditor.desktopArticleTarget.noscript%7Cjquery.tablesorter.styles%7Cmediawiki.page.gallery.styles%7Cskins.vector.search.codex.styles%7Cskins.vector.styles.legacy&amp;only=styles&amp;skin=vector">
+<script async="" src="/load.php?lang=en-gb&amp;modules=startup&amp;only=scripts&amp;raw=1&amp;skin=vector"></script>
+<meta name="ResourceLoaderDynamicStyles" content="">
+<link rel="stylesheet" href="/load.php?lang=en-gb&amp;modules=ext.gadget.stickyTableHeaders%2Cswitch-infobox-styles&amp;only=styles&amp;skin=vector">
+<link rel="stylesheet" href="/load.php?lang=en-gb&amp;modules=site.styles&amp;only=styles&amp;skin=vector">
+<meta name="generator" content="MediaWiki 1.45.3">
+<meta name="robots" content="max-image-preview:standard">
+<meta name="format-detection" content="telephone=no">
+<meta name="description" content="Goblin warriors are power level 2, 6 and 8 monsters located in Brynmoor, Dowdun Reach and Scorned Wilderness">
+<meta property="og:description" content="Goblin warriors are power level 2, 6 and 8 monsters located in Brynmoor, Dowdun Reach and Scorned Wilderness">
+<meta property="og:title" content="Goblin Warrior - RuneScape: Dragonwilds Wiki">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="RuneScape: Dragonwilds Wiki">
+<meta property="og:url" content="https://dragonwilds.runescape.wiki/w/Goblin_Warrior">
+<meta property="og:image" content="https://dragonwilds.runescape.wiki/images/Goblin_Warrior.png?8a4d6">
+<meta property="og:image:width" content="967">
+<meta property="og:image:height" content="1338">
+<meta name="viewport" content="width=1120">
+<link rel="alternate" type="application/x-wiki" title="Edit" href="/w/Goblin_Warrior?action=edit">
+<link rel="apple-touch-icon" href="/images/Apple-touch-icon.png">
+<link rel="icon" href="/images/Favicon.ico">
+<link rel="search" type="application/opensearchdescription+xml" href="/rest.php/v1/search" title="RuneScape: Dragonwilds Wiki (en-gb)">
+<link rel="EditURI" type="application/rsd+xml" href="https://dragonwilds.runescape.wiki/api.php?action=rsd">
+<link rel="canonical" href="https://dragonwilds.runescape.wiki/w/Goblin_Warrior">
+<link rel="license" href="https://creativecommons.org/licenses/by-nc-sa/3.0/">
+</head>
+<body class="skin-vector-legacy mediawiki ltr sitedir-ltr mw-hide-empty-elt ns-0 ns-subject mw-editable page-Goblin_Warrior rootpage-Goblin_Warrior skin-vector action-view wgl-darkmode wgl-theme-dark"><div id="mw-page-base" class="noprint"></div>
+<div id="mw-head-base" class="noprint"></div>
+<div id="content" class="mw-body" role="main">
+	<a id="top"></a>
+	<div id="siteNotice"></div>
+	<div class="mw-indicators">
+	</div>
+	<h1 id="firstHeading" class="firstHeading mw-first-heading"><span class="mw-page-title-main">Goblin Warrior</span></h1>
+	<div id="bodyContent" class="vector-body">
+		<div id="siteSub" class="noprint">From RuneScape: Dragonwilds Wiki</div>
+		<div id="contentSub"><div id="mw-content-subtitle"></div></div>
+		<div id="contentSub2"></div>
+		
+		<div id="jump-to-nav"></div>
+		<a class="mw-jump-link" href="#mw-head">Jump to navigation</a>
+		<a class="mw-jump-link" href="#searchInput">Jump to search</a>
+		<div id="mw-content-text" class="mw-body-content"><div class="mw-content-ltr mw-parser-output" lang="en-GB" dir="ltr"><div class="infobox infobox-switch"><div class="infobox-buttons"><span class="button button-selected" data-switch-index="1" data-switch-anchor="#Power&#95;Level&#95;2">Power Level 2</span><span class="button" data-switch-index="2" data-switch-anchor="#Power&#95;Level&#95;6">Power Level 6</span><span class="button" data-switch-index="3" data-switch-anchor="#Power&#95;Level&#95;8">Power Level 8</span></div><div class="infobox-title" data-attr-param="title">Goblin Warrior</div><div class="infobox-image-container" data-attr-param="image"><div class="infobox-image"><span typeof="mw:File"><a href="/w/File:Goblin_Warrior.png" class="mw-file-description"><img src="/images/thumb/Goblin_Warrior.png/300px-Goblin_Warrior.png?8a4d6" decoding="async" loading="lazy" width="300" height="415" class="mw-file-element" srcset="/images/thumb/Goblin_Warrior.png/600px-Goblin_Warrior.png?8a4d6 2x" data-file-width="967" data-file-height="1338" /></a></span></div></div><div class="infobox-row-container"><div class="infobox-row-label">Released</div><div class="infobox-row-value" data-attr-param="Released"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/15_December" title="15 December">15 December</a> <a href="/w/2025" class="mw-redirect" title="2025">2025</a> (<a href="/w/Update:Eye_on_Ashenfall_-_0.10" title="Update:Eye on Ashenfall - 0.10">Update</a>)</div></div></div><div class="infobox-row-container"><div class="infobox-row-label">Location</div><div class="infobox-row-value" data-attr-param="Location"><div class="infobox-row-value&#95;&#95;inner">
+<ul><li><a href="/w/Bramblemead_Valley" title="Bramblemead Valley">Bramblemead Valley</a></li>
+<li><a href="/w/Whispering_Swamp" title="Whispering Swamp">Whispering Swamp</a></li></ul>
+</div></div></div><div class="infobox-header" data-attr-param="header&#95;4">Combat</div><div class="infobox-row-container"><div class="infobox-row-label"><a href="/w/Power_Level" class="mw-redirect" title="Power Level">Power Level</a></div><div class="infobox-row-value" data-attr-param="&#91;&#91;Power&#95;Level&#93;&#93;"><div class="infobox-row-value&#95;&#95;inner">2</div></div></div><div class="infobox-row-container"><div class="infobox-row-label"><a href="/w/Health" title="Health">Health</a></div><div class="infobox-row-value" data-attr-param="&#91;&#91;Health&#93;&#93;"><div class="infobox-row-value&#95;&#95;inner">140</div></div></div><div class="infobox-row-container"><div class="infobox-row-label">Race</div><div class="infobox-row-value" data-attr-param="Race"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/Goblin_(race)" title="Goblin (race)">Goblin</a></div></div></div><div class="infobox-row-container"><div class="infobox-row-label">Weakness</div><div class="infobox-row-value" data-attr-param="Weakness"><div class="infobox-row-value&#95;&#95;inner">Fire</div></div></div><div class="infobox-row-container"><div class="infobox-row-label">Resistance</div><div class="infobox-row-value" data-attr-param="Resistance"><div class="infobox-row-value&#95;&#95;inner">None</div></div></div><div class="infobox-row-container"><div class="infobox-row-label">Immune</div><div class="infobox-row-value" data-attr-param="Immune"><div class="infobox-row-value&#95;&#95;inner">No</div></div></div><div class="infobox-row-container"><div class="infobox-row-label">Aggressive</div><div class="infobox-row-value" data-attr-param="Aggressive"><div class="infobox-row-value&#95;&#95;inner">Yes</div></div></div><div class="infobox-row-container"><div class="infobox-row-label">Experience</div><div class="infobox-row-value" data-attr-param="Experience"><div class="infobox-row-value&#95;&#95;inner">
+<ul><li>Melee 47</li>
+<li>Magic</li>
+<li>Ranged</li></ul>
+</div></div></div><div class="infobox-row-container"><div class="infobox-row-label"><a href="/w/Spawning" title="Spawning">Respawn</a></div><div class="infobox-row-value" data-attr-param="&#91;&#91;Spawning&#124;Respawn&#93;&#93;"><div class="infobox-row-value&#95;&#95;inner"><a class="text" href="https://dragonwilds.runescape.wiki/w/Goblin_Warrior?action=edit"><b>?</b> (edit)</a></div></div></div></div>
+<div class="infobox-switch-resources" style="display:none"><span data-attr-param="Weakness"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner">Fire</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner">Fire</div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner">Fire</div></span></span><span data-attr-param="&#91;&#91;Spawning&#124;Respawn&#93;&#93;"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner"><a class="text" href="https://dragonwilds.runescape.wiki/w/Goblin_Warrior?action=edit"><b>?</b> (edit)</a></div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner"><a class="text" href="https://dragonwilds.runescape.wiki/w/Goblin_Warrior?action=edit"><b>?</b> (edit)</a></div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner"><a class="text" href="https://dragonwilds.runescape.wiki/w/Goblin_Warrior?action=edit"><b>?</b> (edit)</a></div></span></span><span data-attr-param="Released"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/15_December" title="15 December">15 December</a> <a href="/w/2025" class="mw-redirect" title="2025">2025</a> (<a href="/w/Update:Eye_on_Ashenfall_-_0.10" title="Update:Eye on Ashenfall - 0.10">Update</a>)</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/31_March" title="31 March">31 March</a> <a href="/w/2026" class="mw-redirect" title="2026">2026</a> (<a href="/w/Update:0.11_is_live_now!_Enter_Dowdun_Reach..." title="Update:0.11 is live now! Enter Dowdun Reach...">Update</a>)</div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/15_September" title="15 September">15 September</a> <a href="/w/2026" class="mw-redirect" title="2026">2026</a> (<a href="/w/Update:Eye_on_Ashenfall_-_0.10" title="Update:Eye on Ashenfall - 0.10">Update</a>)</div></span></span><span data-attr-param="Experience"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner">
+<ul><li>Melee 47</li>
+<li>Magic</li>
+<li>Ranged</li></ul>
+</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner">
+<ul><li>Melee 162</li>
+<li>Magic 123</li>
+<li>Ranged 123</li></ul>
+</div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner"><a class="text" href="https://dragonwilds.runescape.wiki/w/Goblin_Warrior?action=edit"><b>?</b> (edit)</a></div></span></span><span data-attr-param="Aggressive"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner">Yes</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner">Yes</div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner">Yes</div></span></span><span data-attr-param="Immune"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner">No</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner">No</div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner">No</div></span></span><span data-attr-param="title"><span data-attr-index="1">Goblin Warrior</span><span data-attr-index="2">Goblin Warrior</span><span data-attr-index="3">Goblin Warrior</span></span><span data-attr-param="&#91;&#91;Health&#93;&#93;"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner">140</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner">490</div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner">665</div></span></span><span data-attr-param="header&#95;4"><span data-attr-index="1">Combat</span><span data-attr-index="2">Combat</span><span data-attr-index="3">Combat</span></span><span data-attr-param="Race"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/Goblin_(race)" title="Goblin (race)">Goblin</a></div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/Goblin_(race)" title="Goblin (race)">Goblin</a></div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/Goblin_(race)" title="Goblin (race)">Goblin</a></div></span></span><span data-attr-param="Location"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner">
+<ul><li><a href="/w/Bramblemead_Valley" title="Bramblemead Valley">Bramblemead Valley</a></li>
+<li><a href="/w/Whispering_Swamp" title="Whispering Swamp">Whispering Swamp</a></li></ul>
+</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/Dowdun_Reach" title="Dowdun Reach">Dowdun Reach</a></div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner"><a href="/w/Scorned_Wilderness" title="Scorned Wilderness">Scorned Wildernessed</a></div></span></span><span data-attr-param="image"><span data-attr-index="1"><div class="infobox-image"><span typeof="mw:File"><a href="/w/File:Goblin_Warrior.png" class="mw-file-description"><img src="/images/thumb/Goblin_Warrior.png/300px-Goblin_Warrior.png?8a4d6" decoding="async" loading="lazy" width="300" height="415" class="mw-file-element" srcset="/images/thumb/Goblin_Warrior.png/600px-Goblin_Warrior.png?8a4d6 2x" data-file-width="967" data-file-height="1338" /></a></span></div></span><span data-attr-index="2"><div class="infobox-image"><span typeof="mw:File"><a href="/w/File:Goblin_Warrior.png" class="mw-file-description"><img src="/images/thumb/Goblin_Warrior.png/300px-Goblin_Warrior.png?8a4d6" decoding="async" loading="lazy" width="300" height="415" class="mw-file-element" srcset="/images/thumb/Goblin_Warrior.png/600px-Goblin_Warrior.png?8a4d6 2x" data-file-width="967" data-file-height="1338" /></a></span></div></span><span data-attr-index="3"><div class="infobox-image"><span typeof="mw:File"><a href="/w/File:Goblin_Warrior.png" class="mw-file-description"><img src="/images/thumb/Goblin_Warrior.png/300px-Goblin_Warrior.png?8a4d6" decoding="async" loading="lazy" width="300" height="415" class="mw-file-element" srcset="/images/thumb/Goblin_Warrior.png/600px-Goblin_Warrior.png?8a4d6 2x" data-file-width="967" data-file-height="1338" /></a></span></div></span></span><span data-attr-param="Resistance"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner">None</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner">None</div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner">None</div></span></span><span data-attr-param="&#91;&#91;Power&#95;Level&#93;&#93;"><span data-attr-index="1"><div class="infobox-row-value&#95;&#95;inner">2</div></span><span data-attr-index="2"><div class="infobox-row-value&#95;&#95;inner">6</div></span><span data-attr-index="3"><div class="infobox-row-value&#95;&#95;inner">8</div></span></span></div>
+<p><b>Goblin warriors</b> are <a href="/w/Power_level" title="Power level">power level</a> 2, 6 and 8 <a href="/w/Monsters" title="Monsters">monsters</a> located in <a href="/w/Brynmoor" title="Brynmoor">Brynmoor</a>, <a href="/w/Dowdun_Reach" title="Dowdun Reach">Dowdun Reach</a> and <a href="/w/Scorned_Wilderness" title="Scorned Wilderness">Scorned Wilderness</a>
+</p>
+<div id="toc" class="toc" role="navigation" aria-labelledby="mw-toc-heading"><input type="checkbox" role="button" id="toctogglecheckbox" class="toctogglecheckbox" style="display:none" /><div class="toctitle" lang="en-GB" dir="ltr"><h2 id="mw-toc-heading">Contents</h2><span class="toctogglespan"><label class="toctogglelabel" for="toctogglecheckbox"></label></span></div>
+<ul>
+<li class="toclevel-1 tocsection-1"><a href="#Location"><span class="tocnumber">1</span> <span class="toctext">Location</span></a></li>
+<li class="toclevel-1 tocsection-2"><a href="#Drops"><span class="tocnumber">2</span> <span class="toctext">Drops</span></a>
+<ul>
+<li class="toclevel-2 tocsection-3"><a href="#100%"><span class="tocnumber">2.1</span> <span class="toctext">100%</span></a></li>
+<li class="toclevel-2 tocsection-4"><a href="#Other"><span class="tocnumber">2.2</span> <span class="toctext">Other</span></a></li>
+</ul>
+</li>
+<li class="toclevel-1 tocsection-5"><a href="#Journal"><span class="tocnumber">3</span> <span class="toctext">Journal</span></a></li>
+<li class="toclevel-1 tocsection-6"><a href="#Gallery"><span class="tocnumber">4</span> <span class="toctext">Gallery</span></a></li>
+</ul>
+</div>
+
+<div class="mw-heading mw-heading2"><h2 id="Location">Location</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/Goblin_Warrior?section=1&amp;veaction=edit" title="Edit section: Location" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="/w/Goblin_Warrior?action=edit&amp;section=1" title="Edit section&#039;s source code: Location"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<div><div class="map" data-json="&#123;&quot;categories&quot;:&#91;&#123;&quot;id&quot;:&quot;Goblin Warrior&quot;,&quot;name&quot;:&quot;Goblin Warrior&quot;,&quot;icon&quot;:&quot;Map&#95;icon.svg&quot;&#125;&#93;,&quot;markers&quot;:&#91;&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;48185.04,155453.39&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;43583.332,154714.38&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;71995.19,153733.5&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;92377.09,158504.06&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;43456.695,143326.1&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;43531.574,142887.27&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;73774.914,174783.64&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;73994.055,174414.56&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;74248.27,174617.92&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;61075.07,160402.95&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;53242.617,127835.24&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;53304.754,126751.945&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;70600.664,160334.27&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;70824.39,160577.88&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;71619.74,185115.81&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;72017.016,184890.31&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;71850.625,185265.14&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;94261.31,169648.77&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;94087.79,169876.38&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;58081.953,159518.38&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;39105.414,151492.62&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;39152.91,151131.84&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;22563.184,153946.84&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;82564.805,146025.14&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;61454.75,151007.95&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;61208.043,150929.75&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;79731.695,154149.88&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;22762.006,153821.89&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;61085,160015&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;61100,157280&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;260619.27,35359.617&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;260213.16,35147.06&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;254291.8,32866.156&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;257926.42,22698.547&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;241431.27,40949.375&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;241265.64,42966.22&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;251134.73,27309.225&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;246450.58,56144.625&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;56536.703,159068.8&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;56568.035,159929.06&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;24309.027,147219.42&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;18560.85,144522.36&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;18728.738,144708.4&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;82138.02,153335.44&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;62561.723,171571.88&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;62273.33,171758.9&#93;&#125;,&#123;&quot;categoryId&quot;:&quot;Goblin Warrior&quot;,&quot;popup&quot;:&#123;&quot;title&quot;:&quot;Goblin Warrior&quot;,&quot;description&quot;:&quot;&quot;&#125;,&quot;position&quot;:&#91;80042.39,156965.05&#93;&#125;&#93;&#125;" data-settings="&#123;&quot;visibleCategories&quot;:&#91;&quot;Goblin Warrior&quot;&#93;&#125;" style="width:532px;height:532px;float:none;padding:4px"><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div><div class="map-popup" style="display:none"><span>Goblin Warrior</span><span></span></div></div></div>
+<div class="mw-heading mw-heading2"><h2 id="Drops">Drops</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/Goblin_Warrior?section=2&amp;veaction=edit" title="Edit section: Drops" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="/w/Goblin_Warrior?action=edit&amp;section=2" title="Edit section&#039;s source code: Drops"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<div class="mw-heading mw-heading3"><h3 id="100%">100%</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/Goblin_Warrior?section=3&amp;veaction=edit" title="Edit section: 100%" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="/w/Goblin_Warrior?action=edit&amp;section=3" title="Edit section&#039;s source code: 100%"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p><i>The following drop rates are provided by Jagex or the game archive, unless otherwise specified.</i>
+</p>
+<table class="wikitable sortable" style="text-align:center">
+<tbody><tr>
+<th>Item</th>
+<th>Quantity</th>
+<th>Rarity</th>
+</tr>
+
+<tr style="text-align:center"><td style="text-align:left"><span typeof="mw:File"><a href="/w/Goblin_Pack" title="Goblin Pack"><img src="/images/thumb/Goblin_Pack.png/32px-Goblin_Pack.png?7efba" decoding="async" loading="lazy" width="32" height="32" class="mw-file-element" srcset="/images/thumb/Goblin_Pack.png/64px-Goblin_Pack.png?7efba 2x" data-file-width="256" data-file-height="256" /></a></span><a href="/w/Goblin_Pack" title="Goblin Pack">Goblin Pack</a></td><td data-sort-value="1">1</td><td data-sort-value="1" class="table-bg-blue"><span>Always</span></td></tr>
+</tbody></table>
+<div class="mw-heading mw-heading3"><h3 id="Other">Other</h3><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/Goblin_Warrior?section=4&amp;veaction=edit" title="Edit section: Other" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="/w/Goblin_Warrior?action=edit&amp;section=4" title="Edit section&#039;s source code: Other"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<p><i>The following drop rates are provided by Jagex or the game archive, unless otherwise specified.</i>
+</p>
+<table class="wikitable sortable" style="text-align:center">
+<tbody><tr>
+<th>Item</th>
+<th>Quantity</th>
+<th>Rarity</th>
+</tr>
+
+<tr style="text-align:center"><td style="text-align:left"><span typeof="mw:File"><a href="/w/A_Cruel_Goblin_Blade" title="A Cruel Goblin Blade"><img src="/images/thumb/A_Cruel_Goblin_Blade.png/32px-A_Cruel_Goblin_Blade.png?24ca7" decoding="async" loading="lazy" width="32" height="32" class="mw-file-element" srcset="/images/thumb/A_Cruel_Goblin_Blade.png/64px-A_Cruel_Goblin_Blade.png?24ca7 2x" data-file-width="281" data-file-height="280" /></a></span><a href="/w/A_Cruel_Goblin_Blade" title="A Cruel Goblin Blade">A Cruel Goblin Blade</a></td><td data-sort-value="1">1</td><td data-sort-value="50" class="table-bg-yellow" title="2%"><span data-drop-percent="2" data-drop-permil="20" data-drop-fraction="2/100" data-drop-permyriad="200" data-drop-oneover="1/50">2/100</span></td></tr>
+</tbody></table>
+<div class="mw-heading mw-heading2"><h2 id="Journal">Journal</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/Goblin_Warrior?section=5&amp;veaction=edit" title="Edit section: Journal" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="/w/Goblin_Warrior?action=edit&amp;section=5" title="Edit section&#039;s source code: Journal"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<div class="seealso">The following text is transcribed from the <a href="/w/Journal" title="Journal">Journal</a>.</div><div class="journal-entry">
+<p><a href="/w/Goblins" class="mw-redirect" title="Goblins">Goblins</a> were once the minions of the war god, <a href="/w/Bandos" title="Bandos">Bandos</a>, until his death at the hands of <a href="/w/Armadyl" title="Armadyl">Armadyl</a>, the god of justice. Raised on the brutal world of <a href="//runescape.wiki/w/Yu%27biusk" class="extiw" title="rsw:Yu&#39;biusk">Yu'biusk</a>, goblins have known no other existence than one of constant battle and bloodshed. Their religion and society decries education and self-improvement in favour of conflict for conflict’s sake. To run from battle is the greatest sin to goblinkind. 
+</p><p>Goblins reproduce quickly and grow up fast. Many of their wars have been won by sheer attrition, as there are always more goblins to hurl at the enemy.   
+</p><p>The goblins of <a href="/w/Ashenfall" title="Ashenfall">Ashenfall</a> have turned away from Bandos, putting their faith in the dragon that circles <a href="/w/Ghornfell" title="Ghornfell">Ghornfell</a>. <a href="/w/Velgar" title="Velgar">Velgar</a> is a cruel and uncaring master, yet the goblins live longer lifespans under his watch than they ever did under Bandos. 
+</p>
+</div>
+<div class="mw-heading mw-heading2"><h2 id="Gallery">Gallery</h2><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/Goblin_Warrior?section=6&amp;veaction=edit" title="Edit section: Gallery" class="mw-editsection-visualeditor"><span>edit</span></a><span class="mw-editsection-divider"> | </span><a href="/w/Goblin_Warrior?action=edit&amp;section=6" title="Edit section&#039;s source code: Gallery"><span>edit source</span></a><span class="mw-editsection-bracket">]</span></span></div>
+<ul class="gallery mw-gallery-traditional">
+		<li class="gallerybox" style="width: 155px">
+			<div class="thumb" style="width: 150px; height: 220px;"><span typeof="mw:File"><a href="/w/File:Goblin_Warrior_2.png" class="mw-file-description" title="A goblin warrior with no helmet."><img alt="A goblin warrior with no helmet." src="/images/thumb/Goblin_Warrior_2.png/120px-Goblin_Warrior_2.png?ae823" decoding="async" loading="lazy" width="120" height="154" class="mw-file-element" srcset="/images/thumb/Goblin_Warrior_2.png/240px-Goblin_Warrior_2.png?ae823 2x" data-file-width="467" data-file-height="600" /></a></span></div>
+			<div class="gallerytext">A goblin warrior with no helmet.</div>
+		</li>
+</ul>
+<!-- 
+NewPP limit report
+Parsed by mediawiki‐jobrunner‐6c8fd77d9f‐sp4j2
+Cached time: 20260926134901
+Cache expiry: 172800
+Reduced expiry: false
+Complications: [show‐toc]
+CPU time usage: 0.102 seconds
+Real time usage: 0.188 seconds
+Preprocessor visited node count: 362/1000000
+Revision size: 2182/8388608 bytes
+Post‐expand include size: 45971/8388608 bytes
+Template argument size: 1698/8388608 bytes
+Highest expansion depth: 6/100
+Expensive parser function count: 1/500
+Unstrip recursion depth: 0/20
+Unstrip post‐expand size: 735/5000000 bytes
+Bucket time usage: 0.000/10 seconds
+Lua time usage: 0.026/10.000 seconds
+Lua memory usage: 1002375/367001600 bytes
+-->
+<!--
+Transclusion expansion time report (%,ms,calls,template)
+100.00%  102.093      1 -total
+ 41.11%   41.967      1 Template:Infobox_Monster
+ 27.80%   28.378      1 Template:Map
+ 16.70%   17.049      2 Template:DropsLine
+  7.17%    7.323      1 Template:Journal_entry
+  3.49%    3.568      2 Template:DropsTableHead
+  3.05%    3.110      1 Template:RSL
+  1.71%    1.743      2 Template:DropsTableBottom
+-->
+
+<!-- Saved in parser cache with key en_rsdwwiki:pcache:174:|#|:idhash:canonical and timestamp 20260926134901 and revision id 71160. Rendering was triggered because: edit-page
+ -->
+</div>
+<div class="printfooter" data-nosnippet="">Retrieved from "<a dir="ltr" href="https://dragonwilds.runescape.wiki/w/Goblin_Warrior?oldid=71160">https://dragonwilds.runescape.wiki/w/Goblin_Warrior?oldid=71160</a>"</div></div>
+		<div id="catlinks" class="catlinks" data-mw="interface"><div id="mw-normal-catlinks" class="mw-normal-catlinks"><a href="/w/Special:Categories" title="Special:Categories">Categories</a>: <ul><li><a href="/w/Category:Pages_with_image_sizes_containing_extra_px?action=edit&amp;redlink=1" class="new" title="Category:Pages with image sizes containing extra px (page does not exist)">Pages with image sizes containing extra px</a></li><li><a href="/w/Category:Monsters" title="Category:Monsters">Monsters</a></li><li><a href="/w/Category:Needs_health_information" title="Category:Needs health information">Needs health information</a></li><li><a href="/w/Category:Needs_power_level_information" title="Category:Needs power level information">Needs power level information</a></li><li><a href="/w/Category:Weak_to_Fire" title="Category:Weak to Fire">Weak to Fire</a></li><li><a href="/w/Category:Goblins" title="Category:Goblins">Goblins</a></li></ul></div></div>
+	</div>
+</div>
+
+<div id="mw-navigation">
+	<h2>Navigation menu</h2>
+	<div id="mw-head">
+		
+<nav id="p-personal" class="mw-portlet mw-portlet-personal vector-user-menu-legacy vector-menu" aria-labelledby="p-personal-label"  >
+	<h3
+		id="p-personal-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">Personal tools</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="pt-createaccount" class="mw-list-item"><a href="/w/Special:CreateAccount?returnto=Goblin+Warrior" title="You are encouraged to create an account and log in; however, it is not mandatory"><span>Create account</span></a></li><li id="pt-login" class="mw-list-item"><a href="/w/Special:UserLogin?returnto=Goblin+Warrior" title="You are encouraged to log in; however, it is not mandatory [o]" accesskey="o"><span>Log in</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+		<div id="left-navigation">
+			
+<nav id="p-associated-pages" class="mw-portlet mw-portlet-associated-pages vector-menu-tabs vector-menu-tabs-legacy vector-menu" aria-labelledby="p-associated-pages-label"  >
+	<h3
+		id="p-associated-pages-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">associated-pages</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="ca-nstab-main" class="selected vector-tab-noicon mw-list-item"><a href="/w/Goblin_Warrior" title="View the content page [c]" accesskey="c"><span>Page</span></a></li><li id="ca-talk" class="new vector-tab-noicon mw-list-item"><a href="/w/Talk:Goblin_Warrior?action=edit&amp;redlink=1" rel="discussion" class="new" title="Discussion about the content page (page does not exist) [t]" accesskey="t"><span>Discussion</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+			
+<nav id="p-variants" class="mw-portlet mw-portlet-variants emptyPortlet vector-menu-dropdown vector-menu" aria-labelledby="p-variants-label"  >
+	<input type="checkbox"
+		id="p-variants-checkbox"
+		role="button"
+		aria-haspopup="true"
+		data-event-name="ui.dropdown-p-variants"
+		class="vector-menu-checkbox"
+		aria-labelledby="p-variants-label"
+	>
+	<label
+		id="p-variants-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">British English</span>
+	</label>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</nav>
+
+		</div>
+		<div id="right-navigation">
+			
+<nav id="p-views" class="mw-portlet mw-portlet-views vector-menu-tabs vector-menu-tabs-legacy vector-menu" aria-labelledby="p-views-label"  >
+	<h3
+		id="p-views-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">Views</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="ca-view" class="selected icon mw-list-item"><a href="/w/Goblin_Warrior"><span>Read</span></a></li><li id="ca-ve-edit" class="mw-list-item"><a href="/w/Goblin_Warrior?veaction=edit" title="Edit this page [v]" accesskey="v"><span>Edit</span></a></li><li id="ca-edit" class="collapsible mw-list-item"><a href="/w/Goblin_Warrior?action=edit" title="Edit the source code of this page [e]" accesskey="e"><span>Edit source</span></a></li><li id="ca-history" class="icon mw-list-item"><a href="/w/Goblin_Warrior?action=history" title="Past revisions of this page [h]" accesskey="h"><span>View history</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+			
+<nav id="p-cactions" class="mw-portlet mw-portlet-cactions emptyPortlet vector-menu-dropdown vector-menu" aria-labelledby="p-cactions-label"  title="More options" >
+	<input type="checkbox"
+		id="p-cactions-checkbox"
+		role="button"
+		aria-haspopup="true"
+		data-event-name="ui.dropdown-p-cactions"
+		class="vector-menu-checkbox"
+		aria-labelledby="p-cactions-label"
+	>
+	<label
+		id="p-cactions-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">More</span>
+	</label>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		</ul>
+		
+	</div>
+</nav>
+
+			
+<div id="p-search" role="search" class="vector-search-box-vue  vector-search-box-show-thumbnail vector-search-box-auto-expand-width vector-search-box">
+	<div class="vector-typeahead-search-container">
+		<div class="cdx-typeahead-search cdx-typeahead-search--show-thumbnail cdx-typeahead-search--auto-expand-width">
+			<form action="/" id="searchform" class="cdx-search-input cdx-search-input--has-end-button">
+				<div id="simpleSearch" class="cdx-search-input__input-wrapper"  data-search-loc="header-navigation">
+					<div class="cdx-text-input cdx-text-input--has-start-icon">
+						<input
+							class="cdx-text-input__input mw-searchInput" autocomplete="off"
+							 type="search" name="search" placeholder="Search Dragonwilds Wiki" aria-label="Search Dragonwilds Wiki" autocapitalize="sentences" spellcheck="false" title="Search RuneScape: Dragonwilds Wiki [f]" accesskey="f" id="searchInput"
+							>
+						<span class="cdx-text-input__icon cdx-text-input__start-icon"></span>
+					</div>
+					<input type="hidden" name="title" value="Special:Search">
+				</div>
+				<button class="cdx-button cdx-search-input__end-button">Search</button>
+			</form>
+		</div>
+	</div>
+</div>
+
+		</div>
+	</div>
+	
+<div id="mw-panel" class="vector-legacy-sidebar">
+	<div id="p-logo" role="banner">
+		<a class="mw-wiki-logo" href="/"
+			title="Visit the main page"></a>
+	</div>
+	
+<nav id="p-Discord" class="mw-portlet mw-portlet-Discord vector-menu-portal portal vector-menu" aria-labelledby="p-Discord-label"  >
+	<h3
+		id="p-Discord-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">Discord</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-Discord" class="mw-list-item"><a rel="nofollow" target="_blank" href="https://discord.gg/rsdwwiki"><span>Discord</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+	
+<nav id="p-Navigation" class="mw-portlet mw-portlet-Navigation vector-menu-portal portal vector-menu" aria-labelledby="p-Navigation-label"  >
+	<h3
+		id="p-Navigation-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">Navigation</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-mainpage-description" class="mw-list-item"><a href="/" title="Visit the main page [z]" accesskey="z"><span>Main page</span></a></li><li id="n-About-us" class="mw-list-item"><a href="/w/Dragonwilds:About"><span>About us</span></a></li><li id="n-Random-page" class="mw-list-item"><a href="/w/Special:Random"><span>Random page</span></a></li><li id="n-Contact-us" class="mw-list-item"><a href="/w/Dragonwilds:Contact_us"><span>Contact us</span></a></li><li id="n-New-files" class="mw-list-item"><a href="/w/Special:NewFiles"><span>New files</span></a></li><li id="n-Game-updates" class="mw-list-item"><a href="/w/Game_updates"><span>Game updates</span></a></li><li id="n-New-player-guide" class="mw-list-item"><a href="/w/Guide_for_new_players"><span>New player guide</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+<nav id="p-Recent_changes" class="mw-portlet mw-portlet-Recent_changes vector-menu-portal portal vector-menu" aria-labelledby="p-Recent_changes-label">
+	<h3
+		id="p-Recent_changes-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">Recent changes</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			
+		
+<li class="mw-list-item rc-sidebar-item">
+  <a class="rc-sidebar-page" href="/w/Rotridden_Cow">Rotridden Cow</a>
+  <p class="rc-sidebar-user">
+    <a href="/?diff=71813">3h <span class="rc-sidebar-ago">ago</span></a>&nbsp;-
+    <a href="/w/Special:Contributions/Valdes">Valdes</a>
+  </p>
+</li>
+<li class="mw-list-item rc-sidebar-item">
+  <a class="rc-sidebar-page" href="/w/Dragonfire_Shield">Dragonfire Shield</a>
+  <p class="rc-sidebar-user">
+    <a href="/?diff=71807">5h <span class="rc-sidebar-ago">ago</span></a>&nbsp;-
+    <a href="/w/Special:Contributions/Eisotopius">Eisotopius</a>
+  </p>
+</li>
+<li class="mw-list-item rc-sidebar-item">
+  <a class="rc-sidebar-page" href="/w/Metre">Metre</a>
+  <p class="rc-sidebar-user">
+    <a href="/?diff=71805">6h <span class="rc-sidebar-ago">ago</span></a>&nbsp;-
+    <a href="/w/Special:Contributions/Broue">Broue</a>
+  </p>
+</li>
+<li class="mw-list-item rc-sidebar-item">
+  <a class="rc-sidebar-page" href="/w/Dowdun_Reach">Dowdun Reach</a>
+  <p class="rc-sidebar-user">
+    <a href="/?diff=71797">8h <span class="rc-sidebar-ago">ago</span></a>&nbsp;-
+    <a href="/w/Special:Contributions/Keplare">Keplare</a>
+  </p>
+</li>
+<li class="mw-list-item rc-sidebar-item rc-sidebar-more">
+    <a class="rc-sidebar-page" href="/w/Special:RecentChanges" accesskey="r">Show more...</a>
+</li></ul>
+		
+	</div>
+</nav>
+
+<nav id="p-Mechanics" class="mw-portlet mw-portlet-Mechanics vector-menu-portal portal vector-menu" aria-labelledby="p-Mechanics-label"  >
+	<h3
+		id="p-Mechanics-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">Mechanics</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-Player" class="mw-list-item"><a href="/w/Player"><span>Player</span></a></li><li id="n-Inventory" class="mw-list-item"><a href="/w/Inventory"><span>Inventory</span></a></li><li id="n-Items" class="mw-list-item"><a href="/w/Category:Items"><span>Items</span></a></li><li id="n-Skills" class="mw-list-item"><a href="/w/Skills"><span>Skills</span></a></li><li id="n-Buildings" class="mw-list-item"><a href="/w/Buildings"><span>Buildings</span></a></li><li id="n-Spells" class="mw-list-item"><a href="/w/Spells"><span>Spells</span></a></li><li id="n-Combat" class="mw-list-item"><a href="/w/Combat"><span>Combat</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+<nav id="p-World" class="mw-portlet mw-portlet-World vector-menu-portal portal vector-menu" aria-labelledby="p-World-label"  >
+	<h3
+		id="p-World-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">World</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-Timeline-and-History" class="mw-list-item"><a href="https://dragonwilds.runescape.wiki/w/History"><span>Timeline and History</span></a></li><li id="n-Ashenfall" class="mw-list-item"><a href="/w/Ashenfall"><span>Ashenfall</span></a></li><li id="n-Lore" class="mw-list-item"><a href="/w/Lore_Scraps"><span>Lore</span></a></li><li id="n-Monsters" class="mw-list-item"><a href="/w/Monsters"><span>Monsters</span></a></li><li id="n-NPCs" class="mw-list-item"><a href="/w/Non-player_character"><span>NPCs</span></a></li><li id="n-Quests" class="mw-list-item"><a href="/w/Quests"><span>Quests</span></a></li><li id="n-Dragonkin" class="mw-list-item"><a href="/w/Dragonkin_(race)"><span>Dragonkin</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+<nav id="p-Community" class="mw-portlet mw-portlet-Community vector-menu-portal portal vector-menu" aria-labelledby="p-Community-label"  >
+	<h3
+		id="p-Community-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">Community</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-How-to-edit" class="mw-list-item"><a href="//runescape.wiki/w/Help:Editing"><span>How to edit</span></a></li><li id="n-User-help" class="mw-list-item"><a href="/w/Dragonwilds:User_help"><span>User help</span></a></li><li id="n-Active-discussions" class="mw-list-item"><a href="/w/Forum:Bramblemead_Grove"><span>Active discussions</span></a></li><li id="n-Policies" class="mw-list-item"><a href="/w/Dragonwilds:Policies"><span>Policies</span></a></li><li id="n-Maintenance-Pages" class="mw-list-item"><a target="_blank" href="https://dragonwilds.runescape.wiki/w/Special:SpecialPages"><span>Maintenance Pages</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+<nav id="p-More_RuneScape" class="mw-portlet mw-portlet-More_RuneScape vector-menu-portal portal vector-menu" aria-labelledby="p-More_RuneScape-label"  >
+	<h3
+		id="p-More_RuneScape-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">More RuneScape</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="n-RuneScape-Wiki" class="mw-list-item"><a href="//runescape.wiki/w/RuneScape_Wiki"><span>RuneScape Wiki</span></a></li><li id="n-OSRS-Wiki" class="mw-list-item"><a href="//oldschool.runescape.wiki/w/Old_School_RuneScape_Wiki"><span>OSRS Wiki</span></a></li><li id="n-RSC-Wiki" class="mw-list-item"><a href="//classic.runescape.wiki/w/RuneScape_Classic_Wiki"><span>RSC Wiki</span></a></li><li id="n-RuneScape.com" class="mw-list-item"><a rel="nofollow" target="_blank" href="https://dragonwilds.runescape.com"><span>RuneScape.com</span></a></li>
+		</ul>
+		
+	</div>
+</nav>
+
+<nav id="p-tb" class="mw-portlet mw-portlet-tb vector-menu-portal portal vector-menu" aria-labelledby="p-tb-label"  >
+	<h3
+		id="p-tb-label"
+		
+		class="vector-menu-heading "
+	>
+		<span class="vector-menu-heading-label">Tools</span>
+	</h3>
+	<div class="vector-menu-content">
+		
+		<ul class="vector-menu-content-list">
+			
+			<li id="t-whatlinkshere" class="mw-list-item"><a href="/w/Special:WhatLinksHere/Goblin_Warrior" title="A list of all wiki pages that link here [j]" accesskey="j"><span>What links here</span></a></li><li id="t-recentchangeslinked" class="mw-list-item"><a href="/w/Special:RecentChangesLinked/Goblin_Warrior" rel="nofollow" title="Recent changes in pages linked from this page [k]" accesskey="k"><span>Related changes</span></a></li><li id="t-print" class="mw-list-item"><a href="javascript:print();" rel="alternate" title="Printable version of this page [p]" accesskey="p"><span>Printable version</span></a></li><li id="t-permalink" class="mw-list-item"><a href="/w/Goblin_Warrior?oldid=71160" title="Permanent link to this revision of this page"><span>Permanent link</span></a></li><li id="t-info" class="mw-list-item"><a href="/w/Goblin_Warrior?action=info" title="More information about this page"><span>Page information</span></a></li><li id="n-bucket" class="mw-list-item"><a href="/w/Goblin_Warrior?action=bucket" title="Bucket"><span>View buckets</span></a></li>
+		</ul>
+		<div class="after-portlet after-portlet-tb">            <a href="/hp/1790433119" style="display: none;"></a></div>
+	</div>
+</nav>
+
+	
+</div>
+
+</div>
+
+<footer id="footer" class="mw-footer" >
+	<ul id="footer-info">
+	<li id="footer-info-lastmod"> This page was last modified on 25 September 2026, at 13:49.</li>
+	<li id="footer-info-copyright">Content on this site is licensed under <a class="external" rel="nofollow" href="https://creativecommons.org/licenses/by-nc-sa/3.0/">CC BY-NC-SA 3.0</a>; <a class="text" href="https://meta.weirdgloop.org/w/Licensing">additional terms may apply</a>.</li>
+</ul>
+
+	<ul id="footer-places">
+	<li id="footer-places-privacy"><a href="//weirdgloop.org/privacy">Privacy policy</a></li>
+	<li id="footer-places-about"><a href="/w/Dragonwilds:About">About the RuneScape: Dragonwilds Wiki</a></li>
+	<li id="footer-places-disclaimers"><a href="/w/Dragonwilds:General_disclaimer">Disclaimers</a></li>
+	<li id="footer-places-tou"><a href="//weirdgloop.org/terms">Terms of Use</a></li>
+	<li id="footer-places-contact"><a href="/w/Special:Contact">Contact Weird Gloop</a></li>
+	<li id="footer-places-mobileview"><a href="https://dragonwilds.runescape.wiki/w/Goblin_Warrior?mobileaction=toggle_view_mobile" class="noprint stopMobileRedirectToggle">Mobile view</a></li>
+</ul>
+
+	<ul id="footer-icons" class="noprint">
+	<li id="footer-copyrightico"><a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank"><img src="https://meta.weirdgloop.org/images/Creative_Commons_footer.png" srcset="https://meta.weirdgloop.org/images/Creative_Commons_footer@2x.png 2x" alt="CC BY-NC-SA 3.0" width="88" height="31" loading="lazy"></a></li>
+	<li id="footer-poweredbyico"><a href="https://weirdgloop.org" target="_blank"><img src="https://meta.weirdgloop.org/images/Weird_Gloop_footer.png" srcset="https://meta.weirdgloop.org/images/Weird_Gloop_footer@2x.png 2x" alt="A Weird Gloop wiki" width="88" height="31" loading="lazy"></a></li>
+</ul>
+
+</footer>
+
+<div class="mw-portlet mw-portlet-dock-bottom emptyPortlet vector-menu-portal portal" id="p-dock-bottom">
+	<ul>
+		
+	</ul>
+</div>
+<script>(RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgHostname":"mediawiki-7d6c9675cc-fbzcs","wgBackendResponseTime":41,"wgPageParseReport":{"limitreport":{"cputime":"0.102","walltime":"0.188","ppvisitednodes":{"value":362,"limit":1000000},"revisionsize":{"value":2182,"limit":8388608},"postexpandincludesize":{"value":45971,"limit":8388608},"templateargumentsize":{"value":1698,"limit":8388608},"expansiondepth":{"value":6,"limit":100},"expensivefunctioncount":{"value":1,"limit":500},"unstrip-depth":{"value":0,"limit":20},"unstrip-size":{"value":735,"limit":5000000},"timingprofile":["100.00%  102.093      1 -total"," 41.11%   41.967      1 Template:Infobox_Monster"," 27.80%   28.378      1 Template:Map"," 16.70%   17.049      2 Template:DropsLine","  7.17%    7.323      1 Template:Journal_entry","  3.49%    3.568      2 Template:DropsTableHead","  3.05%    3.110      1 Template:RSL","  1.71%    1.743      2 Template:DropsTableBottom"]},"bucket":{"limitreport-run-time":{"value":"0.000","limit":"10"}},"scribunto":{"limitreport-timeusage":{"value":"0.026","limit":"10.000"},"limitreport-memusage":{"value":1002375,"limit":367001600}},"cachereport":{"origin":"mediawiki-jobrunner-6c8fd77d9f-sp4j2","timestamp":"20260926134901","ttl":172800,"transientcontent":false}}});});</script>
+
+<script>
+( () => {
+    const initTime = performance.now();
+    const reportFn = p => ( fetch( "https://weirdgloop.org/ai-scrapers-suck", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify( {
+            ray: "a422e56ebee2b3e2",
+            time: performance.now() - initTime,
+            ...p,
+        } ),
+    } ) );
+    let cancelFurther = false;
+    const callback = e => {
+        removeEventListener( e.type, callback );
+
+        if ( cancelFurther ) {
+            return;
+        }
+        cancelFurther = true;
+
+        let data = {};
+        if ( event.type.indexOf( 'pointer' ) === 0 ) {
+            data = {
+                pointerType: e.pointerType,
+                x: e.clientX,
+                y: e.clientY,
+                sx: e.screenX,
+                sy: e.screenY,
+                dx: e.movementX,
+                dy: e.movementY,
+            };
+        }
+
+        reportFn( {
+            type: e.type,
+            isTrusted: e.isTrusted,
+            area: !( e.target && e.target.closest ) ? null :
+                !!e.target.closest( '#p-search' ) ? 'search' :
+                !!e.target.closest( '#content' ) ? 'content' :
+                !!e.target.closest( '#mw-panel' ) ? 'panel' :
+                !!e.target.closest( '#mw-head' ) ? 'head' :
+                !!e.target.closest( '#footer' ) ? 'footer' :
+                ( e.target.closest( '[id]' )?.id ?? e.target.tagName ),
+            ...data,
+        } );
+    };
+    for ( const event of ["pointermove","pointerdown","pointerup","keydown"] ) {
+        addEventListener( event, callback, { passive: true } );
+    }
+    
+} )();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"6348a5ceb9674fe390473560fffff798","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
