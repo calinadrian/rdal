@@ -106,17 +106,20 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   combat, with a ring when suspicious), and the legend lists the nearest ones; click one with drops to see its loot.
   Open the dropdown under **Live creatures** and check any creature types to build a pool for the live map
   and Nearby. Search the list, choose **All creatures**, or **Clear** the pool. Your choices are remembered between launches.
-- **Dungeon maps**: the game has none, so the app draws parchment floor plans from the game's own geometry.
+- **Dungeon maps**: the game has none, so the app draws parchment floor plans from the game's own navigation mesh:
+  the floor creatures and players actually walk on, so rooms, doorways, bridges and stairs join up as they do in the game.
   Going through a dungeon door switches the map to that dungeon, and dungeons with stacked floors have a
   **Level** picker that follows you up and down stairs. Click an entrance on the world map, or use the map picker,
   to look inside any dungeon. Spawns, chests and other markers inside show on the right level.
   Choose **All floors** to see the full layout together, or select a level: ivory paths show that floor,
-  with other floors in a subdued fill. Browsing a dungeon from outside starts with All floors; live entry
+  with other floors in a subdued fill and dotted gaps in the wall where stairs carry on to them. Browsing a dungeon from outside starts with All floors; live entry
   still follows your current level. A manually selected overview stays open when you move between floors.
   Dungeon **Filters** open on demand, and the detail panel appears when you select an entry, leaving more room for the plan.
-  Floor outlines use smooth illustrated contours, warm parchment and shaded wall rims. Thin mesh spurs
-  and detached debris are removed from the drawing; narrow room connections and useful marked dead ends are retained.
-  Floor extraction preserves narrow stairs and joins height bands before discarding unsupported geometry.
+  Plans are drawn like a surveyed map: inked walls with hatched rock around them, a faint 5 m grid and a scale bar,
+  tread lines where stairs and ramps climb, fine lines along ledges, and shading for slopes.
+  Only floor joined to the dungeon's spawns, chests and exits is mapped. Invisible collision planes, and areas reached
+  only through a gap in the rock far from anything in the dungeon, are left out. Floor that runs on past the mapped
+  area fades out instead of ending in a wall.
 - Play in **Borderless / Windowed** mode so the overlay can sit on top.
 
 ## After a game update
@@ -208,7 +211,7 @@ over loopback and checks the real updater's download, SHA-512 verification and r
 | Path | What it is |
 |---|---|
 | `tools/Dumper` | Our external, read-only UE5 reader: writes `Mappings.usmap` + `sdk.json`, and with `--track` streams the player position and M/Esc key presses (game window only, keys are passed through). |
-| `tools/Extractor` | CUE4Parse-based exporter (`survey`, `json`, `bulk`, `world`, `texture` modes). |
+| `tools/Extractor` | CUE4Parse-based exporter (`survey`, `json`, `bulk`, `world`, `texture` modes; `floorplan` maps the dungeons from the navigation mesh, and `floorplan-style` redraws them from the cached layouts without the game). |
 | `tools/ext/c4p` | [CUE4Parse](https://github.com/FabianFG/CUE4Parse), Apache-2.0. |
 | `tools/build.ps1` | Builds both tools. The C# compiler can't handle this folder's long path, so it builds in `%LOCALAPPDATA%\dwal` (which also holds the .NET SDK) and copies the binaries back. |
 | `importer/game.js` | Joins the raw exports into the overlay database. |

@@ -62,8 +62,8 @@ if (mode == "world")
 
 if (mode == "floorplan")
 {
-    // floorplan <outDir> <dungeon-regions.json>  ->  <outDir>/<id>.png + floorplans.json
-    Floorplan.Run(provider, outDir, args[2]);
+    // floorplan <outDir> <dungeon-regions.json> [cacheDir]  ->  <outDir>/<id>.png + floorplans.json, <cacheDir>/layouts
+    Floorplan.Run(provider, outDir, args[2], args.ElementAtOrDefault(3) ?? outDir);
     return;
 }
 

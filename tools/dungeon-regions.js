@@ -49,7 +49,6 @@ for (const actors of groups.values()) {
     minX: Math.min(...xs) - PAD, maxX: Math.max(...xs) + PAD,
     minY: Math.min(...ys) - PAD, maxY: Math.max(...ys) + PAD,
     minZ: zLo - 1500, maxZ: zHi + 1500,
-    floorMinZ: zLo - 1500, floorMaxZ: zHi + 800, // gameplay actors stand on the floors; rock tops sit above them
   };
   const own = teleporters.filter(t => t.x >= r.minX && t.x <= r.maxX && t.y >= r.minY && t.y <= r.maxY && t.z >= r.minZ && t.z <= r.maxZ);
   const stems = [...new Set(own.map(t => stem(destination(t))))];

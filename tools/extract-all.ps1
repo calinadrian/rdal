@@ -36,12 +36,13 @@ Bulk chests      '/Spawners/Chests/.*\.uasset$' '^Default__'
 & $x world (Split-Path $out)
 & node (Join-Path $PSScriptRoot 'export-acquisition-world.js')
 if ($LASTEXITCODE -ne 0) { throw 'Acquisition world export failed' }
-# Dungeon floor plans: find the interiors from the placed actors, then draw their geometry from above.
+# Dungeon floor plans: find the interiors from the placed actors, then map the game's navigation mesh there.
+# The floor data is cached in Extractor\out\layouts, so `Extractor floorplan-style` can redraw without the game.
 & node (Join-Path $PSScriptRoot 'dungeon-regions.js')
 if ($LASTEXITCODE -ne 0) { throw 'Dungeon region search failed' }
 $dungeons = Join-Path (Split-Path $PSScriptRoot) 'data\dungeons'
 Remove-Item -Recurse -Force $dungeons -ErrorAction SilentlyContinue
-& $x floorplan $dungeons (Join-Path $out 'dungeon-regions.json')
+& $x floorplan $dungeons (Join-Path $out 'dungeon-regions.json') (Split-Path $out)
 # Same size, WebP instead of PNG: the parchment plans shrink about eightfold.
 & $x webp $dungeons --quality=90
 if ($LASTEXITCODE -ne 0) { throw 'Floor plan WebP conversion failed' }
