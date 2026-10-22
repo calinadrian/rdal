@@ -140,7 +140,7 @@ h3 { font-size: var(--fs-md); font-weight: 600; }
 .recipe-head .name { font-size: var(--fs-lg); font-weight: 600; text-align: left; overflow-wrap: anywhere; text-decoration: none; }
 .recipe-head .name:hover { color: var(--accent); text-decoration: underline; }
 .recipe-type { margin: 0; }
-.recipe > .journal-stats.compact { margin: 0 0 12px; }
+.recipe > .journal-stats.compact, .recipe > .journal-stats-block > .journal-stats.compact { margin: 0 0 12px; }
 .recipe-rows { display: grid; border-top: 1px solid var(--line); }
 .recipe-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 4px 14px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .recipe-label { padding-top: 5px; }

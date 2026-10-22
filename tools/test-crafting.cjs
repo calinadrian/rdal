@@ -159,12 +159,12 @@ app.whenReady().then(async () => {
     console.log('PASS: material/learning/quest classifications, chest-chain map sources, no false arrow gathering locations, exact vault map navigation');
     await js(`openQuest('The Great Body Robbery'); questMapStepMode='current';renderDetail();`);
     assert.equal(await js(`document.querySelector('.quest-show-map').disabled`),false);
-    assert.equal(await js(`markersFor('The Great Body Robbery').length`),3);
+    assert.equal(await js(`markersFor('The Great Body Robbery').filter(m=>m.precision!=='interaction').length`),3, 'Keep the three original coffin locations alongside the added quest interaction pins');
     await js(`document.querySelector('.quest-show-map').click()`);
     assert.equal(await js('state.module'),'map');
     assert.equal(await js('questMapStepMode'),'all');
     assert.equal(await js('MapView.highlightLabel()'),'The Great Body Robbery');
-    assert(await js(`document.querySelector('#map-highlight').textContent.includes('3 locations')`));
+    assert(await js(`MapView.navigation().highlight.markers.length>=3 && MapView.navigation().highlight.markers.every(i=>db.map.markers[i].ref==='The Great Body Robbery')`));
     console.log('PASS: quest-header map button, three explicit coffin locations, current-step fallback and map highlight');
     const allMasterworks=db.journal.categories.find(c=>c.name==='Masterworks').groups.flatMap(g=>g.items);
     const regular=db.journal.categories.filter(c=>['Weapons','Armour & Shields'].includes(c.name)).flatMap(c=>c.groups.flatMap(g=>g.items));

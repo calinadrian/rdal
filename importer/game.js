@@ -67,6 +67,9 @@ let journalCombat = {};
 try { journalCombat = load('journal-combat.json'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
 const attackDamage = name => Object.values(journalCombat).flat().find(e => e.Name === `Default__${name}_C`)?.Properties?.DamageAmount;
 const combatStats = { arrowMin: attackDamage('BP_Player_Shortbow_Quickshot'), arrowMax: attackDamage('BP_Player_Bow_FullDraw'), bolt: attackDamage('BP_Player_Crossbow_Quickshot') };
+let weaponCombat = {};
+try { weaponCombat = load('weapon-combat.json'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+combatStats.weaponDamage = require('./weapon-damage').buildWeaponCombat({ ...journalCombat, ...weaponCombat }, base);
 const ITEM_TYPE = { WearableEquipmentData: 'Armour', HeldEquipmentData: 'Weapons & tools', ShieldData: 'Shields', TrinketItemData: 'Trinkets',
   RangedAmmoData: 'Ammunition', MagicAmmoData: 'Runes', FishingBaitAmmoData: 'Bait', SeedHeldEquipmentData: 'Seeds', HeldTreeSeedData: 'Seeds',
   FuelItemData: 'Fuel', JournalItemData: 'Journal', FishingRodHeldEquipmentData: 'Weapons & tools', SpadeToolEquipmentData: 'Weapons & tools',

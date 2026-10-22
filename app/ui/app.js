@@ -1709,8 +1709,10 @@ function journalStats(e, compact = false) {
   const stats = e.journal?.stats || [];
   if (!stats.length) return null;
   const shown = compact ? stats.filter(s => !['Durability', 'Critical chance bonus'].includes(s.label)).slice(0, 4) : stats;
-  return h('dl', { class: compact ? 'journal-stats compact' : 'journal-stats', 'aria-label': `${e.name} base item stats` },
+  const values = h('dl', { class: compact ? 'journal-stats compact' : 'journal-stats', 'aria-label': `${e.name} base item stats` },
     shown.map(s => h('div', { class: 'journal-stat' }, h('dt', {}, s.label), h('dd', {}, `${s.prefix || ''}${+s.value.toFixed(2)}${s.max != null ? '–' + s.max : ''}${s.unit}`))));
+  return h('div', { class: 'journal-stats-block' }, values,
+    !compact && e.journal?.damageNote ? h('p', { class: 'muted small weapon-damage-note' }, e.journal.damageNote) : null);
 }
 
 function armourSetSummary(set) {

@@ -13,7 +13,9 @@ function itemStats(p, row, base, combat = {}) {
   if (Number.isFinite(fraction) && types.includes('DamageType.Ranged.Bolts')) add('Bolt damage', Number.isFinite(combat.bolt) ? Math.round(combat.bolt * fraction) : null);
   const armour = row(p.WearableEquipmentDataTableRowHandle);
   for (const [key, label] of Object.entries({ Defense: 'Defence', MeleeResistance: 'Melee resistance', RangedResistance: 'Ranged resistance', MagicResistance: 'Magic resistance', MaxVitalShield: 'Vital shield' })) add(label, armour?.[key]);
-  add('Damage multiplier', p.DamageMultiplier, '×');
+  const weapon = combat.weaponDamage?.(p, row);
+  if (weapon) stats.push(...weapon.stats);
+  else add('Damage multiplier', p.DamageMultiplier, '×');
   add('Block', p.BlockingDamageNegation, '%');
   add('Critical chance bonus', p.CriticalHitChanceIncrease == null ? null : p.CriticalHitChanceIncrease * 100, '%');
   add('Durability', p.BaseDurability);
@@ -23,7 +25,8 @@ function itemStats(p, row, base, combat = {}) {
     ['ToxicityRowHandle', 'Toxicity', 'Toxicity'], ['WitherRowHandle', 'Wither', 'Wither'],
   ]) add(label, row(p[handle])?.[key]);
   return { stats, skill: p.AssociatedSkill ? base(p.AssociatedSkill)?.replace(/^SKILL_/, '') : null,
-    damageTypes: (p.DamageTypes || []).map(t => t.split('.').pop()),
+    damageTypes: weapon?.types || (p.DamageTypes || []).map(t => t.split('.').pop()),
+    ...(weapon?.note && { damageNote: weapon.note }),
     armourWeight: p.ArmorWeight?.split('::').pop() || null };
 }
 module.exports = { itemStats };

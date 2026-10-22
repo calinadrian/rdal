@@ -40,6 +40,10 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   **Clear search** returns to the page you searched from. Breadcrumbs and **Back** help you retrace item, source, recipe, and map links while keeping filters and scroll positions.
 - Item details open when selected and have **Close details**. In compact windows they use the reading pane, with their own Back and breadcrumb controls.
   **Show locations**, **View recipe**, and **Add to wishlist** provide direct actions; descriptions expand on demand.
+- Weapon stats show base attack damage from the current power-level tables and the item's referenced attacks.
+  Melee values name the damage type (such as Slash, Stab or Crush) and show the normal combo range.
+  Bows separate full-draw and quick-shot damage; crossbows show shot damage. Magic weapons label their rune damage multiplier.
+  These values exclude ammunition, character skills, critical hits and target resistance; they are not live damage predictions.
 - Both world and dungeon maps use **Filters**, with a count of settings changed from the defaults and **Reset filters**.
   The map explains when filters, zoom, or missing live creature data leave no markers visible. The Map and Floor selectors identify what you are viewing.
 - Quest and recipe panels label saved progress with its last-read time. Unknown progress stays explicitly unknown; active quests put the current objective and its confirmed locations first.
