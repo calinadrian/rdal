@@ -53,6 +53,8 @@ app.whenReady().then(async()=>{
   await js(`$('#quest-tracker .tracker-remove').click()`);
   assert(await js(`!trackedQuests.length && $('#quest-tracker').hidden`),'Untracking the last quest hides the map tracker');
   assert(await js(`Preferences.json('trackedQuests',null).length===0`),'Tracked quests are saved');
+  // Like WoW, an active quest still marks its hunting targets on the map when untracked, just without a number.
+  assert(await js(`(()=>{const line=questTrackerObjective(ent('Dragon Slayer')).lines.find(l=>l.kind==='kill');const t=MapView.trackedEntry(line.markers[0]);return !!t&&t.index===null&&t.quest==='Dragon Slayer'})()`),'Untracked active quests keep their target creatures on the map');
   console.log('PASS: track from guide, kill + drop-source lines with amounts, auto-track on accept, map visibility with filters off, line map buttons, auto-untrack on completion');
   clearTimeout(timer);app.exit(0);
  }catch(e){console.error(e);clearTimeout(timer);app.exit(1)}

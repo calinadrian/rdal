@@ -334,73 +334,77 @@ function resetMapFilters() {
   renderLegend(); updateMapFilterCount();
 }
 
+// The map is set up when it first opens, or at start when the minimap needs its filters and tracked quests.
+function initMap() {
+  if (!db?.map || mapReady) return;
+  mapReady = true;
+  MapView.init($('#map'), db.map, (m) => {
+    if (m.enter) { history.push(snapshot()); MapView.setLayer(db.map.dungeons.find(d => d.id === m.enter)); renderNavigation(); return; }
+    selectedQuestMarker = m.c === 'quest' ? m : null;
+    selectedDiscoveryMarker = ['lore', 'shrine'].includes(m.c) ? m : null;
+    if (selectedDiscoveryMarker) renderDetail();
+    // A tracked spawn or source opens the quest it is tracked for; quest markers open their own quest.
+    else if (MapView.trackedEntry(m) && m.c !== 'quest') showItem(MapView.trackedEntry(m).quest);
+    else if (m.ref) showItem(m.ref);
+  });
+  MapView.setTracked(trackedMapEntries());
+  MapView.setQuestStatus((name) => questStatus(ent(name)));
+  MapView.setQuestInfo(questMarkerInfo);
+  MapView.setQuestVisibility(questMapMarkerVisible);
+  MapView.onVisibilityChange(summary => {
+    const box = $('#map-empty');
+    box.hidden = !!summary.visible;
+    if (!summary.visible) box.replaceChildren(h('p', {}, summary.reason),
+      h('button', { type: 'button', onclick: resetMapFilters }, 'Reset filters'),
+      h('button', { type: 'button', onclick: () => MapView.fit(false) }, 'Fit map'));
+    updateMapFilterCount();
+  });
+  // Follow is a remembered toggle: the button shows its state, and it is restored next time.
+  MapView.onFollowChange((on) => {
+    $('#map-follow').classList.toggle('on', on);
+    Preferences.set('mapFollow', on ? '1' : '0');
+  });
+  // Map picker: the world or one of the dungeons. It follows the player through dungeon doors.
+  const picker = $('#map-layer');
+  picker.replaceChildren(h('option', { value: '' }, 'World map'),
+    ...(db.map.dungeons || []).slice().sort((a, b) => byName(a.name, b.name)).map(d => h('option', { value: d.id }, d.name)));
+  picker.hidden = false;
+  picker.onchange = () => { history.push(snapshot()); MapView.setLayer(db.map.dungeons.find(d => d.id === picker.value)); renderNavigation(); };
+  const levels = $('#map-level');
+  new ResizeObserver(() => {
+    const tools = $('.map-tools');
+    $('#mapview').style.setProperty('--map-controls-bottom', `${tools.offsetTop + tools.offsetHeight + 12}px`);
+  }).observe($('.map-tools'));
+  levels.onchange = () => { history.push(snapshot()); MapView.setLayer(MapView.layer(), +levels.value); renderNavigation(); };
+  $('#map-filters').onclick = () => {
+    Preferences.set(MapView.layer() ? 'dungeonFiltersOpen' : 'worldFiltersOpen', $('#map-legend').hidden ? '1' : '0');
+    syncDungeonMapChrome();
+    requestAnimationFrame(() => MapView.fit(false));
+  };
+  MapView.onLayerChange((d, level) => {
+    syncDungeonMapChrome(d);
+    picker.value = d?.id || '';
+    const count = d?.levels?.length || 0;
+    levels.hidden = count < 2;
+    $('#map-level-label').hidden = count < 2;
+    $('#map-level-key').hidden = count < 2 || level < 0;
+    levels.replaceChildren(...(d?.overview ? [h('option', { value: -1 }, 'All floors')] : []), ...Array.from({ length: count }, (_, i) =>
+      h('option', { value: i }, i === 0 ? 'Level 1 (lowest)' : i === count - 1 ? `Level ${i + 1} (top)` : `Level ${i + 1}`)));
+    levels.value = level;
+    renderNavigation();
+  });
+  let saved = null;
+  saved = Preferences.get('mapFollow');
+  if (saved === '1') MapView.setFollow(true, { restore: true });
+  renderLegend();
+}
+
 function setMapMode(on) {
   if (on) document.body.classList.remove('journal-mode');
   const changed = document.body.classList.contains('map-mode') !== on;
   document.body.classList.toggle('map-mode', on);
   $('#mapview').hidden = !on;
-  if (on && db?.map && !mapReady) {
-    mapReady = true;
-    MapView.init($('#map'), db.map, (m) => {
-      if (m.enter) { history.push(snapshot()); MapView.setLayer(db.map.dungeons.find(d => d.id === m.enter)); renderNavigation(); return; }
-      selectedQuestMarker = m.c === 'quest' ? m : null;
-      selectedDiscoveryMarker = ['lore', 'shrine'].includes(m.c) ? m : null;
-      if (selectedDiscoveryMarker) renderDetail();
-      // A tracked spawn or source opens the quest it is tracked for; quest markers open their own quest.
-      else if (MapView.trackedEntry(m) && m.c !== 'quest') showItem(MapView.trackedEntry(m).quest);
-      else if (m.ref) showItem(m.ref);
-    });
-    MapView.setTracked(trackedMapEntries());
-    MapView.setQuestStatus((name) => questStatus(ent(name)));
-    MapView.setQuestInfo(questMarkerInfo);
-    MapView.setQuestVisibility(questMapMarkerVisible);
-    MapView.onVisibilityChange(summary => {
-      const box = $('#map-empty');
-      box.hidden = !!summary.visible;
-      if (!summary.visible) box.replaceChildren(h('p', {}, summary.reason),
-        h('button', { type: 'button', onclick: resetMapFilters }, 'Reset filters'),
-        h('button', { type: 'button', onclick: () => MapView.fit(false) }, 'Fit map'));
-      updateMapFilterCount();
-    });
-    // Follow is a remembered toggle: the button shows its state, and it is restored next time.
-    MapView.onFollowChange((on) => {
-      $('#map-follow').classList.toggle('on', on);
-      Preferences.set('mapFollow', on ? '1' : '0');
-    });
-    // Map picker: the world or one of the dungeons. It follows the player through dungeon doors.
-    const picker = $('#map-layer');
-    picker.replaceChildren(h('option', { value: '' }, 'World map'),
-      ...(db.map.dungeons || []).slice().sort((a, b) => byName(a.name, b.name)).map(d => h('option', { value: d.id }, d.name)));
-    picker.hidden = false;
-    picker.onchange = () => { history.push(snapshot()); MapView.setLayer(db.map.dungeons.find(d => d.id === picker.value)); renderNavigation(); };
-    const levels = $('#map-level');
-    new ResizeObserver(() => {
-      const tools = $('.map-tools');
-      $('#mapview').style.setProperty('--map-controls-bottom', `${tools.offsetTop + tools.offsetHeight + 12}px`);
-    }).observe($('.map-tools'));
-    levels.onchange = () => { history.push(snapshot()); MapView.setLayer(MapView.layer(), +levels.value); renderNavigation(); };
-    $('#map-filters').onclick = () => {
-      Preferences.set(MapView.layer() ? 'dungeonFiltersOpen' : 'worldFiltersOpen', $('#map-legend').hidden ? '1' : '0');
-      syncDungeonMapChrome();
-      requestAnimationFrame(() => MapView.fit(false));
-    };
-    MapView.onLayerChange((d, level) => {
-      syncDungeonMapChrome(d);
-      picker.value = d?.id || '';
-      const count = d?.levels?.length || 0;
-      levels.hidden = count < 2;
-      $('#map-level-label').hidden = count < 2;
-      $('#map-level-key').hidden = count < 2 || level < 0;
-      levels.replaceChildren(...(d?.overview ? [h('option', { value: -1 }, 'All floors')] : []), ...Array.from({ length: count }, (_, i) =>
-        h('option', { value: i }, i === 0 ? 'Level 1 (lowest)' : i === count - 1 ? `Level ${i + 1} (top)` : `Level ${i + 1}`)));
-      levels.value = level;
-      renderNavigation();
-    });
-    let saved = null;
-    saved = Preferences.get('mapFollow');
-    if (saved === '1') MapView.setFollow(true, { restore: true });
-    renderLegend();
-  }
+  if (on) initMap();
   syncDungeonMapChrome();
   if (on) MapView.resize();
   if (changed && db) { renderContent(); renderDetail(); }
@@ -953,7 +957,9 @@ function questStepActions(q, objective) {
   const markers = questStepMarkers(q, objective.key);
   const sources = questStepSourceMarkers(q, objective.key);
   const resources = questStepGuidance(q, objective.key)?.resources || [];
-  const unplaced = sources.length ? 'Use the spawn locations below to find the creatures for this objective. These are recorded spawn sites, not live sightings.'
+  const unplaced = sources.length ? (questStatus(q) === 'active' && questProgress(q).current
+    ? 'Every recorded spawn is marked on the map and minimap while this quest is active. ' : 'Use the spawn locations below to find the creatures for this objective. ')
+    + 'These are recorded spawn sites, not live sightings.'
     : resources.length ? 'Use the item and creature location buttons below for this objective.'
     : /\b(plant|water|harvest)\b/i.test(objective.text) ? 'Complete this step at a farming plot you have built.'
       : /\b(build|place|construct)\b/i.test(objective.text) ? 'Use your chosen building site for this step; it has no fixed quest location.'
@@ -1134,13 +1140,16 @@ function questTrackerObjective(q) {
 }
 
 // Map entries for every tracked quest: the tracker number, the quest and the line each marker serves.
+// Like WoW (and Questie), every other active quest also marks where its current objective's creatures
+// spawn, without a tracker number, so hunting targets are always on the map and minimap.
 function trackedMapEntries() {
   const out = [];
-  trackedList().forEach((q, i) => {
-    if (questStatus(q) === 'done') return;
-    for (const line of questTrackerObjective(q)?.lines || []) for (const m of line.markers)
-      out.push({ marker: m, index: i + 1, quest: q.name, kind: line.kind, label: `${line.verb} ${line.name}${line.qty ? ' ×' + line.qty : ''}` });
-  });
+  const entries = (q, index, kinds) => {
+    for (const line of questTrackerObjective(q)?.lines || []) if (kinds.includes(line.kind)) for (const m of line.markers)
+      out.push({ marker: m, index, quest: q.name, kind: line.kind, label: `${line.verb} ${line.name}${line.qty ? ' ×' + line.qty : ''}` });
+  };
+  trackedList().forEach((q, i) => { if (questStatus(q) !== 'done') entries(q, i + 1, ['goto', 'kill', 'loot', 'collect']); });
+  for (const q of browseQuests()) if (!isTracked(q.name) && questStatus(q) === 'active' && questProgress(q).current) entries(q, null, ['kill', 'loot']);
   return out;
 }
 
@@ -2345,6 +2354,10 @@ async function checkUpdateNow() {
 }
 
 let lastPlayer = null;
+// The minimap window (app/minimap.js) draws what the map shows around you, sent with every position sample.
+// Its farthest zoom reaches 260 m from the player, so markers within 270 m are enough.
+let minimapOn = false;
+const MINIMAP_RANGE = 27000;
 function onPlayer(p) {
   lastPlayer = p;
   MapView.setPlayer(p);
@@ -2360,6 +2373,7 @@ function onPlayer(p) {
   else if (!p.ok) MapView.setOthers([]);
   if (p.npcs && mapReady) onNpcs(p.npcs, p);
   else if (!p.ok && mapReady) { liveCreatures = []; renderLiveCreatures(); }
+  if (minimapOn && mapReady) window.atlas.sendMinimap(MapView.minimapScene(MINIMAP_RANGE));
   const el = $('#status-progress');
   if (el.dataset.importing) return;
   el.textContent = p.ok ? `● Live: ${MapView.playerDungeon()?.name || p.region || p.world} (${Math.round(p.x / 100)}, ${Math.round(p.y / 100)})` : !gameRunning ? '○ Waiting for RuneScape: Dragonwilds to start' : '◐ Game detected, waiting for your character…';
@@ -2418,6 +2432,7 @@ async function doImport(kind) {
     $('#data-meta').textContent = `Current data: ${db.meta.entities} entries (${db.meta.source === 'game' ? 'game files' : db.meta.source}, ${new Date(db.meta.generatedAt).toLocaleString()}).`;
     render();
     renderStatus();
+    if (minimapOn) initMap();
   } else {
     const hint = kind === 'game' ? 'Check that RuneScape: Dragonwilds is installed, then try again.' : 'Check your internet connection, then try again.';
     settingsMessage(`The update didn't finish, so your current data is unchanged. ${hint}`, 'err');
@@ -2502,6 +2517,8 @@ async function init() {
     if (view?.type === 'search') $('#search').value = view.arg;
   }
   setMapMode(state.module === 'map');
+  minimapOn = !!settings.minimap;
+  if (minimapOn) initMap();
   render();
   renderStatus(settings);
 
@@ -2577,6 +2594,10 @@ async function init() {
     $('#opacity-val').textContent = Math.round((s.opacity ?? 0.94) * 100) + '%';
     $('#data-meta').textContent = db ? `Current data: ${db.meta.entities} entries (${db.meta.source === 'game' ? 'game files' : db.meta.source}, ${new Date(db.meta.generatedAt).toLocaleString()}).` : 'No data imported yet.';
     $('#set-maponm').checked = !!s.mapOnM;
+    $('#set-minimap').checked = !!s.minimap;
+    $('#set-minimap-size').value = String(s.minimapSize || 200);
+    $('#set-minimap-rotate').checked = !!s.minimapRotate;
+    $('#minimap-options').hidden = !s.minimap;
     $('#set-mode').value = s.mode;
     $('#set-showongame').checked = !!s.showOnGame;
     $('#set-autostart').checked = !!s.autoStart;
@@ -2593,20 +2614,25 @@ async function init() {
       window.atlas.setSettings({ opacity: savedSettings.opacity });
     $('#settings').returnValue = '';
   });
+  $('#set-minimap').onchange = (ev) => { $('#minimap-options').hidden = !ev.target.checked; };
   $('#settings-save').onclick = async () => {
     const res = await window.atlas.setSettings({
       hotkey, opacity: Number($('#set-opacity').value), mapOnM: $('#set-maponm').checked,
       mode: $('#set-mode').value, showOnGame: $('#set-showongame').checked, autoStart: $('#set-autostart').checked,
+      minimap: $('#set-minimap').checked, minimapSize: Number($('#set-minimap-size').value), minimapRotate: $('#set-minimap-rotate').checked,
     });
     if (!res.ok) {
       hotkeyHint(`${hotkeyLabel(hotkey)} is already taken by another program. Choose a different combination.`, 'err');
       settingsMessage('Not saved: the hotkey could not be registered.', 'err');
       return;
     }
+    const minimapAdded = res.settings.minimap && !minimapOn;
+    minimapOn = !!res.settings.minimap;
+    if (minimapOn) initMap(); // the next position sample fills it in
     savedSettings = res.settings;
     renderStatus(res.settings);
     $('#settings').close('saved');
-    toast('Settings saved');
+    toast(minimapAdded && !gameRunning ? 'Settings saved. The minimap appears while the game runs.' : 'Settings saved');
   };
   $('#import-game').onclick = () => doImport('game');
   $('#import-wiki').onclick = () => doImport('wiki');

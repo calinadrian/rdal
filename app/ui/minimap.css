@@ -1,0 +1,34 @@
+/* The minimap window is transparent: only the name bar, the round map and its zoom buttons show. */
+:root {
+  --size: 200px;
+  --accent: #d6a756;
+  --accent-hover: #e6bc70;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { margin: 0; background: transparent; overflow: hidden; user-select: none; }
+body { display: flex; flex-direction: column; align-items: center; padding: 4px 8px 8px; }
+
+.zone {
+  box-sizing: border-box; max-width: calc(var(--size) - 16px); height: 22px; padding: 0 12px;
+  font-size: 12px; font-weight: 600; line-height: 20px; color: #f1dfb0; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: rgba(14, 12, 9, .88); border: 1px solid rgba(214, 167, 86, .55); border-radius: 11px;
+  text-shadow: 0 1px 2px #000; cursor: grab;
+}
+.zone:active { cursor: grabbing; }
+
+.dial { position: relative; width: var(--size); height: var(--size); margin-top: 4px; }
+.dial canvas { display: block; width: 100%; height: 100%; }
+
+/* Zoom buttons sit on the rim at about four and five o'clock, as in WoW. */
+.zoom {
+  position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; padding: 0;
+  font: 700 15px/1 "Segoe UI", system-ui, sans-serif; color: #f1dfb0;
+  background: #1a160f; border: 1px solid var(--accent); border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .7); cursor: pointer;
+}
+.zoom:hover:not(:disabled) { background: #2c2416; color: var(--accent-hover); }
+.zoom:disabled { opacity: .45; cursor: default; }
+.zoom.in { left: 95.3%; top: 71.1%; }
+.zoom.out { left: 82.1%; top: 88.3%; }

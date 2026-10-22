@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data: blob:; style-src 'self' 'unsafe-inline'">
+  <title>AtlasLoot minimap</title>
+  <link rel="stylesheet" href="minimap.css">
+</head>
+<body>
+  <div id="zone" class="zone" title="Drag to move · double-click to put it back in the corner">Minimap</div>
+  <div class="dial">
+    <canvas id="minimap" role="img" aria-label="Minimap"></canvas>
+    <button type="button" id="zoom-in" class="zoom in" aria-label="Zoom in" title="Zoom in">+</button>
+    <button type="button" id="zoom-out" class="zoom out" aria-label="Zoom out" title="Zoom out">−</button>
+  </div>
+  <script src="map-icons.js"></script>
+  <script src="minimap.js"></script>
+</body>
+</html>

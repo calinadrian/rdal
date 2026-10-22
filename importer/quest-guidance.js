@@ -199,10 +199,12 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
           if (!mapSources.includes(name)) mapSources.push(name);
           for (const suffix of ['', 's']) sourceContent = sourceContent.split(' ' + normal(name) + suffix + ' ').join(' ');
         }
+        // "Hunt Spectral Chinchompas" names the spectral variant, not the ordinary Chinchompa.
+        const variantOf = name => !mapSources.includes(name) && mapSources.some(source => (' ' + normal(source) + ' ').includes(' ' + normal(name) + ' '));
         return { key: objective.key, instruction: reviewed?.instruction || sentence(objective.text),
           notes: reviewed?.notes || (objective.hint ? [sentence(objective.hint)] : []),
           targets: (exactLocations.length ? exactLocations : locations).map(m => m.qlocation),
-          resources: reviewed?.resources || resources, mapSources,
+          resources: reviewed?.resources || resources.filter(name => !variantOf(name)), mapSources,
           ...(reviewed?.sourceRegions && {sourceRegions:reviewed.sourceRegions}) };
       }), clues: [...new Map((clues.get(id) || []).map(c => [c.target + '|' + c.lines.join('|'), c])).values()] };
     for (const version of versions) version.guide = guide;

@@ -86,6 +86,19 @@
       <label class="check"><input id="set-showongame" type="checkbox"> Open automatically when the game starts</label>
       <label class="check"><input id="set-autostart" type="checkbox"> Start with Windows (stays in the tray until the game starts)</label>
       <label class="check"><input id="set-maponm" type="checkbox"> Open the map when I press <b>M</b> in the game</label>
+      <label class="check"><input id="set-minimap" type="checkbox" aria-describedby="minimap-hint"> Show a minimap in the corner of the game, like World of Warcraft</label>
+      <div id="minimap-options" class="minimap-options" hidden>
+        <label>Minimap size
+          <select id="set-minimap-size">
+            <option value="160">Small</option>
+            <option value="200">Medium</option>
+            <option value="260">Large</option>
+          </select>
+        </label>
+        <label class="check"><input id="set-minimap-rotate" type="checkbox"> Turn the minimap with the camera (otherwise north stays up)</label>
+        <small id="minimap-hint">Shows while the game runs, with your map filters and tracked quests. Clicks go through it to the game.
+          Drag its name bar to move it; double-click the bar to put it back in the top-right corner.</small>
+      </div>
       <label for="set-hotkey">Show / hide hotkey</label>
       <div class="hotkey-field">
         <input id="set-hotkey" readonly aria-describedby="hotkey-hint" title="Click, then press the new key combination">

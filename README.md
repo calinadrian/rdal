@@ -35,6 +35,12 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   map zoom/position, last open view, column widths and wishlist. Window settings are kept there too,
   including maximized state. Reopening or updating the app preserves them.
 - **M in the game** switches it to the map without taking focus (as an overlay it pops up, and M or Esc closes it).
+- ⚙ Settings → **Show a minimap in the corner of the game** adds a WoW-style round minimap over the game while it runs
+  (top-right by default; Small, Medium or Large). It follows your position and facing, north up or turned with the
+  camera, and names the region or dungeon floor you are in. It shows what the map shows around you with the same
+  filters: places, spawns, live creatures, other players, and your quests' target areas and tracked numbered gold
+  rings, with an arrow on the rim pointing at each tracked objective that is out of view. Clicks go through it to
+  the game; **+** and **−** zoom, dragging the name bar moves it, and double-clicking the bar puts it back in the corner.
 - In item/monster/chest/quest panels, **Show locations** and named map links highlight where to find the selected entry.
 - **Search everything** searches across the database; each section has a separately labeled filter, result count, and **Clear filter** button.
   **Clear search** returns to the page you searched from. Breadcrumbs and **Back** help you retrace item, source, recipe, and map links while keeping filters and scroll positions.
@@ -56,6 +62,9 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   (with the creatures that drop them and the amount the objective asks for). Every line has a **Map** button. Tracked
   targets stay on the map whatever the filters: numbered gold rings mark places to go, and shaded areas mark where
   kill targets and drop sources spawn. Quests you accept are tracked automatically and drop off when completed.
+  Like WoW (or Questie), every active quest marks the creatures its current objective asks you to hunt or loot
+  from, tracked or not: each recorded spawn gets a red ring (gold for drop sources) and a shaded area on the map
+  and minimap, whatever the filters. Untracked quests' targets just have no tracker number.
   Kill and loot counters are not in the game's quest log, so the tracker shows the amount needed, not your progress.
 - Select a quest to open its full-width guide. **What to do next** comes first, with supplies, item/creature sources, and map actions.
   **Full walkthrough** or **All objective guidance** expands below it. Quests with alternate objectives or collection counters use a reference guide;

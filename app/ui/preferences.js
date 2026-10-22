@@ -1,7 +1,7 @@
 // Hydrate preferences from settings.json before map/app initialization. Browser storage is a mirror
 // and a migration source, so an existing installation keeps its choices on the first upgraded launch.
 (() => {
-  const keys = ['wishlist', 'columns', 'mapFollow', 'liveCreaturePool', 'liveCreatureFilter', 'mapCategories', 'mapViewport', 'navigation', 'mapDiscoveryModes', 'mapDiscoverySnapshot', 'mapDiscoveryMarked', 'questMapFilter', 'questBrowseMode', 'ventTypes', 'recipeProgressSnapshot', 'armourChoices'];
+  const keys = ['wishlist', 'columns', 'mapFollow', 'liveCreaturePool', 'liveCreatureFilter', 'mapCategories', 'mapViewport', 'navigation', 'mapDiscoveryModes', 'mapDiscoverySnapshot', 'mapDiscoveryMarked', 'questMapFilter', 'questBrowseMode', 'ventTypes', 'recipeProgressSnapshot', 'armourChoices', 'trackedQuests', 'trackerCollapsed', 'worldFiltersOpen', 'dungeonFiltersOpen'];
   const values = {};
   window.Preferences = {
     get(key) { return values[key] ?? null; },
@@ -41,6 +41,7 @@
     }
     await script('discovery.js');
     await script('recipe-progress.js');
+    await script('map-icons.js');
     await script('map.js');
     await script('app.js');
   })().catch(error => console.error('Could not start AtlasLoot:', error));

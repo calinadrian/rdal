@@ -700,7 +700,11 @@ dialog.update-dialog h2:first-of-type { margin: 0 0 8px; font-size: var(--fs-xl)
   button, input, select, summary { transition: none; }
 }
 
-/* Settings: hotkey recorder, import progress and messages */
+/* Settings: minimap options, hotkey recorder, import progress and messages */
+.minimap-options { margin: -6px 0 14px 24px; }
+.minimap-options[hidden] { display: none; }
+dialog .minimap-options label { margin: 10px 0; }
+.minimap-options small { display: block; }
 .hotkey-field { display: flex; gap: 8px; margin-top: 4px; }
 dialog .hotkey-field input { flex: 1; margin-top: 0; cursor: pointer; caret-color: transparent; font-weight: 600; }
 dialog .hotkey-field input.recording { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hover); font-weight: 400; }

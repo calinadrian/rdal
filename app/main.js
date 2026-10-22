@@ -15,9 +15,11 @@ if (process.env.ATLAS_SNAPSHOT && process.env.ATLAS_TEST_PROFILE) app.setPath('u
 const DB_FILE = path.join(ROOT, 'data', 'db.json');
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
 // mode: 'window' = normal app window (e.g. on a second monitor); 'overlay' = always on top of the game.
+// minimap: a WoW-style round map in a corner of the game while it runs (minimapPosition once dragged).
 const DEFAULTS = {
   hotkey: 'Control+Shift+L', opacity: 0.94, bounds: { width: 1180, height: 720 }, mapOnM: true,
   mode: 'window', showOnGame: true, hideOnGameExit: false, autoStart: false,
+  minimap: false, minimapSize: 200, minimapRotate: false, minimapZoom: 2,
 };
 const DUMPER = path.join(ROOT, 'tools', 'Dumper', 'bin', 'out', 'Dumper.exe');
 const GAME_EXES = ['RSDragonwilds-WinGDK-Shipping.exe', 'RSDragonwilds-Win64-Shipping.exe'];
@@ -105,6 +107,14 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 
+// The WoW-style minimap window over the game (minimap.js), fed by the main window.
+const minimap = require('./minimap').createMinimap({
+  settings: () => settings,
+  update: (patch) => { settings = { ...settings, ...patch }; saveSettings(); },
+  icon: ICON,
+});
+const syncMinimap = () => minimap.sync(gameRunning);
+
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
   tray.setToolTip(`Dragonwilds AtlasLoot (${settings.hotkey})`);
@@ -160,6 +170,7 @@ async function watchGame() {
   if (running !== gameRunning) {
     gameRunning = running;
     win?.webContents.send('game', { running });
+    syncMinimap();
     if (running) {
       startTracker();
       if (settings.showOnGame) reveal({ focus: false });
@@ -277,7 +288,7 @@ ipcMain.handle('db:import', (_, kind) => runImport(kind));
 ipcMain.handle('settings:get', () => settings);
 ipcMain.handle('preferences:get', () => settings.ui || {});
 function commitPreferences(patch) {
-  const allowed = new Set(['wishlist', 'columns', 'mapFollow', 'liveCreaturePool', 'liveCreatureFilter', 'mapCategories', 'mapViewport', 'navigation', 'mapDiscoveryModes', 'mapDiscoverySnapshot', 'mapDiscoveryMarked', 'questMapFilter', 'questBrowseMode', 'ventTypes', 'recipeProgressSnapshot', 'armourChoices']);
+  const allowed = new Set(['wishlist', 'columns', 'mapFollow', 'liveCreaturePool', 'liveCreatureFilter', 'mapCategories', 'mapViewport', 'navigation', 'mapDiscoveryModes', 'mapDiscoverySnapshot', 'mapDiscoveryMarked', 'questMapFilter', 'questBrowseMode', 'ventTypes', 'recipeProgressSnapshot', 'armourChoices', 'trackedQuests', 'trackerCollapsed', 'worldFiltersOpen', 'dungeonFiltersOpen']);
   const clean = Object.fromEntries(Object.entries(patch || {}).filter(([key, value]) => allowed.has(key) && typeof value === 'string' && value.length < (key==='recipeProgressSnapshot' ? 262144 : 32768)));
   settings.ui = { ...settings.ui, ...clean };
   saveSettings();
@@ -297,6 +308,7 @@ ipcMain.handle('settings:set', (_, patch) => {
   settings = { ...settings, ...patch };
   saveSettings();
   applyMode();
+  if (Object.keys(patch).some((key) => key.startsWith('minimap'))) syncMinimap();
   if ('autoStart' in patch) setAutoStart(settings.autoStart);
   return { ok: true, settings };
 });

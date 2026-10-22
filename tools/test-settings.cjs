@@ -23,6 +23,8 @@ run('1 saves settings', `
   liveCreaturePool = new Set(['Wolf', 'Cow']); saveCreaturePool();
   Preferences.setJSON('columns', { '--w-detail': 480 });
   wish.add('Wolf'); saveWish(); showItem('Wolf');
+  setTracked('The Wild Hunt', true); trackerCollapsed = true; Preferences.set('trackerCollapsed', '1');
+  $('#map-filters').click();
   await atlas.setSettings({ opacity: 0.82, mapOnM: false });
   await atlas.getPreferences();
 `);
@@ -32,6 +34,9 @@ assert.equal(settings.mapOnM, false);
 assert.deepEqual(JSON.parse(settings.ui.liveCreaturePool).sort(), ['Cow', 'Wolf']);
 assert(JSON.parse(settings.ui.mapCategories).includes('ore'));
 assert(JSON.parse(settings.ui.mapViewport).scale > 0);
+assert.deepEqual(JSON.parse(settings.ui.trackedQuests), ['The Wild Hunt']);
+assert.equal(settings.ui.trackerCollapsed, '1');
+assert.equal(settings.ui.worldFiltersOpen, '1');
 // Move generated storage aside within this test profile; keep the authoritative settings.json.
 const browserStorage = path.resolve(profile, 'Local Storage');
 assert(browserStorage.startsWith(profile + path.sep));
@@ -44,6 +49,9 @@ run('2 restores from settings.json without browser storage', `
   check(liveCreaturePool?.size === 2 && liveCreaturePool.has('Wolf') && liveCreaturePool.has('Cow'), 'Creature pool was not restored');
   check(!MapView.isFollowing() && Preferences.get('mapFollow') === '0', 'Follow off was not restored');
   check(wish.has('Wolf'), 'Wishlist was not restored');
+  check(isTracked('The Wild Hunt') && trackedQuests.length === 1, 'Tracked quests were not restored');
+  check(trackerCollapsed && document.querySelector('#quest-tracker .quest-tracker.collapsed'), 'Collapsed quest tracker was not restored');
+  check(!document.querySelector('#map-legend').hidden, 'Open map filters were not restored');
   check(document.documentElement.style.getPropertyValue('--w-detail') === '480px', 'Pane width was not restored');
   const settings = await atlas.getSettings(); check(settings.opacity === 0.82 && !settings.mapOnM, 'Application settings were not restored');
   await new Promise(r => setTimeout(r, 500));

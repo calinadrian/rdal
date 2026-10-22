@@ -69,7 +69,8 @@ window.MapView = (() => {
     return best;
   }
   const markerLevel = (m) => m._level ??= levelAt(map.dungeons.find(d => d.id === m.d), m);
-  const onLayer = (m) => (m.d || null) === (layer?.id || null) && (!layer || level < 0 || markerLevel(m) === level);
+  const onStorey = (m, l, lv) => (m.d || null) === (l?.id || null) && (!l || lv < 0 || markerLevel(m) === lv);
+  const onLayer = (m) => onStorey(m, layer, level);
   const dungeonAt = (p) => (map?.dungeons || []).find(({ bounds: b }) =>
     p.x >= b.minX && p.x <= b.maxX && p.y >= b.minY && p.y <= b.maxY && p.z >= b.minZ && p.z <= b.maxZ) || null;
   const playerHere = () => player?.ok && playerLayer === layer && (!layer || level < 0 || playerLevel === level);
@@ -79,99 +80,11 @@ window.MapView = (() => {
   const toScreen = (x, y) => { const [u, v] = toImg(x, y); return [u * scale + ox, v * scale + oy]; };
   const cat = (c) => map.categories.find((k) => k.id === c) || {};
 
-  // Icons extracted from the game (data/mapicons, data/icons), loaded on first use.
-  const images = {};
-  function image(p) {
-    if (!images[p]) {
-      images[p] = new Image();
-      images[p].onload = () => { dirty = true; };
-      images[p].src = '../../data/' + p;
-    }
-    return images[p].complete && images[p].naturalWidth ? images[p] : null;
-  }
-
-  // One map icon centred on (sx, sy) with size s, in the category's style.
-  function drawIcon(sx, sy, s, c, iconPath, ring, markerColor) {
-    const k = cat(c);
-    const tint = markerColor || k.color;
-    const style = k.style === 'circle' ? 'circle' : iconPath && iconPath !== k.icon && iconPath.startsWith('mapicons/T_NavIcons') ? 'badge' : k.style;
-    const img = style === 'circle' ? null : image(iconPath || k.icon);
-    if (style !== 'badge' || !img) {
-      ctx.beginPath();
-      ctx.arc(sx, sy, s / 2, 0, Math.PI * 2);
-      ctx.fillStyle = style === 'item' ? 'rgba(20,16,12,0.9)' : tint || '#888';
-      ctx.fill();
-      ctx.lineWidth = ring ? 2.5 : 1.5;
-      ctx.strokeStyle = ring || (style === 'item' ? tint : 'rgba(0,0,0,0.85)');
-      ctx.stroke();
-      if (img) { const g = s * (style === 'item' ? 0.82 : 0.62); ctx.drawImage(img, sx - g / 2, sy - g / 2, g, g); }
-    } else {
-      ctx.drawImage(img, sx - s / 2, sy - s / 2, s, s);
-      if (ring) {
-        ctx.lineWidth = 2.5; ctx.strokeStyle = ring;
-        if (iconPath?.startsWith('mapicons/T_NavIcons_Atlas')) {
-          ctx.beginPath(); ctx.arc(sx, sy, s / 2 - 1, 0, Math.PI * 2); ctx.stroke();
-        } else ctx.strokeRect(sx - s / 2, sy - s / 2, s, s);
-      }
-    }
-  }
-
-  const ventGlyphs = {};
-  function ventGlyph(marker) {
-    const key = marker.i + '|' + marker.color;
-    if (ventGlyphs[key]) return ventGlyphs[key];
-    const source = marker.ventType && image(marker.i);
-    if (!source) return null;
-    const probe = document.createElement('canvas');
-    probe.width = source.naturalWidth; probe.height = source.naturalHeight;
-    const p = probe.getContext('2d'); p.drawImage(source, 0, 0);
-    const pixels = p.getImageData(0, 0, probe.width, probe.height).data;
-    let left = probe.width, top = probe.height, right = -1, bottom = -1;
-    for (let y = 0; y < probe.height; y++) for (let x = 0; x < probe.width; x++) {
-      if (pixels[(y * probe.width + x) * 4 + 3] <= 8) continue;
-      left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x); bottom = Math.max(bottom, y);
-    }
-    if (right < left) return null;
-    const width = right - left + 1, height = bottom - top + 1;
-    const glyph = document.createElement('canvas'); glyph.width = glyph.height = 64;
-    glyph.dataset.ventType = marker.ventType;
-    const g = glyph.getContext('2d');
-    const ratio = 64 / Math.max(width, height);
-    g.drawImage(source, left, top, width, height, (64 - width * ratio) / 2, (64 - height * ratio) / 2, width * ratio, height * ratio);
-    g.globalCompositeOperation = 'source-in'; g.fillStyle = marker.color || '#a0a0a0'; g.fillRect(0, 0, 64, 64);
-    return ventGlyphs[key] = glyph;
-  }
-
-  function createVentIcon(marker) {
-    const icon = document.createElement('canvas'); icon.width = icon.height = 44;
-    icon.className = 'vent-rune-icon'; icon.setAttribute('aria-hidden', 'true');
-    const draw = () => { const g = icon.getContext('2d'); g.clearRect(0, 0, 44, 44); paintVent(g, 22, 22, 40, marker, false); };
-    draw();
-    if (!ventGlyphs[marker.i + '|' + marker.color]) images[marker.i]?.addEventListener('load', draw, { once: true });
-    return icon;
-  }
-
-  // A transparent circle frames the rune. A neutral hairline keeps the colored
-  // outline readable over both light terrain and dark water without a solid disc.
-  function paintVent(g, sx, sy, size, marker, hovered) {
-    const rune = ventGlyph(marker);
-    g.save();
-    g.beginPath(); g.arc(sx, sy, size / 2, 0, Math.PI * 2);
-    g.lineWidth = 4; g.strokeStyle = 'rgba(12,16,14,.85)'; g.stroke();
-    g.lineWidth = hovered ? 2 : 1.5; g.strokeStyle = hovered ? '#fff' : marker.color || '#a0a0a0'; g.stroke();
-    const glyphSize = Math.round(size * 0.66);
-    if (rune) {
-      g.shadowColor = 'rgba(0,0,0,.75)'; g.shadowBlur = 2; g.shadowOffsetY = 1;
-      g.drawImage(rune, sx - glyphSize / 2, sy - glyphSize / 2, glyphSize, glyphSize);
-    } else if (!marker.ventType) {
-      g.beginPath(); g.arc(sx, sy, 2, 0, Math.PI * 2); g.fillStyle = '#aaa'; g.fill();
-    }
-    g.restore();
-  }
-
-  function drawVent(sx, sy, marker, hovered) {
-    paintVent(ctx, sx, sy, MARKER_SIZE, marker, hovered);
-  }
+  // Icons extracted from the game, loaded on first use (painting shared with the minimap, map-icons.js).
+  const icons = MapIcons(() => { dirty = true; });
+  const image = icons.image;
+  const drawIcon = (sx, sy, s, c, iconPath, ring, markerColor) => icons.drawIcon(ctx, sx, sy, s, cat(c), iconPath, ring, markerColor);
+  const drawVent = (sx, sy, marker, hovered) => icons.paintVent(ctx, sx, sy, MARKER_SIZE, marker, hovered);
 
   function init(cnv, mapData, selectFn) {
     canvas = cnv;
@@ -320,14 +233,21 @@ window.MapView = (() => {
   let questStatus = () => 'unknown';
   let questVisibility = (m, highlighted) => highlighted || !m.ref || questStatus(m.ref) !== 'done';
   let questInfo = () => null;
+  // Vent type, discovery and quest filters, which the minimap applies too.
+  const filtered = (m, highlighted) => (m.c !== 'vent' || ventTypeEnabled(m.ventType || 'unknown')) && MapDiscovery.visible(m) && (m.c !== 'quest' || questVisibility(m, highlighted));
   // Tracked quest targets stay on the map whatever the filters or highlight, like WoW's quest areas.
-  const visible = (m) => onLayer(m) && (tracked.has(m) || (m.c !== 'vent' || ventTypeEnabled(m.ventType || 'unknown')) && MapDiscovery.visible(m) && (m.c !== 'quest' || questVisibility(m, !!highlight?.markers.has(m))) && (highlight ? highlight.markers.has(m)
+  const visible = (m) => onLayer(m) && (tracked.has(m) || filtered(m, !!highlight?.markers.has(m)) && (highlight ? highlight.markers.has(m)
     : enabled.has(m.c) && (frame().res / scale < DENSE_UNITS || !['ore', 'gather'].includes(m.c))));
   // Ring around quest markers: blue for quests in progress, gold for givers of quests you can still take.
   const questRing = (m) => {
     if (m.c !== 'quest' || !m.ref) return null;
     const s = questStatus(m.ref);
     return s === 'active' ? '#4fc3ff' : m.qnpc && s !== 'done' ? '#ffd040' : null;
+  };
+  // Ring around a quest's target creatures and drop sources, in its shaded area's colour.
+  const targetRing = (m) => {
+    const t = tracked.get(m);
+    return t && t.kind !== 'goto' && m.c !== 'quest' ? t.kind === 'kill' ? '#ff6a4a' : '#ffd040' : null;
   };
 
   function pick(e) {
@@ -358,9 +278,9 @@ window.MapView = (() => {
       const info = hover.c === 'quest' ? questInfo(hover) : null;
       const t = tracked.get(hover);
       if (t && hover.c !== 'quest') {
-        tip.textContent = [`${t.index}. ${t.quest}`, t.label, hover.n + (hover.region ? ' · ' + hover.region : ''), 'Click for the quest'].join('\n');
+        tip.textContent = [t.index ? `${t.index}. ${t.quest}` : `${t.quest} · active quest`, t.label, hover.n + (hover.region ? ' · ' + hover.region : ''), 'Click for the quest'].join('\n');
       } else if (info) {
-        tip.textContent = (t ? 'Tracked · ' + t.label + '\n' : '') + `${info.title}\n${info.label} · ${info.location}\n`
+        tip.textContent = (t ? (t.index ? 'Tracked · ' : 'Active quest · ') + t.label + '\n' : '') + `${info.title}\n${info.label} · ${info.location}\n`
           + (info.steps.length ? info.steps.map(s => `${s.number}. ${s.text}`).join('\n') : 'Objective link not confirmed in game data.')
           + '\nClick for quest details';
       } else {
@@ -430,6 +350,7 @@ window.MapView = (() => {
       if (sx < -30 || sy < -30 || sx > cw + 30 || sy > ch + 30) continue;
       ctx.beginPath(); ctx.arc(sx, sy, MARKER_SIZE / 2 + 5, 0, Math.PI * 2);
       ctx.lineWidth = 3; ctx.strokeStyle = '#ffd040'; ctx.shadowColor = '#ffb000'; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+      if (!t.index) continue; // an untracked active quest's place has no tracker number
       const bx = sx + MARKER_SIZE / 2 + 2, by = sy - MARKER_SIZE / 2 - 2;
       ctx.beginPath(); ctx.arc(bx, by, 8, 0, Math.PI * 2); ctx.fillStyle = '#ffd040'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = '#2a1e00'; ctx.stroke();
@@ -492,21 +413,10 @@ window.MapView = (() => {
       if (sx < -20 || sy < -20 || sx > cw + 20 || sy > ch + 20) continue;
       const info = infos.get(m);
       if (info) {
-        ctx.font = info.pickup ? '700 17px Segoe UI' : '600 11px Segoe UI';
-        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-        const metrics = ctx.measureText(info.badge);
-        ctx.beginPath();
-        ctx.arc(sx, sy, MARKER_SIZE / 2, 0, Math.PI * 2);
-        ctx.fillStyle = info.current ? '#16384f' : info.pickup ? '#3b321f' : '#252525'; ctx.fill();
-        ctx.lineWidth = m === hover || info.current || info.pickup ? 2 : 1;
-        ctx.strokeStyle = m === hover ? '#fff' : info.color; ctx.stroke();
-        ctx.fillStyle = info.color;
-        ctx.fillText(info.badge, sx + (metrics.actualBoundingBoxLeft - metrics.actualBoundingBoxRight) / 2,
-          sy + (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2);
-        ctx.textAlign = 'center';
+        icons.paintQuest(ctx, sx, sy, MARKER_SIZE, info, m === hover);
       } else if (m.c === 'vent') {
         drawVent(sx, sy, m, m === hover);
-      } else drawIcon(sx, sy, markerSize(m), m.c, m.i, m === hover ? '#fff' : questRing(m), m.color);
+      } else drawIcon(sx, sy, markerSize(m), m.c, m.i, m === hover ? '#fff' : questRing(m) || targetRing(m), m.color);
     }
 
     drawTrackedPins(cw, ch);
@@ -622,7 +532,7 @@ window.MapView = (() => {
       if (W > 1) restore(); else pendingFocus = restore;
     },
     isVentTypeEnabled: ventTypeEnabled,
-    createVentIcon,
+    createVentIcon: icons.createVentIcon,
     setVentTypes,
     setVentType(type, on) {
       const types = ventTypes === null ? new Set((map?.markers || []).filter(m => m.c === 'vent').map(m => m.ventType || 'unknown')) : new Set(ventTypes);
@@ -686,6 +596,51 @@ window.MapView = (() => {
       dirty = true;
     },
     trackedEntry: (m) => tracked.get(m) || null,
+    // What the minimap draws around you: the map and storey you stand on (whatever this map shows), markers
+    // within `range` world units that the filters let through (search highlights aside), live creatures,
+    // other players, and the nearest target of each tracked quest so it can point at those past its rim.
+    minimapScene(range) {
+      if (!map || !player?.ok) return { ok: false };
+      const l = playerLayer, lv = playerLevel;
+      const near = (p) => Math.abs(p.x - player.x) < range && Math.abs(p.y - player.y) < range;
+      const markers = [], targets = new Map();
+      for (const m of map.markers) {
+        if (!onStorey(m, l, lv)) continue;
+        const t = tracked.get(m);
+        if (t?.index) { // rim arrows only for quests in the tracker
+          const d = Math.hypot(m.x - player.x, m.y - player.y), best = targets.get(t.index);
+          if (!best || d < best.d) targets.set(t.index, { x: m.x, y: m.y, index: t.index, d });
+        }
+        if (!near(m) || !(t || filtered(m, false) && enabled.has(m.c))) continue;
+        const info = m.c === 'quest' ? questInfo(m) : null;
+        markers.push({ x: m.x, y: m.y, c: m.c, i: m.i, color: m.color, ventType: m.ventType, ring: questRing(m) || targetRing(m),
+          quest: info && { badge: info.badge, color: info.color, current: info.current, pickup: info.pickup },
+          track: t && { index: t.index, area: t.kind !== 'goto' && m.c !== 'quest' ? t.kind : null } });
+      }
+      // Same stacking as the map: spawn dots under places, current quest steps and pickups on top.
+      const rank = (m) => m.c === 'monster' ? 0 : !m.quest ? 1 : m.quest.current ? 4 : m.quest.pickup ? 3 : 2;
+      markers.sort((a, b) => rank(a) - rank(b));
+      const inside = (poly) => {
+        let hit = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const [xi, yi] = poly[i], [xj, yj] = poly[j];
+          if ((yi > player.y) !== (yj > player.y) && player.x < (xj - xi) * (player.y - yi) / (yj - yi) + xi) hit = !hit;
+        }
+        return hit;
+      };
+      return {
+        ok: true,
+        player: { x: player.x, y: player.y, yaw: player.yaw },
+        place: l ? l.name + (l.levels?.length > 1 ? ` · Level ${lv + 1}` : '') : map.regions.find(r => inside(r.poly))?.name || 'Dragonwilds',
+        image: l ? l.levels?.[lv]?.image || l.image : map.image,
+        frame: l ? { minX: l.frame.minX, minY: l.frame.minY, res: l.frame.res } : { minX: map.bounds.minX, minY: map.bounds.minY, size: map.bounds.size },
+        categories: map.categories,
+        markers,
+        targets: [...targets.values()].map(({ x, y, index }) => ({ x, y, index })),
+        npcs: enabled.has('npc') ? npcs.filter(near).map(n => ({ x: n.x, y: n.y, alert: !!n.alert, combat: !!n.combat })) : [],
+        others: others.filter(o => dungeonAt(o) === l && (!l || levelAt(l, o) === lv) && near(o)).map(o => ({ x: o.x, y: o.y, yaw: o.yaw })),
+      };
+    },
     focusMarker(marker) {
       if (highlight && !highlight.markers.has(marker)) highlight = null;
       hover = null;
