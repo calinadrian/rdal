@@ -34,6 +34,7 @@ window.MapView = (() => {
     else Preferences.setJSON('mapViewport', view);
   }
   let highlight = null;        // { label, markers:Set }
+  let tracked = new Map();     // marker -> { index, quest, kind, label } for pinned quests' current objectives
   let player = null;
   let npcs = [];               // live creatures around the player: { n, ref, hostile, alert, x, y }
   let others = [];             // other players in your world (co-op): { n, x, y, z, yaw }
@@ -319,8 +320,9 @@ window.MapView = (() => {
   let questStatus = () => 'unknown';
   let questVisibility = (m, highlighted) => highlighted || !m.ref || questStatus(m.ref) !== 'done';
   let questInfo = () => null;
-  const visible = (m) => onLayer(m) && (m.c !== 'vent' || ventTypeEnabled(m.ventType || 'unknown')) && MapDiscovery.visible(m) && (m.c !== 'quest' || questVisibility(m, !!highlight?.markers.has(m))) && (highlight ? highlight.markers.has(m)
-    : enabled.has(m.c) && (frame().res / scale < DENSE_UNITS || !['ore', 'gather'].includes(m.c)));
+  // Tracked quest targets stay on the map whatever the filters or highlight, like WoW's quest areas.
+  const visible = (m) => onLayer(m) && (tracked.has(m) || (m.c !== 'vent' || ventTypeEnabled(m.ventType || 'unknown')) && MapDiscovery.visible(m) && (m.c !== 'quest' || questVisibility(m, !!highlight?.markers.has(m))) && (highlight ? highlight.markers.has(m)
+    : enabled.has(m.c) && (frame().res / scale < DENSE_UNITS || !['ore', 'gather'].includes(m.c))));
   // Ring around quest markers: blue for quests in progress, gold for givers of quests you can still take.
   const questRing = (m) => {
     if (m.c !== 'quest' || !m.ref) return null;
@@ -354,8 +356,11 @@ window.MapView = (() => {
       const mood = hover.combat ? ' · in combat' : hover.alert ? ' · suspicious'
         : qs ? { active: ' · in progress', available: ' · not started', unknown: ' · not found yet', done: ' · completed' }[qs] : '';
       const info = hover.c === 'quest' ? questInfo(hover) : null;
-      if (info) {
-        tip.textContent = `${info.title}\n${info.label} · ${info.location}\n`
+      const t = tracked.get(hover);
+      if (t && hover.c !== 'quest') {
+        tip.textContent = [`${t.index}. ${t.quest}`, t.label, hover.n + (hover.region ? ' · ' + hover.region : ''), 'Click for the quest'].join('\n');
+      } else if (info) {
+        tip.textContent = (t ? 'Tracked · ' + t.label + '\n' : '') + `${info.title}\n${info.label} · ${info.location}\n`
           + (info.steps.length ? info.steps.map(s => `${s.number}. ${s.text}`).join('\n') : 'Objective link not confirmed in game data.')
           + '\nClick for quest details';
       } else {
@@ -383,6 +388,54 @@ window.MapView = (() => {
     }
     if (dirty) draw();
     requestAnimationFrame(loop);
+  }
+
+  // WoW-style quest areas: spawns of tracked kill/loot targets merge into one soft shaded region.
+  // Drawn opaque on a scratch canvas, then composited once so overlapping circles don't darken.
+  const AREA_UNITS = 3000;     // world radius around each recorded spawn
+  let areaCanvas = null;
+  function drawTrackedAreas(cw, ch) {
+    const spawns = [...tracked].filter(([m, t]) => t.kind !== 'goto' && m.c !== 'quest' && onLayer(m));
+    if (!spawns.length) return;
+    const dpr = devicePixelRatio;
+    areaCanvas ||= document.createElement('canvas');
+    if (areaCanvas.width !== canvas.width || areaCanvas.height !== canvas.height) { areaCanvas.width = canvas.width; areaCanvas.height = canvas.height; }
+    const g = areaCanvas.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, areaCanvas.width, areaCanvas.height);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const r = Math.max(18, AREA_UNITS / frame().res * scale);
+    for (const kind of ['loot', 'kill', 'collect']) {
+      g.fillStyle = kind === 'kill' ? '#e0563a' : '#f0c040';
+      g.beginPath();
+      for (const [m, t] of spawns) {
+        if (t.kind !== kind) continue;
+        const [sx, sy] = toScreen(m.x, m.y);
+        if (sx < -r || sy < -r || sx > cw + r || sy > ch + r) continue;
+        g.moveTo(sx + r, sy); g.arc(sx, sy, r, 0, Math.PI * 2);
+      }
+      g.fill();
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 0.34;
+    ctx.drawImage(areaCanvas, 0, 0);
+    ctx.restore();
+  }
+  // Places to go: a gold ring with the quest's tracker number, above everything but the player.
+  function drawTrackedPins(cw, ch) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const [m, t] of tracked) {
+      if ((t.kind !== 'goto' && m.c !== 'quest') || !onLayer(m)) continue;
+      const [sx, sy] = toScreen(m.x, m.y);
+      if (sx < -30 || sy < -30 || sx > cw + 30 || sy > ch + 30) continue;
+      ctx.beginPath(); ctx.arc(sx, sy, MARKER_SIZE / 2 + 5, 0, Math.PI * 2);
+      ctx.lineWidth = 3; ctx.strokeStyle = '#ffd040'; ctx.shadowColor = '#ffb000'; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+      const bx = sx + MARKER_SIZE / 2 + 2, by = sy - MARKER_SIZE / 2 - 2;
+      ctx.beginPath(); ctx.arc(bx, by, 8, 0, Math.PI * 2); ctx.fillStyle = '#ffd040'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#2a1e00'; ctx.stroke();
+      ctx.font = '700 11px Segoe UI'; ctx.fillStyle = '#2a1e00'; ctx.fillText(String(t.index), bx, by + 0.5);
+    }
+    ctx.textBaseline = 'alphabetic';
   }
 
   function draw() {
@@ -432,6 +485,7 @@ window.MapView = (() => {
     const priority = m => infos.get(m)?.current ? 3 : infos.get(m)?.pickup ? 2 : 1;
     const nonQuests = map.markers.filter(m => m.c !== 'quest' && onLayer(m));
     const ordered = nonQuests.filter(m=>m.c==='monster').concat(nonQuests.filter(m=>m.c!=='monster'), [...infos.keys()].sort((a, b) => priority(a) - priority(b)));
+    drawTrackedAreas(cw, ch);
     for (const m of ordered) {
       if (!visible(m)) continue;
       const [sx, sy] = toScreen(m.x, m.y);
@@ -454,6 +508,8 @@ window.MapView = (() => {
         drawVent(sx, sy, m, m === hover);
       } else drawIcon(sx, sy, markerSize(m), m.c, m.i, m === hover ? '#fff' : questRing(m), m.color);
     }
+
+    drawTrackedPins(cw, ch);
 
     // Live creatures around the player: amber, turning red with a pulsing ring when alerted/in combat.
     if (enabled.has('npc') && playerHere()) {
@@ -624,6 +680,12 @@ window.MapView = (() => {
     setQuestStatus(fn) { questStatus = fn; dirty = true; },
     setQuestVisibility(fn) { questVisibility = fn; dirty = true; },
     setQuestInfo(fn) { questInfo = fn; dirty = true; },
+    setTracked(entries) {
+      tracked = new Map();
+      for (const e of entries) if (!tracked.has(e.marker)) tracked.set(e.marker, e);
+      dirty = true;
+    },
+    trackedEntry: (m) => tracked.get(m) || null,
     focusMarker(marker) {
       if (highlight && !highlight.markers.has(marker)) highlight = null;
       hover = null;

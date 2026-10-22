@@ -51,6 +51,12 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
 - Quest and recipe panels label saved progress with its last-read time. Unknown progress stays explicitly unknown; active quests put the current objective and its confirmed locations first.
 - **Quests** offers persistent progress filters shared by the sidebar and overview. Search a quest name, place, item or objective;
   active quest rows show the rewritten next action with **Continue guide** and a direct objective map button.
+- **Track quest** pins a quest to the WoW-style quest tracker, shown on the map and at the top of the quest overview.
+  Each tracked quest lists its current objective with what to do: places to go, creatures to slay and items to loot
+  (with the creatures that drop them and the amount the objective asks for). Every line has a **Map** button. Tracked
+  targets stay on the map whatever the filters: numbered gold rings mark places to go, and shaded areas mark where
+  kill targets and drop sources spawn. Quests you accept are tracked automatically and drop off when completed.
+  Kill and loot counters are not in the game's quest log, so the tracker shows the amount needed, not your progress.
 - Select a quest to open its full-width guide. **What to do next** comes first, with supplies, item/creature sources, and map actions.
   **Full walkthrough** or **All objective guidance** expands below it. Quests with alternate objectives or collection counters use a reference guide;
   they do not claim that preceding entries are complete. Missing or unrecognised progress never falls back to a supposed current task.

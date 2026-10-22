@@ -862,3 +862,40 @@ body.quests-mode #list button.list-item.sel { background: var(--accent-soft); }
   body.quests-mode:not(.map-mode) #detail { padding: 18px; }
   .quest-filter { padding: 6px 8px; }
 }
+
+/* Quest tracker: pinned quests' current objectives (on the map and atop the quest overview) */
+.map-quest-tracker { position: absolute; top: var(--map-controls-bottom, 60px); right: 16px; width: min(320px, calc(100% - 32px)); max-height: calc(100% - var(--map-controls-bottom, 60px) - 64px); overflow-y: auto; z-index: 2; }
+.map-quest-tracker[hidden] { display: none; }
+.quest-tracker { background: rgba(20,18,15,.94); border: 1px solid var(--line); border-radius: 8px; padding: 4px 0 8px; font-size: var(--fs-sm); }
+.quest-overview .quest-tracker { margin: 14px 0 6px; max-width: 760px; }
+.quest-tracker.collapsed { padding-bottom: 4px; width: max-content; margin-left: auto; }
+.quest-overview .quest-tracker.collapsed { margin-left: 0; }
+.tracker-toggle { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; border-radius: 0; padding: 6px 12px; color: #ffd040; font-weight: 600; text-align: left; }
+.tracker-toggle:hover { background: none; color: #ffe27a; }
+.tracker-heading { letter-spacing: .04em; }
+.tracker-count { color: var(--muted); font-weight: 400; font-size: var(--fs-xs); }
+.tracker-chevron { margin-left: auto; color: var(--muted); }
+.tracker-empty { margin: 2px 12px 4px; }
+.tracker-quest { padding: 8px 12px 6px; border-top: 1px solid rgba(255,255,255,.06); }
+.tracker-quest.sel { background: rgba(255,208,64,.06); }
+.tracker-quest-head { display: flex; align-items: center; gap: 8px; }
+.tracker-num { flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #ffd040; color: #2a1e00; font-size: 11px; font-weight: 700; }
+.tracker-title { flex: 1; min-width: 0; background: none; border: 0; padding: 0; color: #ffd040; font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+.tracker-title:hover { background: none; color: #ffe27a; text-decoration: underline; text-underline-offset: 3px; }
+.tracker-remove { flex: none; background: none; border: 0; padding: 0 4px; color: var(--muted); font-size: 16px; line-height: 1; }
+.tracker-remove:hover { background: none; color: var(--text); }
+.tracker-step { margin: 4px 0 4px 26px; color: #ddd8cc; line-height: 1.45; }
+.tracker-step.done { color: #7fd17f; }
+.tracker-step-label { color: var(--muted); font-size: var(--fs-xs); }
+.tracker-lines { list-style: none; margin: 2px 0 0 26px; padding: 0; display: grid; gap: 3px; }
+.tracker-line { display: flex; align-items: baseline; gap: 8px; color: #cfcfcf; line-height: 1.4; }
+.tracker-line::before { content: '–'; color: var(--muted); }
+.tracker-line-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tracker-verb { color: var(--muted); }
+.tracker-line.kill .tracker-verb { color: #ef8a6f; }
+.tracker-line.loot .tracker-verb, .tracker-line.collect .tracker-verb { color: #f0c040; }
+.tracker-qty { color: var(--text); font-weight: 600; }
+.tracker-from { font-size: var(--fs-xs); }
+.tracker-map { flex: none; height: 22px; padding: 0 8px; font-size: var(--fs-xs); }
+.tracker-nomap { flex: none; font-size: var(--fs-xs); }
+.track-button.on { border-color: #8a6d1c; color: #ffd040; background: rgba(255,208,64,.08); }
