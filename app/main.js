@@ -56,6 +56,7 @@ function conceal() {
 }
 
 function toggle() {
+  if (gameMap.dismiss()) return; // back to the game's own map
   if (win.isVisible() && !win.isMinimized() && win.isFocused()) return conceal();
   reveal();
 }
@@ -98,9 +99,10 @@ function createWindow() {
       app.exit(0);
     });
   }
-  const remember = () => { if (!win.isMaximized()) settings.bounds = win.getBounds(); saveSettings(); };
-  win.on('maximize', () => { settings.maximized = true; saveSettings(); });
-  win.on('unmaximize', () => { settings.maximized = false; remember(); });
+  // While it covers the game's map the window is not where you put it: nothing is remembered then.
+  const remember = () => { if (gameMap.shown()) return; if (!win.isMaximized()) settings.bounds = win.getBounds(); saveSettings(); };
+  win.on('maximize', () => { if (gameMap.shown()) return; settings.maximized = true; saveSettings(); });
+  win.on('unmaximize', () => { if (gameMap.shown()) return; settings.maximized = false; remember(); });
   win.on('moved', remember);
   win.on('resized', remember);
   // Links open in the normal browser, never inside the overlay.
@@ -114,6 +116,8 @@ const minimap = require('./minimap').createMinimap({
   icon: ICON,
 });
 const syncMinimap = () => minimap.sync(gameRunning);
+// The app's map stands in for the game's own map (game-map.js), told by the tracker when that map opens and closes.
+const gameMap = require('./game-map').createGameMap({ window: () => win, settings: () => settings, reveal, applyMode, minimap });
 
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
@@ -182,9 +186,8 @@ async function watchGame() {
   if (!app.isQuitting) setTimeout(watchGame, 3000);
 }
 
-// Live position + in-game key presses from the read-only tracker (runs while the game does).
+// Live position, whether the game's map is open, and in-game key presses from the read-only tracker (runs while the game does).
 let tracker = null;
-let mapShownByKey = false;
 function startTracker() {
   if (!fs.existsSync(DUMPER) || app.isQuitting || tracker || !gameRunning) return;
   tracker = spawn(DUMPER, ['--track'], { windowsHide: true });
@@ -198,38 +201,19 @@ function startTracker() {
       if (!line.startsWith('{')) continue;
       let msg;
       try { msg = JSON.parse(line); } catch { continue; }
-      if (msg.key) onGameKey(msg.key);
-      else if (win && !win.isDestroyed()) win.webContents.send('player', msg);
+      if (msg.key) gameMap.key(msg.key);
+      else if (win && !win.isDestroyed()) {
+        gameMap.follow(msg.ok ? msg.map ?? null : false, !!msg.focus);
+        win.webContents.send('player', msg);
+      }
     }
   });
   tracker.stderr.on('data', () => {});
   tracker.on('exit', () => {
     tracker = null;
-    if (win && !win.isDestroyed()) win.webContents.send('player', { ok: false, offline: true });
+    if (win && !win.isDestroyed()) { gameMap.follow(false, false); win.webContents.send('player', { ok: false, offline: true }); }
     setTimeout(startTracker, 5000);
   });
-}
-
-// M in the game switches us to the map without stealing focus. The overlay also
-// pops up/away with M and Esc; the window just stays where it is.
-function onGameKey(key) {
-  if (!settings.mapOnM) return;
-  if (!overlay()) {
-    if (key === 'M') {
-      if (!win.isVisible() || win.isMinimized()) reveal({ focus: false });
-      win.webContents.send('show-map');
-    }
-    return;
-  }
-  if (key === 'M') {
-    if (win.isVisible() && mapShownByKey) { win.hide(); mapShownByKey = false; return; }
-    reveal({ focus: false });
-    win.webContents.send('show-map');
-    mapShownByKey = true;
-  } else if (key === 'Escape' && mapShownByKey) {
-    win.hide();
-    mapShownByKey = false;
-  }
 }
 
 // Full refresh from the installed game: mappings (if the game is running), raw extract, database build.

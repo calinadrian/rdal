@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('atlas', {
   onProgress: (fn) => ipcRenderer.on('import-progress', (_, p) => fn(p)),
   onShown: (fn) => ipcRenderer.on('shown', fn),
   onShowMap: (fn) => ipcRenderer.on('show-map', fn),
+  onGameMap: (fn) => ipcRenderer.on('game-map', (_, on) => fn(on)),
   onPlayer: (fn) => ipcRenderer.on('player', (_, p) => fn(p)),
   onGame: (fn) => ipcRenderer.on('game', (_, g) => fn(g)),
   sendMinimap: (scene) => ipcRenderer.send('minimap:scene', scene),

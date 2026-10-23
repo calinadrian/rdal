@@ -1,5 +1,5 @@
-// Reports M / Escape presses made while the game window is focused, so the overlay can
-// open its map alongside the in-game map. Keys are always passed on to the game unchanged.
+// Reports M / Escape presses made while the game window is focused (the overlay's fallback when the game's map
+// panel cannot be read, and a hint to look for it). Keys are always passed on to the game unchanged.
 using System.Runtime.InteropServices;
 
 namespace Dumper;
@@ -20,6 +20,9 @@ public static class KeyWatch
 
     static HookProc? _proc; // kept alive for the hook's lifetime
 
+    // Whether the game window has the keyboard (not alt-tabbed away).
+    public static bool GameFocused(int gamePid) => GetWindowThreadProcessId(GetForegroundWindow(), out var pid) != 0 && pid == gamePid;
+
     public static void Start(int gamePid, Action<string> onKey)
     {
         var t = new Thread(() =>
@@ -29,7 +32,7 @@ public static class KeyWatch
                 if (code >= 0 && wParam == new IntPtr(WM_KEYDOWN))
                 {
                     int vk = Marshal.ReadInt32(lParam);
-                    if ((vk == 0x4D || vk == 0x1B) && GetWindowThreadProcessId(GetForegroundWindow(), out var pid) != 0 && pid == gamePid)
+                    if ((vk == 0x4D || vk == 0x1B) && GameFocused(gamePid))
                         onKey(vk == 0x4D ? "M" : "Escape");
                 }
                 return CallNextHookEx(IntPtr.Zero, code, wParam, lParam);

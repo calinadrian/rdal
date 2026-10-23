@@ -48,6 +48,7 @@
       <div id="map-empty" class="map-empty" role="status" hidden></div>
       <div id="map-level-key" class="map-level-key" hidden><span><i class="floor-swatch current"></i>This floor</span><span><i class="floor-swatch other"></i>Other floors</span></div>
       <div id="map-tip" class="map-tip" hidden></div>
+      <p class="game-map-hint" aria-hidden="true">AtlasLoot map · close the game's map (M) to return</p>
     </section>
     <aside id="detail" class="pane detail" aria-label="Item details"></aside>
   </main>
@@ -85,7 +86,7 @@
       </label>
       <label class="check"><input id="set-showongame" type="checkbox"> Open automatically when the game starts</label>
       <label class="check"><input id="set-autostart" type="checkbox"> Start with Windows (stays in the tray until the game starts)</label>
-      <label class="check"><input id="set-maponm" type="checkbox"> Open the map when I press <b>M</b> in the game</label>
+      <label class="check" title="As an overlay, AtlasLoot's map covers the game's map while it is open, and closes with it"><input id="set-maponm" type="checkbox"> Show AtlasLoot's map when I open the game's map (<b>M</b>)</label>
       <label class="check"><input id="set-minimap" type="checkbox" aria-describedby="minimap-hint"> Show a minimap in the corner of the game, like World of Warcraft</label>
       <div id="minimap-options" class="minimap-options" hidden>
         <label>Minimap size

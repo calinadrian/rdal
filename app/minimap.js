@@ -49,7 +49,7 @@ function createMinimap({ settings, update, icon }) {
       mm.webContents.send('minimap:options', options());
       mm.webContents.send('minimap:scene', scene);
     });
-    mm.once('ready-to-show', () => mm.showInactive());
+    mm.once('ready-to-show', () => { if (!suspended) mm.showInactive(); });
     mm.on('closed', () => { if (win === mm) win = null; });
   }
 
@@ -73,7 +73,14 @@ function createMinimap({ settings, update, icon }) {
     if (win) win.setBounds({ ...win.getBounds(), height: bounds().height });
   });
 
-  return { sync, bounds, window: () => win };
+  // Out of the way while the app's map covers the game's (as the game hides its own minimap with its map).
+  let suspended = false;
+  function suspend(on) {
+    suspended = on;
+    if (win && !win.isDestroyed()) on ? win.hide() : win.showInactive();
+  }
+
+  return { sync, suspend, bounds, window: () => win };
 }
 
 module.exports = { createMinimap };

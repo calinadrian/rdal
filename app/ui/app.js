@@ -2340,7 +2340,7 @@ function renderStatus(settings) {
   $('#status-data').textContent = db ? `${db.meta.entities} entries · ${db.meta.source === 'game' ? 'from game files' : db.meta.source} · ${new Date(db.meta.generatedAt).toLocaleString()}` : 'No data';
   if (!settings) return;
   settingsMode = settings.mode;
-  $('#status-hotkey').textContent = `Show/hide: ${hotkeyLabel(settings.hotkey)}${settings.mapOnM ? ' · M in game: map' : ''}`;
+  $('#status-hotkey').textContent = `Show/hide: ${hotkeyLabel(settings.hotkey)}${settings.mapOnM ? ' · Game map (M): AtlasLoot map' : ''}`;
   $('#btn-hide').title = settings.mode === 'overlay' ? 'Hide (Esc)' : 'Minimise';
 }
 
@@ -2709,14 +2709,21 @@ async function init() {
   $('#status-update').onclick = () => update.status === 'ready' ? showUpdateDialog() : update.status !== 'dev' && checkUpdateNow();
   $('#update-check').onclick = checkUpdateNow;
   $('#update-restart').onclick = $('#update-now').onclick = () => window.atlas.installUpdate();
-  // M pressed in the game: open on the map, following the player.
-  window.atlas.onShowMap(() => {
+  // The game's map opened: open on the map, following the player.
+  const showMap = () => {
     if (state.module !== 'map') history.push(snapshot());
     state.module = 'map';
     renderModules();
     setMapMode(true);
     renderNavigation();
     if (lastPlayer?.ok && !MapView.highlightLabel() && Preferences.get('mapFollow') === null) MapView.setFollow(true);
+  };
+  window.atlas.onShowMap(showMap);
+  // As an overlay it covers the game's own map: just the map, without the app around it.
+  window.atlas.onGameMap((on) => {
+    document.body.classList.toggle('game-map', on);
+    if (on) showMap();
+    requestAnimationFrame(() => MapView.resize());
   });
   $('#map-follow').onclick = () => MapView.setFollow(!MapView.isFollowing());
   $('#map-zoom-in').onclick = () => MapView.zoom(1.5);

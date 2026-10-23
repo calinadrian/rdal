@@ -29,7 +29,7 @@ if (args.Contains("--track"))
     int samples = args.Contains("--once") ? 1 : int.MaxValue;
     var outLock = new object();
     void Emit(object o) { lock (outLock) Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(o)); }
-    if (samples > 1) KeyWatch.Start(proc.Id, key => Emit(new { key }));
+    if (samples > 1) KeyWatch.Start(proc.Id, key => { if (key == "M") tracker.MapKeyPressed(); Emit(new { key }); });
     for (int i = 0; i < samples && !proc.HasExited; i++)
     {
         try { Emit(tracker.Sample()); }

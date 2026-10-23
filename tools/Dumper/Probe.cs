@@ -37,7 +37,7 @@ public sealed class Probe
         return found;
     }
 
-    // Numeric leaves of an object: (label, address, type). Recurses into structs and one level into object refs named Slot.
+    // Numeric and true/false leaves of an object: (label, address, type). Recurses into structs and one level into object refs named Slot.
     List<(string Label, ulong Addr, string Type)> Leaves(ulong obj, ulong structOrClass, string prefix, int depth)
     {
         var res = new List<(string, ulong, string)>();
@@ -49,9 +49,10 @@ public sealed class Probe
                 ulong addr = obj + (ulong)_m.I32(f + (ulong)_l.PropOffset);
                 switch (type)
                 {
-                    case "FloatProperty": case "DoubleProperty": case "IntProperty":
+                    case "FloatProperty": case "DoubleProperty": case "IntProperty": case "ByteProperty": case "EnumProperty":
                         res.Add((prefix + name, addr, type)); break;
-                    case "BoolProperty":
+                    case "BoolProperty": // FBoolProperty: FieldSize, ByteOffset, ByteMask, FieldMask after FProperty
+                        res.Add((prefix + name, addr + _m.Read<byte>(f + (ulong)_l.PropBase + 1), "Bool:" + _m.Read<byte>(f + (ulong)_l.PropBase + 3)));
                         break;
                     case "StructProperty" when depth < 3:
                         res.AddRange(Leaves(addr, _m.Ptr(f + (ulong)_l.PropBase), prefix + name + ".", depth + 1)); break;
@@ -64,10 +65,13 @@ public sealed class Probe
         return res;
     }
 
-    string Read((string Label, ulong Addr, string Type) l) => l.Type switch
+    string Read((string Label, ulong Addr, string Type) l) => l.Type.StartsWith("Bool:")
+        ? ((_m.Read<byte>(l.Addr) & byte.Parse(l.Type[5..])) != 0 ? "true" : "false")
+        : l.Type switch
     {
         "FloatProperty" => _m.Read<float>(l.Addr).ToString("0.###"),
         "DoubleProperty" => _m.Read<double>(l.Addr).ToString("0.###"),
+        "ByteProperty" or "EnumProperty" => _m.Read<byte>(l.Addr).ToString(),
         _ => _m.I32(l.Addr).ToString(),
     };
 
@@ -159,6 +163,7 @@ public sealed class Probe
                     if (last.TryGetValue(key, out var old) && old == v) continue;
                     last[key] = v;
                     if (!first) Console.WriteLine($"{t} {_e.ObjName(_e.ClassOf(o))} {l.Label} = {v} (was {old})");
+                    else if (l.Type.StartsWith("Bool:") || l.Type is "ByteProperty" or "EnumProperty") Console.WriteLine($"{t} 0x{o:X} {_e.ObjName(_e.ClassOf(o))} {l.Label} = {v}");
                 }
             if (first) Console.WriteLine($"{t} watching {objs.Count} objects, {leaves.Values.Sum(x => x.Count)} values");
             first = false;

@@ -51,6 +51,7 @@ public sealed class Tracker
         }
         catch { _oQuestComp = -1; }
         _discovery = new DiscoveryReader(_e, Prop);
+        try { (_oActive, _activeMask) = BoolProp("/Script/CommonUI.CommonActivatableWidget", "bIsActive"); } catch { _oActive = -1; }
 
         // GWorld: the module global that points at a live World with a game instance.
         var worlds = _e.Objects().Select(x => x.Obj)
@@ -198,6 +199,52 @@ public sealed class Tracker
         return res;
     }
 
+    // FBoolProperty keeps FieldSize, ByteOffset, ByteMask, FieldMask after the FProperty: (byte offset, mask).
+    (int, byte) BoolProp(string classPath, string name)
+    {
+        for (ulong c = _e.FindObject(classPath); c != 0; c = _m.Ptr(c + (ulong)_l.SuperStruct))
+            for (ulong f = _m.Ptr(c + (ulong)_l.ChildProperties); f != 0; f = _m.Ptr(f + (ulong)_l.FieldNext))
+                if (_e.FName(f + (ulong)_l.FieldName) == name)
+                    return (_m.I32(f + (ulong)_l.PropOffset) + _m.Read<byte>(f + (ulong)_l.PropBase + 1), _m.Read<byte>(f + (ulong)_l.PropBase + 3));
+        throw new Exception($"{classPath}.{name} not found");
+    }
+
+    // The game's own map: the Map panel of the in-game menu (a native MapWidget, CommonUI activatable) is active
+    // exactly while it shows, whether opened with M or from the menu's tabs. The menu is built the first time it
+    // opens and rebuilt with the world, so the live panels are looked up again when missing or stale: at most every
+    // 10 s, or straight away after M is pressed in the game. null while no panel is known.
+    int _oActive = -1;
+    byte _activeMask;
+    List<(ulong Obj, ulong Cls)> _mapPanels = new();
+    DateTime _mapScan;
+    volatile bool _mapRescan;
+    public void MapKeyPressed() => _mapRescan = true;
+    readonly Dictionary<ulong, bool> _isMapPanel = new();
+    bool IsMapPanelClass(ulong cls)
+    {
+        if (_isMapPanel.TryGetValue(cls, out var p)) return p;
+        p = false;
+        for (ulong c = cls; c != 0 && !p; c = _m.Ptr(c + (ulong)_l.SuperStruct)) p = _e.ObjName(c) == "MapWidget";
+        return _isMapPanel[cls] = p;
+    }
+    bool? MapOpen()
+    {
+        if (_oActive < 0) return null;
+        if (_mapPanels.Count == 0 || _mapPanels.Any(p => _e.ClassOf(p.Obj) != p.Cls))
+        {
+            if (DateTime.Now < _mapScan && !_mapRescan) return _mapPanels.Count == 0 ? null : false;
+            _mapScan = DateTime.Now.AddSeconds(10);
+            _mapRescan = false;
+            _e.Refresh();
+            _mapPanels = _e.Objects().Select(x => x.Obj)
+                .Where(o => (_m.I32(o + Engine.OFlags) & 0x10) == 0 && IsMapPanelClass(_e.ClassOf(o)) && _e.PathName(o).StartsWith("/Engine/Transient"))
+                .Select(o => (o, _e.ClassOf(o))).ToList();
+            _log($"Map panels: {string.Join(", ", _mapPanels.Select(p => $"0x{p.Obj:X} {_e.ObjName(p.Cls)}"))} (bIsActive at +0x{_oActive:X} mask 0x{_activeMask:X})");
+            if (_mapPanels.Count == 0) return null;
+        }
+        return _mapPanels.Any(p => (_m.Read<byte>(p.Obj + (ulong)_oActive) & _activeMask) != 0);
+    }
+
     public object Sample()
     {
         _m.ClearCache();
@@ -218,7 +265,10 @@ public sealed class Tracker
         var quests = _tick % 20 == 0 ? Quests() : null;
         var discovery = _tick % 20 == 0 ? _discovery?.Read(pc, world) : null;
         _tick++;
-        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), npcs, players, quests, discovery };
+        // Whether the game's map is showing and the game window has the keyboard, for the overlay map.
+        bool? map = MapOpen();
+        bool focus = KeyWatch.GameFocused(_m.Pid);
+        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), map, focus, npcs, players, quests, discovery };
     }
 
     public void Run(int intervalMs, CancellationToken ct)

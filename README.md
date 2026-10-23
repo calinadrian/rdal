@@ -34,7 +34,11 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
 - UI preferences save automatically to the app's profile: map categories, creature pool, Follow me,
   map zoom/position, last open view, column widths and wishlist. Window settings are kept there too,
   including maximized state. Reopening or updating the app preserves them.
-- **M in the game** switches it to the map without taking focus (as an overlay it pops up, and M or Esc closes it).
+- **Opening the game's map** (M, or the menu's Map tab) switches it to the map without taking focus. As an overlay,
+  AtlasLoot's map stands in for the game's: it covers the game's screen with just the map while the game's map is
+  open and closes with it (M or Esc in the game). It never takes the keyboard, so the game keeps it; the mouse pans,
+  zooms and hovers. It only follows the game's real map, so nothing opens while you are alt-tabbed or typing, and
+  switching away from the game puts it away. The show/hide hotkey shows the game's own map instead until it next opens.
 - ⚙ Settings → **Show a minimap in the corner of the game** adds a WoW-style round minimap over the game while it runs
   (top-right by default; Small, Medium or Large). It follows your position and facing, north up or turned with the
   camera, and names the region or dungeon floor you are in. It shows what the map shows around you with the same

@@ -26,9 +26,11 @@ public sealed class Engine
 
     public void FindNamePool(byte[] module, Action<string> log)
     {
-        // Block 0 of the pool starts with the entries "None", "ByteProperty".
+        if (FindNamePoolInModule(module, log)) return;
+        // Block 0 of the pool starts with the entries "None", "ByteProperty". Copies of those entries can sit in
+        // other heap buffers too, so each match is tried in turn: the pool is the one the module points at.
         var needle = Encoding.ASCII.GetBytes("ByteProperty");
-        ulong block0 = 0;
+        int tried = 0;
         foreach (var r in M.Regions(heapOnly: true))
         {
             if (r.RegionSize > 0x40000000) continue;
@@ -41,18 +43,44 @@ public sealed class Engine
                     && (BinaryPrimitives.ReadUInt16LittleEndian(buf.AsSpan(i - 8)) >> 6) == 4
                     && (BinaryPrimitives.ReadUInt16LittleEndian(buf.AsSpan(i - 2)) >> 6) == 12)
                 {
-                    block0 = r.BaseAddress + (ulong)(i - 8);
-                    break;
+                    ulong block0 = r.BaseAddress + (ulong)(i - 8);
+                    tried++;
+                    log($"Name block 0 candidate at 0x{block0:X}");
+                    if (UseNamePool(module, block0, log)) return;
                 }
                 i++;
             }
-            if (block0 != 0) break;
         }
-        if (block0 == 0) throw new Exception("FName pool block 0 not found");
-        log($"Name block 0 at 0x{block0:X}");
+        throw new Exception(tried == 0 ? "FName pool block 0 not found" : "Pointer to FName pool not found in module");
+    }
 
-        // FNamePool: FRWLock (8), CurrentBlock (4), CurrentByteCursor (4), Blocks[]
-        for (int o = 0; o + 8 <= module.Length; o += 8)
+    // The quick way, from the module's side: a block count, then that many block pointers, the first of which
+    // starts with "None", "ByteProperty". Avoids reading the whole heap (the game holds copies of those entries).
+    bool FindNamePoolInModule(byte[] module, Action<string> log)
+    {
+        var first = new byte[22];
+        for (int o = 0; o + 0x18 <= module.Length; o += 8)
+        {
+            uint cur = BinaryPrimitives.ReadUInt32LittleEndian(module.AsSpan(o + 8));
+            if (cur == 0 || cur > 8192 || o + 0x10 + (cur + 1) * 8 > module.Length) continue;
+            bool blocks = true;
+            for (int b = 0; b <= cur && blocks; b++)
+            {
+                ulong p = BinaryPrimitives.ReadUInt64LittleEndian(module.AsSpan(o + 0x10 + b * 8));
+                blocks = Memory.LooksLikePtr(p) && !M.InModule(p);
+            }
+            if (!blocks || !M.ReadRaw(BinaryPrimitives.ReadUInt64LittleEndian(module.AsSpan(o + 0x10)), first)) continue;
+            if ((BinaryPrimitives.ReadUInt16LittleEndian(first) >> 6) != 4 || Encoding.ASCII.GetString(first, 2, 4) != "None"
+                || (BinaryPrimitives.ReadUInt16LittleEndian(first.AsSpan(6)) >> 6) != 12 || Encoding.ASCII.GetString(first, 8, 12) != "ByteProperty") continue;
+            return UseNamePool(module, BinaryPrimitives.ReadUInt64LittleEndian(module.AsSpan(o + 0x10)), log);
+        }
+        return false;
+    }
+
+    // FNamePool: FRWLock (8), CurrentBlock (4), CurrentByteCursor (4), Blocks[]
+    bool UseNamePool(byte[] module, ulong block0, Action<string> log)
+    {
+        for (int o = 0x10; o + 8 <= module.Length; o += 8)
         {
             if (BinaryPrimitives.ReadUInt64LittleEndian(module.AsSpan(o)) != block0) continue;
             ulong pool = M.ModuleBase + (ulong)o - 0x10;
@@ -62,9 +90,9 @@ public sealed class Engine
             _blocks = new ulong[cur + 1];
             for (int b = 0; b <= cur; b++) _blocks[b] = M.Ptr(pool + 0x10 + (ulong)b * 8);
             log($"GNames at module+0x{o - 0x10:X} ({cur + 1} blocks)");
-            return;
+            return true;
         }
-        throw new Exception("Pointer to FName pool not found in module");
+        return false;
     }
 
     public string Name(uint index)
