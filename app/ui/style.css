@@ -352,17 +352,74 @@ body.map-mode:not(.map-detail-open) #detail { display: none; }
 body.quests-mode:not(.map-mode):not(.map-detail-open) .layout { grid-template-columns: var(--w-modules, clamp(140px, 14vw, 176px)) var(--w-list, clamp(160px, 19vw, 244px)) minmax(0, 1fr); }
 body.quests-mode:not(.map-mode):not(.map-detail-open) #detail { display: none; }
 .mapview { position: relative; overflow: hidden; background: #151515; padding: 0; }
-/* Over the game's own map (overlay mode): only the map and an open detail, with a hint that fades away. */
+/* Over the game's own map: the map and three quiet things on dark glass with a gold hairline (what to show at the
+   top, your quests on the right, zoom at the bottom right), soft dark edges, and a hint that fades away. */
+body.game-map {
+  --glass: rgba(14, 12, 9, .9); --glass-line: rgba(214, 167, 86, .38); --cream: #f1dfb0; --quest: #ffd040;
+}
 body.game-map .titlebar, body.game-map .statusbar, body.game-map #modules, body.game-map #map-navigation { display: none; }
 body.game-map.map-mode .layout { grid-template-columns: minmax(0, 1fr) var(--w-detail, clamp(220px, 24vw, 304px)); }
 body.game-map.map-mode:not(.map-detail-open) .layout { grid-template-columns: minmax(0, 1fr); }
+body.game-map .mapview { animation: game-map-in .2s ease-out; }
+body.game-map .mapview::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, .55) 100%);
+}
+body.game-map .mapview > :not(canvas) { z-index: 2; }
+@keyframes game-map-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* What to show: four views and Customize, top centre. */
+.game-map-views { display: none; }
+body.game-map .game-map-views {
+  display: flex; gap: 2px; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); padding: 4px;
+  background: var(--glass); border: 1px solid var(--glass-line); border-radius: 999px; box-shadow: 0 6px 24px rgba(0, 0, 0, .45);
+}
+.game-map-views button {
+  height: 34px; padding: 0 18px; border: 0; border-radius: 999px; background: transparent;
+  color: #d9d2c2; font-size: 14px; font-weight: 600; letter-spacing: .02em;
+}
+.game-map-views button:hover { background: rgba(255, 255, 255, .06); color: var(--cream); }
+.game-map-views button[aria-pressed=true] { background: linear-gradient(#e9c06b, #c99a45); color: #1d1408; }
+.game-map-views .customize { margin-left: 6px; font-weight: 500; color: #a9a294; box-shadow: inset 1px 0 rgba(255, 255, 255, .08); border-radius: 0 999px 999px 0; }
+.game-map-views .customize.on { color: var(--cream); }
+body.game-map #map-legend { top: 76px; max-height: calc(100% - 96px); background: var(--glass); border-color: var(--glass-line); border-radius: 10px; }
+
+/* Zoom and centre on me, bottom right; the floor picker joins them inside dungeons. */
+.map-center { display: none; }
+body.game-map .map-tools { top: auto; bottom: 28px; right: 24px; flex-direction: column; align-items: flex-end; gap: 8px; }
+body.game-map .map-tools > .map-select-label:not(#map-level-label), body.game-map #map-filters, body.game-map #map-follow, body.game-map #map-fit { display: none; }
+body.game-map .map-tools .map-select-label { background: var(--glass); border: 1px solid var(--glass-line); }
+body.game-map .map-zoom-controls { flex-direction: column; gap: 0; background: var(--glass); border: 1px solid var(--glass-line); border-radius: 12px; overflow: hidden; box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
+body.game-map .map-zoom-controls button { width: 44px; height: 42px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--cream); font-size: 20px; }
+body.game-map .map-zoom-controls button + button { border-top: 1px solid rgba(255, 255, 255, .07); }
+body.game-map .map-zoom-controls button:hover { background: rgba(255, 255, 255, .07); }
+body.game-map .map-center { display: grid; place-items: center; }
+.map-center svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.map-center svg .dot { fill: currentColor; stroke: none; }
+
+/* Your quests, top right: number, gold title, what to do next. Clicking one frames where to go. */
+body.game-map .map-quest-tracker { top: 20px; right: 24px; width: min(330px, calc(100% - 48px)); max-height: calc(100% - 220px); }
+.quest-tracker.compact { padding: 10px 0 6px; background: var(--glass); border-color: var(--glass-line); border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
+.quest-tracker.compact .tracker-heading { display: block; padding: 0 16px 6px; color: var(--quest); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.quest-tracker.compact .tracker-quest { display: block; width: 100%; padding: 8px 16px; border: 0; border-top: 1px solid rgba(255, 255, 255, .06); border-radius: 0; background: transparent; text-align: left; }
+.quest-tracker.compact .tracker-quest:hover:not(:disabled) { background: rgba(255, 208, 64, .07); }
+.quest-tracker.compact .tracker-quest:disabled { cursor: default; opacity: 1; }
+.quest-tracker.compact .tracker-quest-head { display: flex; align-items: center; gap: 8px; }
+.quest-tracker.compact .tracker-title { color: var(--quest); font-size: 14px; font-weight: 600; }
+.quest-tracker.compact .tracker-step {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  margin: 3px 0 0 26px; color: #e4ded0; font-size: 13px; line-height: 1.45;
+}
+.quest-tracker.compact .tracker-quest.done .tracker-step { color: #7fd17f; }
+
 .game-map-hint { display: none; }
 body.game-map .game-map-hint {
-  display: block; position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); margin: 0; padding: 6px 14px;
-  font-size: var(--fs-sm); color: var(--muted); background: rgba(20,18,15,.88); border: 1px solid var(--line); border-radius: 999px;
+  display: block; position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); margin: 0; padding: 7px 16px;
+  font-size: var(--fs-sm); color: #cfc7b6; background: var(--glass); border: 1px solid var(--glass-line); border-radius: 999px;
   pointer-events: none; animation: game-map-hint 5s ease-in forwards;
 }
 @keyframes game-map-hint { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+body.game-map .map-highlight { bottom: 28px; background: var(--glass); border-color: var(--glass-line); border-radius: 999px; padding: 6px 8px 6px 16px; }
 .mapview[hidden] { display: none; }
 .mapview canvas { display: block; cursor: grab; }
 .mapview canvas:active { cursor: grabbing; }
@@ -421,7 +478,11 @@ body.game-map .game-map-hint {
 .map-highlight[hidden] { display: none; }
 .map-tip { position: absolute; pointer-events: none; background: rgba(0,0,0,.85); border: 1px solid var(--gold-dim); border-radius: 4px; padding: 3px 7px; font-size: var(--fs-xs); white-space: nowrap; }
 .map-tip[hidden] { display: none; }
-.map-tip { white-space: pre-line; max-width: min(340px, calc(100% - 16px)); line-height: 1.6; padding: 10px 12px; border-color: #666; background: #202020; overflow-wrap: anywhere; }
+.map-tip { display: flex; flex-direction: column; gap: 2px; white-space: normal; max-width: min(320px, calc(100% - 16px)); line-height: 1.45; padding: 9px 12px 10px; border-color: rgba(214,167,86,.38); border-radius: 8px; background: rgba(16,14,11,.96); box-shadow: 0 6px 20px rgba(0,0,0,.45); overflow-wrap: anywhere; }
+.map-tip[hidden] { display: none; }
+.map-tip strong { color: #f1dfb0; font-size: var(--fs-sm); font-weight: 600; }
+.map-tip span { color: #c9c2b2; }
+.map-tip em { margin-top: 3px; color: #d6a756; font-style: normal; font-size: 11px; letter-spacing: .02em; }
 .quest-map-key { display: grid; gap: 5px; border-top: 1px solid var(--line); margin: 10px 0 8px; padding-top: 10px; font-size: var(--fs-xs); color: var(--muted); }
 .quest-map-key > span { display: flex; align-items: center; gap: 8px; }
 .quest-map-key-title { color: var(--text); font-weight: 600; }

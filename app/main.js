@@ -117,7 +117,7 @@ const minimap = require('./minimap').createMinimap({
 });
 const syncMinimap = () => minimap.sync(gameRunning);
 // The app's map stands in for the game's own map (game-map.js), told by the tracker when that map opens and closes.
-const gameMap = require('./game-map').createGameMap({ window: () => win, settings: () => settings, reveal, applyMode, minimap });
+const gameMap = require('./game-map').createGameMap({ window: () => win, settings: () => settings, applyMode, minimap });
 
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));

@@ -119,7 +119,9 @@ function snapshot() {
     scroll: Object.fromEntries(['list', 'content', 'detail'].map(id => [id, $('#' + id).scrollTop])),
     mapContext: mapReady && state.module === 'map' ? MapView.navigation() : null };
 }
-function saveNavigation() { Preferences.setJSON('navigation', { ...snapshot(), filter: state.filter }); }
+// Not while the app stands in for the game's map: the page you had open is what the app comes back to.
+function saveNavigation() { if (!gameMapReturn) Preferences.setJSON('navigation', { ...snapshot(), filter: state.filter }); }
+let gameMapReturn = null; // your page in the app while it covers the game's map
 function go(view, { detail, push = true } = {}) {
   clearTimeout(searchTimer);
   if (push) history.push(snapshot());
@@ -304,7 +306,9 @@ function filterCreatureChoices() {
 function syncDungeonMapChrome(d = MapView.layer()) {
   const dungeon = !!d && document.body.classList.contains('map-mode');
   document.body.classList.toggle('dungeon-map', dungeon);
-  const open = Preferences.get(dungeon ? 'dungeonFiltersOpen' : 'worldFiltersOpen') === '1';
+  // Over the game's map the filters only open with Customize (and that is not remembered).
+  const open = document.body.classList.contains('game-map') ? document.body.classList.contains('game-map-customize')
+    : Preferences.get(dungeon ? 'dungeonFiltersOpen' : 'worldFiltersOpen') === '1';
   $('#map-legend').hidden = !open;
   const filters = $('#map-filters');
   filters.hidden = false;
@@ -313,8 +317,42 @@ function syncDungeonMapChrome(d = MapView.layer()) {
   updateMapFilterCount();
 }
 
+// What the game map shows, in one click: each view sets the map's categories and quest steps (saved like any filter),
+// and the full filters stay one click away under Customize. Shows which view the current filters match, if any.
+const MAP_VIEWS = {
+  quests: { categories: ['quest', 'travel'], steps: 'current' },
+  explore: { categories: ['travel', 'shrine', 'lore', 'chest', 'agility', 'recipe', 'vent'], steps: 'all' },
+  gather: { categories: ['travel', 'ore', 'gather', 'tree', 'fishing', 'salvage'], steps: 'all' },
+  all: { categories: null, steps: 'all' }, // every category and live creatures
+};
+const mapFilterIds = () => [...db.map.categories.map(c => c.id), 'npc'];
+const viewCategories = id => MAP_VIEWS[id].categories || mapFilterIds();
+function mapViewNow() {
+  const on = mapFilterIds().filter(id => MapView.isEnabled(id)).sort().join();
+  return Object.keys(MAP_VIEWS).find(id => viewCategories(id).slice().sort().join() === on
+    && questMapMode === 'all' && questMapStepMode === MAP_VIEWS[id].steps) || null;
+}
+function setMapView(id) {
+  const cats = viewCategories(id);
+  for (const c of mapFilterIds()) MapView.setEnabled(c, cats.includes(c));
+  questMapMode = 'all'; questMapStepMode = MAP_VIEWS[id].steps;
+  MapView.setHighlight(null); syncMapHighlight();
+  saveQuestMapFilter(); renderLegend();
+}
+function renderMapViews() {
+  if (!db?.map || !mapReady) return;
+  const now = mapViewNow();
+  for (const b of document.querySelectorAll('.game-map-views [data-view]')) b.setAttribute('aria-pressed', String(b.dataset.view === now));
+  const customize = $('#game-map-customize');
+  const open = document.body.classList.contains('game-map-customize');
+  customize.setAttribute('aria-expanded', String(open));
+  customize.classList.toggle('on', open || !now);
+  customize.textContent = now ? 'Customize' : 'Custom';
+}
+
 function updateMapFilterCount() {
   if (!db?.map || !mapReady) return;
+  renderMapViews();
   const defaults = MapView.defaultCategories();
   const count = [...db.map.categories.map(c => c.id), 'npc'].filter(id => MapView.isEnabled(id) !== defaults.includes(id)).length
     + Number(liveCreaturePool !== null) + Number(questMapMode !== 'all') + Number(questMapStepMode !== 'all')
@@ -378,6 +416,9 @@ function initMap() {
     $('#mapview').style.setProperty('--map-controls-bottom', `${tools.offsetTop + tools.offsetHeight + 12}px`);
   }).observe($('.map-tools'));
   levels.onchange = () => { history.push(snapshot()); MapView.setLayer(MapView.layer(), +levels.value); renderNavigation(); };
+  for (const b of document.querySelectorAll('.game-map-views [data-view]')) b.onclick = () => setMapView(b.dataset.view);
+  $('#game-map-customize').onclick = () => { document.body.classList.toggle('game-map-customize'); syncDungeonMapChrome(); };
+  $('#map-center').onclick = () => MapView.centerOnPlayer(0.5);
   $('#map-filters').onclick = () => {
     Preferences.set(MapView.layer() ? 'dungeonFiltersOpen' : 'worldFiltersOpen', $('#map-legend').hidden ? '1' : '0');
     syncDungeonMapChrome();
@@ -1210,6 +1251,7 @@ function trackerShowLine(q, line) {
 function questTrackerPanel() {
   const quests = trackedList();
   if (!quests.length) return null;
+  if (document.body.classList.contains('game-map')) return gameMapQuestList();
   const toggle = h('button', { type: 'button', class: 'tracker-toggle', 'aria-expanded': !trackerCollapsed,
     title: trackerCollapsed ? 'Expand the quest tracker' : 'Collapse the quest tracker',
     onclick: () => { trackerCollapsed = !trackerCollapsed; Preferences.set('trackerCollapsed', trackerCollapsed ? '1' : '0'); renderQuestTracker(); } },
@@ -1237,6 +1279,20 @@ function questTrackerPanel() {
               onclick: () => trackerShowLine(q, line) }, line.markers.length === 1 ? 'Map' : `Map · ${line.markers.length}`)
               : h('span', { class: 'tracker-nomap muted' }, 'no fixed place')))) : null]);
   }));
+}
+
+// Over the game's map the quest list reads like the minimap's: the number its targets carry, the quest and what to
+// do next. Clicking a quest frames where to go; nothing else to press.
+function gameMapQuestList() {
+  return h('div', { class: 'quest-tracker compact' }, h('div', { class: 'tracker-heading' }, 'Quests'),
+    minimapQuests().map(q => {
+      const markers = q.done ? [] : (questTrackerObjective(ent(q.name))?.lines || []).flatMap(l => l.markers);
+      return h('button', { type: 'button', class: 'tracker-quest' + (q.done ? ' done' : ''), disabled: !markers.length,
+        title: markers.length ? 'Show where to go' : 'No fixed place on the map',
+        onclick: () => { MapView.setHighlight(q.name, markers); syncMapHighlight(); } },
+        h('span', { class: 'tracker-quest-head' }, h('span', { class: 'tracker-num', 'aria-hidden': 'true' }, q.index), h('span', { class: 'tracker-title' }, q.name)),
+        h('span', { class: 'tracker-step' }, q.step ? h('span', { class: 'tracker-step-label' }, q.step + ' · ') : null, q.text));
+    }));
 }
 
 function renderQuestTracker() {
@@ -2709,20 +2765,30 @@ async function init() {
   $('#status-update').onclick = () => update.status === 'ready' ? showUpdateDialog() : update.status !== 'dev' && checkUpdateNow();
   $('#update-check').onclick = checkUpdateNow;
   $('#update-restart').onclick = $('#update-now').onclick = () => window.atlas.installUpdate();
-  // The game's map opened: open on the map, following the player.
-  const showMap = () => {
-    if (state.module !== 'map') history.push(snapshot());
-    state.module = 'map';
-    renderModules();
-    setMapMode(true);
-    renderNavigation();
-    if (lastPlayer?.ok && !MapView.highlightLabel() && Preferences.get('mapFollow') === null) MapView.setFollow(true);
-  };
-  window.atlas.onShowMap(showMap);
-  // As an overlay it covers the game's own map: just the map, without the app around it.
+  // The game's map opened: the app covers it with just its map, following the player. It is a layer over your page
+  // in the app, not a visit to the Map section: that page comes back (and is all that is saved) when it closes.
   window.atlas.onGameMap((on) => {
-    document.body.classList.toggle('game-map', on);
-    if (on) showMap();
+    if (on && !gameMapReturn) {
+      gameMapReturn = { page: snapshot(), following: mapReady && MapView.isFollowing() };
+      document.body.classList.add('game-map');
+      document.body.classList.remove('game-map-customize');
+      state.module = 'map';
+      renderModules();
+      setMapMode(true);
+      renderNavigation();
+      // Like the game's own map: clean, on you and still (no following, no earlier search results).
+      if (MapView.isFollowing()) MapView.setFollow(false);
+      MapView.setHighlight(null); syncMapHighlight();
+      MapView.centerOnPlayer(0.5);
+      renderQuestTracker(); renderMapViews();
+    } else if (!on && gameMapReturn) {
+      const { page, following } = gameMapReturn;
+      gameMapReturn = null;
+      document.body.classList.remove('game-map', 'game-map-customize');
+      restoreNavigation(page);
+      if (following) MapView.setFollow(true, { restore: true });
+      renderQuestTracker();
+    }
     requestAnimationFrame(() => MapView.resize());
   });
   $('#map-follow').onclick = () => MapView.setFollow(!MapView.isFollowing());

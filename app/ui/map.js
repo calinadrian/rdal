@@ -292,19 +292,27 @@ window.MapView = (() => {
       const info = hover.c === 'quest' ? questInfo(hover) : null;
       const t = tracked.get(hover);
       if (t && hover.c !== 'quest') {
-        tip.textContent = [t.index ? `${t.index}. ${t.quest}` : `${t.quest} · active quest`, t.label, hover.n + (hover.region ? ' · ' + hover.region : ''), 'Click for the quest'].join('\n');
+        card(tip, hover.n, [t.label, `${t.index ? `Quest ${t.index}: ` : ''}${t.quest}${hover.region ? ' · ' + hover.region : ''}`], 'Click for the quest');
       } else if (info) {
-        tip.textContent = (t ? (t.index ? 'Tracked · ' : 'Active quest · ') + t.label + '\n' : '') + `${info.title}\n${info.label} · ${info.location}\n`
-          + (info.steps.length ? info.steps.map(s => `${s.number}. ${s.text}`).join('\n') : 'Objective link not confirmed in game data.')
-          + '\nClick for quest details';
+        // One step: the one this place is for now (current, or where the quest starts), else its first.
+        const step = info.steps.find(s => String(s.number) === info.badge) || info.steps[0];
+        card(tip, info.title, [t ? `Tracked · ${t.label}` : '', `${info.label} · ${info.location}`,
+          step ? step.text : 'Step not confirmed in the game data'], 'Click for the quest guide');
       } else {
-        const discovery = ['lore', 'shrine'].includes(hover.c) ? `\n${{ discovered: 'Discovered', undiscovered: 'Undiscovered', unknown: 'Discovery status not yet confirmed' }[MapDiscovery.state(hover)]}` : '';
-        const action = hover.enter ? '  (click to open its map)' : hover.ref || ['lore', 'shrine'].includes(hover.c) ? '  (click for details)' : '';
-        tip.textContent = `${hover.live ? '● ' : ''}${hover.n}${mood}${dist}${hover.region ? ' · ' + hover.region : ''}${discovery}${action}`;
+        const discovery = ['lore', 'shrine'].includes(hover.c) ? { discovered: 'Discovered', undiscovered: 'Undiscovered', unknown: 'Discovery not confirmed yet' }[MapDiscovery.state(hover)] : '';
+        const about = [mood.replace(/^ · /, ''), dist.replace(/^ · /, ''), hover.region, discovery].filter(Boolean).join(' · ');
+        card(tip, `${hover.live ? '● ' : ''}${hover.n}`, [about],
+          hover.enter ? 'Click to open its map' : hover.ref || ['lore', 'shrine'].includes(hover.c) ? 'Click for details' : '');
       }
       tip.style.left = Math.max(8, Math.min(mx + 14, r.width - tip.offsetWidth - 8)) + 'px';
       tip.style.top = Math.max(8, Math.min(my + 10, r.height - tip.offsetHeight - 8)) + 'px';
     } else tip.hidden = true;
+  }
+
+  // Hover card: what it is, a line or two about it, and what a click does.
+  function card(tip, title, lines, action) {
+    const el = (tag, text) => Object.assign(document.createElement(tag), { textContent: text });
+    tip.replaceChildren(el('strong', title), ...lines.filter(Boolean).map(l => el('span', l)), ...(action ? [el('em', action)] : []));
   }
 
   const following = () => follow && playerHere() && performance.now() > followPause;
@@ -381,25 +389,35 @@ window.MapView = (() => {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (img.complete && W > 1) ctx.drawImage(img, ox, oy, W * scale, H * scale);
 
-    // Region outlines + names (world map only)
-    ctx.lineWidth = 1;
-    ctx.font = `${scale > 0.3 ? 13 : 11}px Segoe UI`;
+    // Region outlines (faint) and names as the game writes them: a serif in cream with a dark outline, the region's
+    // power level small beneath (world map only).
     ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
     for (const r of layer ? [] : map.regions) {
       ctx.beginPath();
       r.poly.forEach(([x, y], i) => { const [sx, sy] = toScreen(x, y); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); });
       ctx.closePath();
-      ctx.strokeStyle = 'rgba(255,230,170,0.35)';
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,230,170,0.16)';
       ctx.stroke();
       if (scale > 0.12) {
         const cx = r.poly.reduce((a, p) => a + p[0], 0) / r.poly.length, cy = r.poly.reduce((a, p) => a + p[1], 0) / r.poly.length;
-        const [sx, sy] = toScreen(cx, cy);
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillText(`${r.name}${r.level ? ' (' + r.level + ')' : ''}`, sx + 1, sy + 1);
-        ctx.fillStyle = '#ffe6aa';
-        ctx.fillText(`${r.name}${r.level ? ' (' + r.level + ')' : ''}`, sx, sy);
+        const [sx, sy] = toScreen(cx, cy), size = scale > 0.3 ? 18 : 15;
+        ctx.font = `600 ${size}px "Palatino Linotype", "Book Antiqua", Georgia, serif`;
+        ctx.letterSpacing = '0.5px';
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(12,9,5,0.85)'; ctx.strokeText(r.name, sx, sy);
+        ctx.fillStyle = '#f3e3b8'; ctx.fillText(r.name, sx, sy);
+        if (r.level) {
+          ctx.font = '600 11px Segoe UI';
+          ctx.letterSpacing = '1px';
+          ctx.lineWidth = 3; ctx.strokeText(`TIER ${r.level}`, sx, sy + 15);
+          ctx.fillStyle = '#c9b88c'; ctx.fillText(`TIER ${r.level}`, sx, sy + 15);
+        }
+        ctx.letterSpacing = '0px';
       }
     }
+    ctx.lineWidth = 1;
+    ctx.font = `${scale > 0.3 ? 13 : 11}px Segoe UI`;
 
     // Spawn dots stay subdued; landmarks retain their readable size at any zoom.
     const cw = viewW, ch = viewH;
@@ -503,16 +521,20 @@ window.MapView = (() => {
       }
     }
 
-    // Player: the game's own arrow, pointing where the camera looks (yaw 0 = +X = right).
+    // Player: the game's own arrow, pointing where the camera looks (yaw 0 = +X = right), large on a soft halo so
+    // you find yourself at a glance.
     if (playerHere()) {
       const [sx, sy] = toScreen(player.x, player.y);
+      ctx.beginPath(); ctx.arc(sx, sy, 22, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(60,200,255,0.16)'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(140,225,255,0.55)'; ctx.stroke();
       ctx.save();
       ctx.translate(sx, sy);
       ctx.rotate(((player.yaw + 90) * Math.PI) / 180);
       const img = image('mapicons/T_NavIcons_Player_Self.png');
       ctx.shadowColor = '#3cf';
       ctx.shadowBlur = 8;
-      if (img) ctx.drawImage(img, -MARKER_SIZE / 2, -MARKER_SIZE / 2, MARKER_SIZE, MARKER_SIZE);
+      if (img) ctx.drawImage(img, -18, -18, 36, 36);
       else {
         ctx.beginPath();
         ctx.moveTo(0, -12); ctx.lineTo(-7, 8); ctx.lineTo(0, 4); ctx.lineTo(7, 8); ctx.closePath();
@@ -589,6 +611,14 @@ window.MapView = (() => {
       return highlight;
     },
     highlightLabel: () => highlight?.label || null,
+    // On you, on your map and floor, at least this close (as the game's own map opens).
+    centerOnPlayer(minScale) {
+      if (!player?.ok) return false;
+      if (layer !== playerLayer || (layer && level !== playerLevel)) setLayer(playerLayer, playerLevel);
+      const go = () => { centerOn(player.x, player.y, minScale); saveViewport(); };
+      if (W > 1) go(); else pendingFocus = go;
+      return true;
+    },
     setPlayer(p) {
       player = p;
       // Going through a dungeon door (either way) takes the map with you.
