@@ -23,9 +23,13 @@ if (args.Contains("--track"))
 {
     // Position stream for the overlay: logs go to stderr, JSON lines to stdout.
     Action<string> err = s => Console.Error.WriteLine(s);
+    mem.MaxPages = 50_000; // runs beside the game, often on a modest PC: a smaller cache, a slightly slower start
     var tracker = new Tracker(eng, Layout.Discover(eng, err), err);
     tracker.Init(module);
     module = null;
+    // Finding the game's types read hundreds of megabytes once: hand them back before tracking for hours.
+    mem.ClearCache();
+    GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
     int samples = args.Contains("--once") ? 1 : int.MaxValue;
     var outLock = new object();
     void Emit(object o) { lock (outLock) Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(o)); }

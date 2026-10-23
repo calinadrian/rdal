@@ -6,12 +6,15 @@ public sealed class DiscoveryReader
     readonly Engine _e;
     readonly Memory _m;
     readonly int _playerState, _ownerGuid, _journal, _entries, _progress, _shrines, _poiPlayers, _recipes, _temporaryRecipes;
-    ulong _poiActor, _world;
-    DateTime _nextScan;
+    readonly ObjectSweep _sweep;
+    readonly ObjectSweep.Want _poiActors;
+    readonly Func<ulong, string, bool> _isA;
+    ulong _poiActor;
 
-    public DiscoveryReader(Engine e, Func<string, string, int> prop)
+    public DiscoveryReader(Engine e, Func<string, string, int> prop, ObjectSweep sweep, Func<ulong, string, bool> isA)
     {
-        _e = e; _m = e.M;
+        _e = e; _m = e.M; _sweep = sweep; _isA = isA;
+        _poiActors = sweep.Add((o, cls) => isA(cls, "PoiDiscoverySystemActor"));
         int Offset(string type, string name) { try { return prop(type, name); } catch { return -1; } }
         _playerState = Offset("/Script/Engine.Controller", "PlayerState");
         _ownerGuid = Offset("/Script/Dominion.DominionPlayerState", "OwnerGuid");
@@ -117,12 +120,11 @@ public sealed class DiscoveryReader
         }
         if (_poiPlayers >= 0)
         {
-            if (_world != world) { _world = world; _poiActor = 0; _nextScan = DateTime.MinValue; }
-            if ((_poiActor == 0 || !InWorld(_poiActor, world)) && DateTime.Now >= _nextScan)
+            bool Live(ulong o) => _isA(_e.ClassOf(o), "PoiDiscoverySystemActor") && InWorld(o, world);
+            if (!Live(_poiActor))
             {
-                _nextScan = DateTime.Now.AddSeconds(20);
-                _poiActor = _e.Objects().Select(o => o.Obj).FirstOrDefault(o =>
-                    (_m.I32(o + Engine.OFlags) & 0x10) == 0 && _e.ObjName(_e.ClassOf(o)) == "PoiDiscoverySystemActor" && InWorld(o, world));
+                _poiActor = _poiActors.Found.FirstOrDefault(Live);
+                if (_poiActor == 0) _sweep.Need(_poiActors);
             }
             var players = _poiActor == 0 ? null : Array(_poiActor + (ulong)_poiPlayers, 32, 1000);
             if (players != null)

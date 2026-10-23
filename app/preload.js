@@ -17,7 +17,8 @@ contextBridge.exposeInMainWorld('atlas', {
   onProgress: (fn) => ipcRenderer.on('import-progress', (_, p) => fn(p)),
   onShown: (fn) => ipcRenderer.on('shown', fn),
   onGameMap: (fn) => ipcRenderer.on('game-map', (_, on) => fn(on)),
-  onPlayer: (fn) => ipcRenderer.on('player', (_, p) => fn(p)),
+  // Answered once handled, so main.js sends the next sample (merged from those that came meanwhile).
+  onPlayer: (fn) => ipcRenderer.on('player', (_, p) => { try { fn(p); } finally { ipcRenderer.send('player:done'); } }),
   onGame: (fn) => ipcRenderer.on('game', (_, g) => fn(g)),
   sendMinimap: (scene) => ipcRenderer.send('minimap:scene', scene),
   getUpdate: () => ipcRenderer.invoke('update:get'),

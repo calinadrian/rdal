@@ -15,6 +15,7 @@
   const questList = document.getElementById('quest-list');
   let size = 200, rotate = false, zoom = 2, folded = false;
   let scene = { ok: false };
+  let live = null;             // your latest position straight from the tracker, newer than the scene's: { x, y, yaw }
   let shown = null;            // position drawn, gliding towards the latest sample: { x, y, yaw }
   let dirty = true;
   let areaCanvas = null;
@@ -108,13 +109,15 @@
     bridge.zoom(next);
   }
 
-  // Glide to each new sample (the tracker reads about seven a second); jumps and teleports snap.
-  function glide() {
-    const p = scene.player;
-    if (!shown || Math.hypot(p.x - shown.x, p.y - shown.y) > 3000) { shown = { ...p }; return; }
+  // Glide to each new sample (the tracker reads about seven a second); jumps and teleports snap. By time, so it
+  // moves alike at any frame rate: 30% of the way every 60th of a second.
+  function glide(ms) {
+    const p = live || scene.player;
+    if (!shown || Math.hypot(p.x - shown.x, p.y - shown.y) > 3000) { shown = { ...p }; dirty = true; return; }
     const turn = ((p.yaw - shown.yaw + 540) % 360) - 180;
     if (Math.abs(p.x - shown.x) + Math.abs(p.y - shown.y) < 1 && Math.abs(turn) < 0.2) return;
-    shown.x += (p.x - shown.x) * 0.3; shown.y += (p.y - shown.y) * 0.3; shown.yaw += turn * 0.3;
+    const k = 1 - 0.7 ** (ms / (1000 / 60));
+    shown.x += (p.x - shown.x) * k; shown.y += (p.y - shown.y) * k; shown.yaw += turn * k;
     dirty = true;
   }
 
@@ -268,13 +271,19 @@
     ctx.fillStyle = ink; ctx.fillText(String(n), x, y + 0.5);
   }
 
-  function loop() {
-    if (scene.ok) glide();
-    if (dirty) draw();
+  // At most 30 frames a second: smooth for a minimap, and less work on top of the game than the screen's 60 or more.
+  let lastFrame = 0;
+  function loop(now) {
     requestAnimationFrame(loop);
+    if (now - lastFrame < 1000 / 30 - 2) return;
+    const ms = Math.min(100, now - lastFrame);
+    lastFrame = now;
+    if (scene.ok) glide(ms);
+    if (dirty) draw();
   }
 
   bridge.onOptions(layout);
+  bridge.onPlayer((p) => { live = p; });
   bridge.onScene((next) => {
     scene = next;
     if (scene.ok) loadImage(scene.image); else shown = null;

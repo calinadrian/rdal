@@ -14,8 +14,24 @@ public sealed class Tracker
     ulong _gworld; // address of the GWorld global
     int _oGameInstance, _oLocalPlayers, _oPlayerController, _oPawn, _oRoot, _oRelLoc, _oControlRot, _oPersistentLevel;
     DiscoveryReader? _discovery;
+    ObjectSweep _sweep = null!;
+    ObjectSweep.Want _questApis = null!, _registries = null!, _panels = null!;
+    ulong _world;
 
     public Tracker(Engine e, Layout l, Action<string> log) { _e = e; _l = l; _m = e.M; _log = log; }
+
+    // Whether a class is, or derives from, the class of that name (the game subclasses its native classes in
+    // blueprints, e.g. BP_Components_QuestProgress_C).
+    readonly Dictionary<(ulong, string), bool> _isA = new();
+    bool IsA(ulong cls, string name)
+    {
+        if (cls == 0) return false;
+        if (_isA.TryGetValue((cls, name), out var yes)) return yes;
+        // A stale pointer reads as garbage: a real class chain is never this deep.
+        ulong c = cls;
+        for (int depth = 0; c != 0 && !yes && depth < 64; depth++, c = _m.Ptr(c + (ulong)_l.SuperStruct)) yes = _e.ObjName(c) == name;
+        return _isA[(cls, name)] = yes;
+    }
 
     // Offset of a property, searching up the class chain.
     int Prop(string classPath, string name)
@@ -53,7 +69,11 @@ public sealed class Tracker
         try { _oVisibility = Prop("/Script/Dominion.QuestProgressComponent", "VisibilityTrackers"); } catch { _oVisibility = -1; }
         try { _oLodestones = Prop("/Script/Dominion.GameplayObjectRegistry", "Lodestones"); } catch { _oLodestones = -1; }
         try { _oVisibilityProp = Prop("/Script/UMG.Widget", "Visibility"); } catch { _oVisibilityProp = -1; }
-        _discovery = new DiscoveryReader(_e, Prop);
+        _sweep = new ObjectSweep(_e);
+        _questApis = _sweep.Add((o, cls) => IsA(cls, "QuestUIAPI"));
+        _registries = _sweep.Add((o, cls) => IsA(cls, "GameplayObjectRegistry"));
+        _panels = _sweep.Add((o, cls) => IsA(cls, "MapWidget") && _e.PathName(o).StartsWith("/Engine/Transient"));
+        _discovery = new DiscoveryReader(_e, Prop, _sweep, IsA);
         try { (_oActive, _activeMask) = BoolProp("/Script/CommonUI.CommonActivatableWidget", "bIsActive"); } catch { _oActive = -1; }
 
         // GWorld: the module global that points at a live World with a game instance.
@@ -65,6 +85,8 @@ public sealed class Tracker
             if (worlds.Contains(BinaryPrimitives.ReadUInt64LittleEndian(module.AsSpan(o)))) _gworld = _m.ModuleBase + (ulong)o;
         if (_gworld == 0) throw new Exception("GWorld not found (load into a world first)");
         _log($"GWorld at module+0x{_gworld - _m.ModuleBase:X}");
+        // A sample reads far fewer pages than the type lookups above: keep the cache (and this process) small from here on.
+        _m.MaxPages = 8192;
     }
 
     // ULevel.Actors is a native TArray (not reflected): find the TArray whose first entries are actors owned by the level.
@@ -98,16 +120,6 @@ public sealed class Tracker
         return _pawnClass[cls] = n;
     }
 
-    // Other people's characters (co-op): player pawns share the native DominionPlayerCharacter base.
-    readonly Dictionary<ulong, bool> _isPlayer = new();
-    bool IsPlayerClass(ulong cls)
-    {
-        if (_isPlayer.TryGetValue(cls, out var p)) return p;
-        p = false;
-        for (ulong c = cls; c != 0 && !p; c = _m.Ptr(c + (ulong)_l.SuperStruct)) p = _e.ObjName(c) == "DominionPlayerCharacter";
-        return _isPlayer[cls] = p;
-    }
-
     // FString: TCHAR* data, int count (including the terminator).
     string FString(ulong addr)
     {
@@ -128,19 +140,26 @@ public sealed class Tracker
         if (_oLevelActors < 0) _oLevelActors = LevelActorsOffset(level);
         if (_oLevelActors < 0) return res;
         ulong data = _m.Ptr(level + (ulong)_oLevelActors);
-        int num = Math.Min(_m.I32(level + (ulong)_oLevelActors + 8), 200_000);
-        var actors = _m.Bytes(data, num * 8);
-        for (int i = 0; i + 8 <= actors.Length && res.Count < 400; i += 8)
+        // Spawned actors are added at the end and destroyed ones leave empty slots, so on a long session (a joining
+        // player's game spawns and drops actors as they come in and out of range) the list keeps growing: read
+        // its newest end.
+        int num = Math.Clamp(_m.I32(level + (ulong)_oLevelActors + 8), 0, 2_000_000), from = Math.Max(0, num - 200_000);
+        var actors = _m.Bytes(data + (ulong)from * 8, (num - from) * 8);
+        for (int i = 0; i + 8 <= actors.Length; i += 8)
         {
             ulong a = BitConverter.ToUInt64(actors, i);
             if (a == 0 || a == player) continue;
-            var cls = PawnClass(_e.ClassOf(a));
+            ulong klass = _e.ClassOf(a);
+            var cls = PawnClass(klass);
             if (cls.Length == 0 || (_m.I32(a + Engine.OFlags) & 0x10) != 0) continue;
+            // Past 400 creatures only other players are still wanted.
+            bool isPlayer = IsA(klass, "DominionPlayerCharacter");
+            if (!isPlayer && res.Count >= 400) continue;
             ulong root = _m.Ptr(a + (ulong)_oRoot);
             if (root == 0) continue;
             double x = _m.Read<double>(root + (ulong)_oRelLoc), y = _m.Read<double>(root + (ulong)_oRelLoc + 8), z = _m.Read<double>(root + (ulong)_oRelLoc + 16);
             if (x == 0 && y == 0) continue;
-            if (IsPlayerClass(_e.ClassOf(a)))
+            if (isPlayer)
             {
                 ulong state = _oPlayerState > 0 ? _m.Ptr(a + (ulong)_oPlayerState) : 0;
                 string name = state != 0 && _oPlayerName > 0 ? FString(state + (ulong)_oPlayerName) : "";
@@ -148,7 +167,7 @@ public sealed class Tracker
                 players.Add(new { n = name, x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1) });
                 continue;
             }
-            res.Add(new { c = cls, x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), alert = _oAlert > 0 ? _m.Bytes(a + (ulong)_oAlert, 1)[0] : 0 });
+            res.Add(new { c = cls, x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), alert = _oAlert > 0 ? _m.Read<byte>(a + (ulong)_oAlert) : 0 });
         }
         return res;
     }
@@ -159,22 +178,17 @@ public sealed class Tracker
     // Data @0, State @8 (Ungiven/Given/Complete), CurrentObjective FName @0xC, QuestInts @0x18, QuestBools @0x28).
     int _oQuestComp = -1, _oQuests = -1, _oVisibility = -1;
     ulong _questApi;
-    DateTime _questScan;
     ulong QuestComponent()
     {
         if (_oQuestComp < 0) return 0;
-        ulong comp = _questApi == 0 ? 0 : _m.Ptr(_questApi + (ulong)_oQuestComp);
-        if (comp == 0 || _e.ObjName(_e.ClassOf(comp)) != "QuestProgressComponent")
-        {
-            // The UI API object is recreated with the world: look it up again (a full object scan, so at most every 20 s).
-            if (DateTime.Now < _questScan) return 0;
-            _questScan = DateTime.Now.AddSeconds(20);
-            _questApi = _e.Objects().Select(x => x.Obj)
-                .FirstOrDefault(o => (_m.I32(o + Engine.OFlags) & 0x10) == 0 && _e.ObjName(_e.ClassOf(o)) == "QuestUIAPI"
-                                     && _m.Ptr(o + (ulong)_oQuestComp) != 0);
-            comp = _questApi == 0 ? 0 : _m.Ptr(_questApi + (ulong)_oQuestComp);
-        }
-        return comp;
+        ulong Comp(ulong api) => api == 0 || !IsA(_e.ClassOf(api), "QuestUIAPI") ? 0
+            : _m.Ptr(api + (ulong)_oQuestComp) is var c && IsA(_e.ClassOf(c), "QuestProgressComponent") ? c : 0;
+        ulong comp = Comp(_questApi);
+        if (comp != 0) return comp;
+        // The UI API object is recreated with the world: look for it again.
+        _questApi = _questApis.Found.FirstOrDefault(o => Comp(o) != 0);
+        if (_questApi == 0) _sweep.Need(_questApis);
+        return Comp(_questApi);
     }
 
     // TArray of { FName, value } pairs, 12 bytes each (FQuestBool, FQuestInt, FLocationVisibilityTracker).
@@ -205,8 +219,8 @@ public sealed class Tracker
             ulong qd = _m.Ptr(q);
             if (qd == 0) continue;
             var ints = NamedValues(q + 0x18, a => _m.I32(a));
-            var bools = NamedValues(q + 0x28, a => _m.Bytes(a, 1)[0] != 0);
-            res.Add(new { id = _e.ObjName(qd), s = _m.Bytes(q + 8, 1)[0], o = _e.FName(q + 0xC), b = bools, i = ints is { Count: > 0 } ? ints : null });
+            var bools = NamedValues(q + 0x28, a => _m.Read<byte>(a) != 0);
+            res.Add(new { id = _e.ObjName(qd), s = _m.Read<byte>(q + 8), o = _e.FName(q + 0xC), b = bools, i = ints is { Count: > 0 } ? ints : null });
         }
         return res;
     }
@@ -214,7 +228,7 @@ public sealed class Tracker
     // The quest locations the game has shown or hidden on its own map (QFT_UpdateQuestLocation), by location name.
     // Locations never updated keep their placed default (bShownByDefault).
     Dictionary<string, bool>? QuestLocations(ulong comp) =>
-        comp == 0 || _oVisibility < 0 ? null : NamedValues(comp + (ulong)_oVisibility, a => _m.Bytes(a, 1)[0] != 0);
+        comp == 0 || _oVisibility < 0 ? null : NamedValues(comp + (ulong)_oVisibility, a => _m.Read<byte>(a) != 0);
 
     // FBoolProperty keeps FieldSize, ByteOffset, ByteMask, FieldMask after the FProperty: (byte offset, mask).
     (int, byte) BoolProp(string classPath, string name)
@@ -228,36 +242,26 @@ public sealed class Tracker
 
     // The game's own map: the Map panel of the in-game menu (a native MapWidget, CommonUI activatable) is active
     // exactly while it shows, whether opened with M or from the menu's tabs. The menu is built the first time it
-    // opens and rebuilt with the world, so the live panels are looked up again when missing or stale: at most every
-    // 10 s, or straight away after M is pressed in the game. null while no panel is known.
+    // opens and rebuilt with the world, so the live panels are looked for again when missing or gone, straight
+    // away after M is pressed in the game. null while no panel is known.
     int _oActive = -1;
     byte _activeMask;
     List<(ulong Obj, ulong Cls)> _mapPanels = new();
-    DateTime _mapScan;
     volatile bool _mapRescan;
     public void MapKeyPressed() => _mapRescan = true;
-    readonly Dictionary<ulong, bool> _isMapPanel = new();
-    bool IsMapPanelClass(ulong cls)
-    {
-        if (_isMapPanel.TryGetValue(cls, out var p)) return p;
-        p = false;
-        for (ulong c = cls; c != 0 && !p; c = _m.Ptr(c + (ulong)_l.SuperStruct)) p = _e.ObjName(c) == "MapWidget";
-        return _isMapPanel[cls] = p;
-    }
     bool? MapOpen()
     {
         if (_oActive < 0) return null;
         if (_mapPanels.Count == 0 || _mapPanels.Any(p => _e.ClassOf(p.Obj) != p.Cls))
         {
-            if (DateTime.Now < _mapScan && !_mapRescan) return _mapPanels.Count == 0 ? null : false;
-            _mapScan = DateTime.Now.AddSeconds(10);
-            _mapRescan = false;
-            _e.Refresh();
-            _mapPanels = _e.Objects().Select(x => x.Obj)
-                .Where(o => (_m.I32(o + Engine.OFlags) & 0x10) == 0 && IsMapPanelClass(_e.ClassOf(o)) && _e.PathName(o).StartsWith("/Engine/Transient"))
-                .Select(o => (o, _e.ClassOf(o))).ToList();
-            _log($"Map panels: {string.Join(", ", _mapPanels.Select(p => $"0x{p.Obj:X} {_e.ObjName(p.Cls)}"))} (bIsActive at +0x{_oActive:X} mask 0x{_activeMask:X})");
-            if (_mapPanels.Count == 0) return null;
+            // The panels of the latest look that are still there; another look when some are missing.
+            var found = _panels.Found.Select(o => (Obj: o, Cls: _e.ClassOf(o))).ToList();
+            var live = found.Where(p => IsA(p.Cls, "MapWidget")).ToList();
+            if (live.Count == 0 || live.Count < found.Count) { _sweep.Need(_panels, _mapRescan); _mapRescan = false; }
+            if (live.Count > 0 && !live.SequenceEqual(_mapPanels))
+                _log($"Map panels: {string.Join(", ", live.Select(p => $"0x{p.Obj:X} {_e.ObjName(p.Cls)}"))} (bIsActive at +0x{_oActive:X} mask 0x{_activeMask:X})");
+            _mapPanels = live;
+            if (live.Count == 0) return null;
         }
         return _mapPanels.Any(p => (_m.Read<byte>(p.Obj + (ulong)_oActive) & _activeMask) != 0);
     }
@@ -294,18 +298,14 @@ public sealed class Tracker
     // Every lodestone in the world, built ones included, from the GameplayObjectRegistry actor's Lodestones
     // (TArray<FLodestoneData>, 64 bytes each: Location, RespawnLocation, Guid). Looked up again with the world.
     int _oLodestones = -1;
-    ulong _registry, _registryCls;
-    DateTime _registryScan;
+    ulong _registry;
     List<object>? Lodestones()
     {
         if (_oLodestones < 0) return null;
-        if (_registry == 0 || _e.ClassOf(_registry) != _registryCls)
+        if (!IsA(_e.ClassOf(_registry), "GameplayObjectRegistry"))
         {
-            if (DateTime.Now < _registryScan) return null;
-            _registryScan = DateTime.Now.AddSeconds(20);
-            _registry = _e.Objects().Select(x => x.Obj).FirstOrDefault(o => (_m.I32(o + Engine.OFlags) & 0x10) == 0 && IsRegistryClass(_e.ClassOf(o)));
-            _registryCls = _registry == 0 ? 0 : _e.ClassOf(_registry);
-            if (_registry == 0) return null;
+            _registry = _registries.Found.FirstOrDefault(o => IsA(_e.ClassOf(o), "GameplayObjectRegistry"));
+            if (_registry == 0) { _sweep.Need(_registries); return null; }
         }
         ulong data = _m.Ptr(_registry + (ulong)_oLodestones);
         int count = _m.I32(_registry + (ulong)_oLodestones + 8);
@@ -318,16 +318,14 @@ public sealed class Tracker
         }
         return res;
     }
-    bool IsRegistryClass(ulong cls)
-    {
-        for (ulong c = cls; c != 0; c = _m.Ptr(c + (ulong)_l.SuperStruct)) if (_e.ObjName(c) == "GameplayObjectRegistry") return true;
-        return false;
-    }
 
     public object Sample()
     {
         _m.ClearCache();
         ulong world = _m.Ptr(_gworld);
+        // A slice of the look for objects that are missing, before the position so that is as fresh as can be.
+        if (world != _world) { _world = world; _sweep.Wake(); }
+        _sweep.Step();
         ulong gi = world == 0 ? 0 : _m.Ptr(world + (ulong)_oGameInstance);
         ulong lps = gi == 0 ? 0 : _m.Ptr(gi + (ulong)_oLocalPlayers);
         ulong lp = lps == 0 ? 0 : _m.Ptr(lps);

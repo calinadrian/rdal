@@ -29,9 +29,13 @@ public sealed class Memory : IDisposable
     public readonly ulong ModuleSize;
     public readonly int Pid;
 
-    // Small page cache: UObject walking re-reads the same pages constantly.
+    // Small page cache: UObject walking re-reads the same pages constantly. Its buffers are reused when it starts
+    // over, so reading the game many times a second does not churn memory.
     readonly Dictionary<ulong, byte[]?> _pages = new();
+    readonly Stack<byte[]> _spare = new();
     const int PageSize = 0x1000;
+    // Pages kept before the cache starts over: plenty for the one-off type lookups, kept small while tracking.
+    public int MaxPages = 200_000;
 
     public Memory(Process p)
     {
@@ -44,7 +48,11 @@ public sealed class Memory : IDisposable
     }
 
     public void Dispose() => CloseHandle(_h);
-    public void ClearCache() => _pages.Clear();
+    public void ClearCache()
+    {
+        foreach (var pg in _pages.Values) if (pg != null && _spare.Count < MaxPages) _spare.Push(pg);
+        _pages.Clear();
+    }
 
     public unsafe bool ReadRaw(ulong addr, Span<byte> buf)
     {
@@ -55,9 +63,9 @@ public sealed class Memory : IDisposable
     byte[]? Page(ulong pageAddr)
     {
         if (_pages.TryGetValue(pageAddr, out var pg)) return pg;
-        var b = new byte[PageSize];
-        if (!ReadRaw(pageAddr, b)) b = null;
-        if (_pages.Count > 200_000) _pages.Clear();
+        if (_pages.Count >= MaxPages) ClearCache();
+        var b = _spare.Count > 0 ? _spare.Pop() : new byte[PageSize];
+        if (!ReadRaw(pageAddr, b)) { _spare.Push(b); b = null; }
         _pages[pageAddr] = b;
         return b;
     }

@@ -98,7 +98,7 @@ function createWindow() {
     if (settings.maximized) win.maximize();
     if (!startHidden || process.env.ATLAS_SNAPSHOT) reveal({ focus: false });
   });
-  win.webContents.on('did-finish-load', () => win.webContents.send('game', { running: gameRunning }));
+  win.webContents.on('did-finish-load', () => { samples.reset(); win.webContents.send('game', { running: gameRunning }); });
   // Test hook: ATLAS_SNAPSHOT=out.png [ATLAS_SNAPSHOT_JS=code] renders, captures, and quits.
   if (process.env.ATLAS_SNAPSHOT) {
     win.webContents.once('did-finish-load', async () => {
@@ -201,9 +201,12 @@ async function watchGame() {
 
 // Live position, whether the game's map is open, and in-game key presses from the read-only tracker (runs while the game does).
 let tracker = null;
+// Samples go to the main window one at a time, merged while it is busy (samples.js).
+const samples = require('./samples').createSamples({ window: () => win });
 function startTracker() {
   if (!fs.existsSync(DUMPER) || app.isQuitting || tracker || !gameRunning) return;
-  tracker = spawn(DUMPER, ['--track'], { windowsHide: true });
+  // A small young-generation budget keeps the tracker near 70 MB for hours instead of growing by the CPU's cache size.
+  tracker = spawn(DUMPER, ['--track'], { windowsHide: true, env: { ...process.env, DOTNET_GCgen0size: '0x400000' } });
   let buf = '';
   tracker.stdout.on('data', (d) => {
     buf += d;
@@ -217,14 +220,15 @@ function startTracker() {
       if (msg.key) gameMap.key(msg.key);
       else if (win && !win.isDestroyed()) {
         gameMap.follow(msg.ok ? msg.map ?? null : false, !!msg.focus, !!msg.teleport);
-        win.webContents.send('player', msg);
+        minimap.player(msg);
+        samples.send(msg);
       }
     }
   });
   tracker.stderr.on('data', () => {});
   tracker.on('exit', () => {
     tracker = null;
-    if (win && !win.isDestroyed()) { gameMap.follow(false, false); win.webContents.send('player', { ok: false, offline: true }); }
+    if (win && !win.isDestroyed()) { gameMap.follow(false, false); minimap.player({ ok: false }); samples.send({ ok: false, offline: true }); }
     setTimeout(startTracker, 5000);
   });
 }

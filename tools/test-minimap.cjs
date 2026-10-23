@@ -75,6 +75,13 @@ app.whenReady().then(async () => {
     const alpha = (x, y) => px[(Math.round(y * k) * width + Math.round(x * k)) * 4 + 3];
     assert(alpha(dial.x + 100, dial.y + 100) > 0, 'The map is drawn inside the circle');
     assert.equal(alpha(dial.x + 2, dial.y + 2), 0, 'Outside the circle the window is see-through');
+    // Your position also comes straight from the tracker: the minimap moves with you while the main window is busy.
+    const disc = { x: Math.round(dial.x), y: Math.round(dial.y), width: Math.round(dial.w), height: Math.round(dial.w) };
+    const still = (await north.mm.webContents.capturePage(disc)).toBitmap();
+    minimap.player({ ok: true, x: me.x + 6000, y: me.y, yaw: me.yaw }); await tick(800);
+    assert(!still.equals((await north.mm.webContents.capturePage(disc)).toBitmap()), 'A live position moves the minimap without a new scene');
+    minimap.player({ ok: false }); await tick(800);
+    assert(still.equals((await north.mm.webContents.capturePage(disc)).toBitmap()), 'Without one it goes back to the scene\'s position');
     assert.equal(await north.run(`document.getElementById('zone').textContent`), scene.place, 'The name bar shows the place');
     assert(await north.run(`/\\d:\\d\\d/.test(document.getElementById('clock').textContent) && /[A-Za-z]/.test(document.getElementById('clock').textContent)`), 'The rim shows the day and local time');
     const listed = await north.run(`[...document.querySelectorAll('.quest')].map(q=>q.querySelector('.quest-num').textContent+' '+q.querySelector('.quest-title').textContent)`);
@@ -121,7 +128,7 @@ app.whenReady().then(async () => {
     assert.equal((await lastScene({ ok: false })).ok, false, 'No position, no scene');
     minimap.sync(false);
     assert.equal(minimap.window(), null, 'Closed when the game is not running');
-    console.log('PASS: minimap scene with region name, filters, tracked targets, live creatures and players; window top-right, see-through, unfocusable; day and time, tracked quests listed and foldable, last place kept; north-up, rotated, zoomed and in a dungeon; zoom, drag and reset saved');
+    console.log('PASS: minimap scene with region name, filters, tracked targets, live creatures and players; window top-right, see-through, unfocusable; day and time, tracked quests listed and foldable, last place kept; follows the live position from the tracker; north-up, rotated, zoomed and in a dungeon; zoom, drag and reset saved');
     clearTimeout(timer); app.exit(0);
   } catch (e) { console.error(e); clearTimeout(timer); app.exit(1); }
 });

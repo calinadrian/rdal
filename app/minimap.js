@@ -80,7 +80,13 @@ function createMinimap({ settings, update, icon }) {
     if (win && !win.isDestroyed()) on ? win.hide() : win.showInactive();
   }
 
-  return { sync, suspend, bounds, window: () => win };
+  // Your position straight from the tracker, so the minimap keeps moving with you even while the main window is
+  // slow to work out the rest of the scene (a modest PC, or the window in the background behind the game).
+  function player(sample) {
+    if (win && !win.isDestroyed() && !suspended) win.webContents.send('minimap:player', sample.ok ? { x: sample.x, y: sample.y, yaw: sample.yaw } : null);
+  }
+
+  return { sync, suspend, player, bounds, window: () => win };
 }
 
 module.exports = { createMinimap };
