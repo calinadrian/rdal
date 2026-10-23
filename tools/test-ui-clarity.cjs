@@ -82,8 +82,8 @@ app.whenReady().then(async () => {
     await js(`$('#content').scrollTop=0`);
     await capture('desktop-recipe');
     await js(`selectModule('quests'); questLog=null; render(); showItem('Ratcatcher')`);
-    assert(await js(`$('#detail').textContent.includes('Progress unknown') && !$('#detail [role=progressbar]').hasAttribute('aria-valuenow')`));
-    assert(await js(`$('#content .quest-summary-bar').textContent.includes('completion unknown')`));
+    assert(await js(`$('#detail').textContent.includes('Progress unknown') && !$('#detail [role=progressbar]')`));
+    assert(await js(`$('#content .progress-context').textContent.includes('Progress unknown') && !$('#content .quest-journal-progress')`));
     await js(`onQuestLog([{id:'Quest_FTUE_RC',s:1,o:'Objective2'}]); renderDetail();`);
     assert(await js(`$('#detail .current-objective') && $('#detail .progress-context').textContent.includes('Saved progress · last updated')`));
     console.log('PASS: recipe → ingredient → Back preserves context; saved and unknown progress; current quest objective');

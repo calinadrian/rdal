@@ -80,7 +80,8 @@ run('4 clicks Live creatures off and quits immediately', `
   liveBox.click();
   if (liveBox.checked || MapView.isEnabled('npc')) throw Error('Checkbox click did not turn live creatures off');
   selectModule('quests');
-  document.querySelector('#content .quest-filter[data-mode="active"]').click();
+  onQuestLog([{ id: 'Quest_FTUE_RC', s: 2 }]);
+  document.querySelector('#content .quest-group-heading[data-group="done"]').click();
   MapView.setResourceTypes('ore', ['Gold']);
   MapView.setResourceTypes('gather', []);
   MapView.setResourceTypes('tree', ['Oak tree']);
@@ -89,11 +90,11 @@ run('4 clicks Live creatures off and quits immediately', `
 settings = JSON.parse(fs.readFileSync(path.join(profile, 'settings.json')));
 assert(!JSON.parse(settings.ui.mapCategories).includes('npc'), 'Immediate quit lost Live creatures off');
 assert(JSON.parse(settings.ui.mapCategories).includes('monster'), 'Other category choices were lost');
-assert.equal(settings.ui.questBrowseMode, 'active', 'Immediate quit lost the quest progress filter');
+assert(JSON.parse(settings.ui.questGroups).includes('done'), 'Immediate quit lost the opened quest section');
 assert.deepEqual(JSON.parse(settings.ui.resourceTypes), { ore: ['Gold'], gather: [], tree: ['Oak tree'] }, 'Immediate quit lost resource selections');
 run('5 keeps the visible Live creatures checkbox off after restart', `
-  if (questBrowseMode !== 'active') throw Error('Quest filter was not restored');
-  if (document.querySelector('#content .quest-filter[data-mode="active"]').getAttribute('aria-pressed') !== 'true') throw Error('Visible quest filter disagrees with saved preference');
+  if (!questGroupsOpen.has('done')) throw Error('Opened quest section was not restored');
+  if (document.querySelector('#content .quest-group-heading[data-group="done"]').getAttribute('aria-expanded') !== 'true') throw Error('Visible quest section disagrees with saved preference');
   selectModule('map');
   const liveBox = document.querySelector('#count-npc').closest('label').querySelector('input');
   if (liveBox.checked || MapView.isEnabled('npc')) throw Error('Live creatures came back on');

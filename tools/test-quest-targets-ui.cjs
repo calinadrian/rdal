@@ -17,7 +17,7 @@ app.whenReady().then(async()=>{
   await win.loadFile(path.join(target,'app/ui/index.html'));win.showInactive();await tick();
   for(const [name,key,expected] of [['Ratcatcher','Objective2','Giant Rat'],['Dragon Slayer','Find and hunt a deer','Deer'],['The Wild Hunt','HuntBeast','Nature Spirit'],['Things That Go Boom In The Night','FindSpectralChinchompaSkulls','Spectral Chinchompa']]) {
    await js(`selectModule('quests');window.q=ent(${JSON.stringify(name)});onQuestLog([{id:q.id,s:1,o:${JSON.stringify(key)}}]);showItem(q.name);state.filter=${JSON.stringify(name)};renderList();`);
-   assert(await js(`$('#detail .current-objective .quest-targets-map').textContent.includes('Show targets on map')`),name);
+   assert(await js(`$('#detail .current-objective .quest-targets-map').textContent.includes('Show where they live')`),name);
    assert(await js(`questStepSourceMarkers(q,${JSON.stringify(key)}).some(m=>m.n===${JSON.stringify(expected)})`),name);
    if(name==='Ratcatcher')assert(await js(`questStepSourceMarkers(q,'Objective2').every(m=>m.region==='Bramblemead Valley'&&!m.d)`),'Tutorial rats stay in the starting area');
    await js(`for(const id of db.map.categories.map(c=>c.id))MapView.setEnabled(id,false);questMapStepMode='current';$('#detail .current-objective .quest-targets-map').click()`);await tick();

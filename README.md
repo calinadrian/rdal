@@ -66,8 +66,10 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
 - Both world and dungeon maps use **Filters**, with a count of settings changed from the defaults and **Reset filters**.
   The map explains when filters, zoom, or missing live creature data leave no markers visible. The Map and Floor selectors identify what you are viewing.
 - Quest and recipe panels label saved progress with its last-read time. Unknown progress stays explicitly unknown; active quests put the current objective and its confirmed locations first.
-- **Quests** offers persistent progress filters shared by the sidebar and overview. Search a quest name, place, item or objective;
-  each row shows the rewritten next action; click anywhere on a row to open its guide. A row's one control is **Track**.
+- **Quests** opens the **Quest journal**: one section each for In progress, Ready to start, Not started and Completed, with
+  how many quests you have finished. The first two are open; click a section (here or in the sidebar) to fold or open it, and
+  your choice is remembered. Filtering opens every section. Search a quest name, place, item or objective; each row says what
+  to do next (and "1 of 3 done" when the step has several places); click anywhere on a row to open its guide. A row's one control is **Track**.
 - **Track** (or **Track quest** in a guide) pins a quest to the WoW-style quest tracker, listed under the minimap and on the map.
   Each tracked quest lists its current objective with what to do: places to go, creatures to slay and items to loot
   (with the creatures that drop them and the amount the objective asks for). Every line has a **Map** button. Tracked
@@ -77,19 +79,28 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   from, tracked or not: each recorded spawn gets a red ring (gold for drop sources) and a shaded area on the map
   and minimap, whatever the filters. Untracked quests' targets just have no tracker number.
   Kill and loot counters are not in the game's quest log, so the tracker shows the amount needed, not your progress.
-- Select a quest to open its full-width guide. **What to do next** comes first, with supplies, item/creature sources, and map actions.
-  **Full walkthrough** or **All objective guidance** expands below it. Quests with alternate objectives or collection counters use a reference guide;
+- Select a quest to open its guide, laid out like a quest journal page: the quest's type, region and tier, its title, your
+  progress, **Track quest** and the wishlist. Then one card says what to do now (**Step 2 of 4** on linear quests, **How to start**
+  before you begin) and lists the places for that step as a tick list, each with a **Map** button. Places you have finished
+  (a ghost laid to rest, a Curse Seal broken, a standing stone read) are ticked off from the quest's own flags in your game,
+  leave the tracker and map, and the card counts them ("1 of 3 done"); **Show all on map** frames the rest. Places inside a dungeon
+  open the matching interior and floor, and **Entrance** shows how to get in. Hunting steps list the creatures with
+  **Show where they live**, and **You need** lists the supplies, each opening its recipes and sources or its own **Map**.
+  **Rewards** follow, then folded sections: **All steps**, **Story**, **Every place in this quest**, **Hints from conversations** and
+  **Related quests & people**. Quests with alternate objectives or collection counters use a reference guide;
   they do not claim that preceding entries are complete. Missing or unrecognised progress never falls back to a supposed current task.
-  **Pin** buttons highlight the actual interaction object; dungeon targets open the matching interior and floor, while **Entrance** buttons show how to reach that dungeon from outside.
-  **Show quest area** is explicitly a general location. Steps without fixed coordinates explain how to use crafting, gathering, contacts, or dialogue clues instead.
-  **Dialogue clues & quest contacts** exposes relevant conversations from the installed game. “Highlighting the Problem” includes the password statue inside Thishepen Kara, the outdoor wizard statue, all three charging pedestals, Windstep advice, and the password; its additional route advice links to the community wiki.
+  Steps without fixed coordinates explain how to use crafting, gathering, contacts, or conversation hints instead.
+  **Hints from conversations** exposes relevant conversations from the installed game. “Highlighting the Problem” includes the password statue inside Thishepen Kara, the outdoor wizard statue, all three charging pedestals, Windstep advice, and the password; its additional route advice links to the community wiki.
 - Creatures show the game's own **journal pictures** (World → Fauna / Factions, exported to `data/journal`):
   above their drops, in the detail panel, as their icons in lists, on the live map and in the Nearby list.
   Each journal page names the creature whose kill unlocks it; regional variants (Scorned Wilderness, Dowdun Reach,
   challenge modes) use their base creature's page. 97 of the 100 monster entries have a picture; Kalphite Soldier,
   Garou Exile and Garou Lightning Berserker have no journal page and show the generic creature icon.
 - **Quests** reads your quest log live from the game (and remembers it when the game is closed): quests are grouped
-  into In progress, Ready to start, No progress recorded and Completed. Unknown progress stays unknown.
+  into In progress, Ready to start, Not started and Completed. Unknown progress stays unknown. Besides each quest's step it reads
+  the quest's flags and counters and which quest areas the game's own map shows: when a step has no exact place to interact
+  with, its areas follow the game's map (ones it hides drop out, ones it shows for that quest come in), so the guide, tracker
+  and minimap move on as soon as you do something in the game.
   Linear walkthroughs show the current step; alternate objectives and counters are kept separate from completion claims.
   Quest locations list each step and name steps that have no
   marked place. Each quest shows a **recommended tier**: the power level of the map regions its locations are in

@@ -50,6 +50,7 @@ public sealed class Tracker
             _oQuests = Prop("/Script/Dominion.QuestProgressComponent", "Quests");
         }
         catch { _oQuestComp = -1; }
+        try { _oVisibility = Prop("/Script/Dominion.QuestProgressComponent", "VisibilityTrackers"); } catch { _oVisibility = -1; }
         _discovery = new DiscoveryReader(_e, Prop);
         try { (_oActive, _activeMask) = BoolProp("/Script/CommonUI.CommonActivatableWidget", "bIsActive"); } catch { _oActive = -1; }
 
@@ -153,25 +154,46 @@ public sealed class Tracker
     int _tick;
 
     // Quest log: QuestUIAPI.LocalPlayerQuestProgressComponent -> Quests (TArray<FQuestProgress>, 0x38 each:
-    // Data @0, State @8 (Ungiven/Given/Complete), CurrentObjective FName @0xC).
-    int _oQuestComp = -1, _oQuests = -1;
+    // Data @0, State @8 (Ungiven/Given/Complete), CurrentObjective FName @0xC, QuestInts @0x18, QuestBools @0x28).
+    int _oQuestComp = -1, _oQuests = -1, _oVisibility = -1;
     ulong _questApi;
     DateTime _questScan;
-    List<object>? Quests()
+    ulong QuestComponent()
     {
-        if (_oQuestComp < 0) return null;
+        if (_oQuestComp < 0) return 0;
         ulong comp = _questApi == 0 ? 0 : _m.Ptr(_questApi + (ulong)_oQuestComp);
         if (comp == 0 || _e.ObjName(_e.ClassOf(comp)) != "QuestProgressComponent")
         {
             // The UI API object is recreated with the world: look it up again (a full object scan, so at most every 20 s).
-            if (DateTime.Now < _questScan) return null;
+            if (DateTime.Now < _questScan) return 0;
             _questScan = DateTime.Now.AddSeconds(20);
             _questApi = _e.Objects().Select(x => x.Obj)
                 .FirstOrDefault(o => (_m.I32(o + Engine.OFlags) & 0x10) == 0 && _e.ObjName(_e.ClassOf(o)) == "QuestUIAPI"
                                      && _m.Ptr(o + (ulong)_oQuestComp) != 0);
             comp = _questApi == 0 ? 0 : _m.Ptr(_questApi + (ulong)_oQuestComp);
-            if (comp == 0) return null;
         }
+        return comp;
+    }
+
+    // TArray of { FName, value } pairs, 12 bytes each (FQuestBool, FQuestInt, FLocationVisibilityTracker).
+    Dictionary<string, T>? NamedValues<T>(ulong array, Func<ulong, T> value)
+    {
+        ulong data = _m.Ptr(array);
+        int count = _m.I32(array + 8);
+        if (count < 0 || count > 4096 || (count > 0 && data == 0)) return null;
+        var res = new Dictionary<string, T>();
+        for (int j = 0; j < count; j++)
+        {
+            ulong entry = data + (ulong)(j * 12);
+            var name = _e.FName(entry);
+            if (!string.IsNullOrEmpty(name) && name != "None") res[name] = value(entry + 8);
+        }
+        return res;
+    }
+
+    List<object>? Quests(ulong comp)
+    {
+        if (comp == 0) return null;
         ulong data = _m.Ptr(comp + (ulong)_oQuests);
         int num = Math.Clamp(_m.I32(comp + (ulong)_oQuests + 8), 0, 2000);
         var res = new List<object>();
@@ -180,24 +202,17 @@ public sealed class Tracker
             ulong q = data + (ulong)(i * 0x38);
             ulong qd = _m.Ptr(q);
             if (qd == 0) continue;
-            // FQuestProgress.QuestBools @0x28, TArray<FQuestBool> (FName @0, bool @8, stride12).
-            ulong boolData = _m.Ptr(q + 0x28);
-            int boolCount = _m.I32(q + 0x30);
-            Dictionary<string, bool>? bools = null;
-            if (boolCount >= 0 && boolCount <= 4096 && (boolCount == 0 || boolData != 0))
-            {
-                bools = new Dictionary<string, bool>();
-                for (int j = 0; j < boolCount; j++)
-                {
-                    ulong entry = boolData + (ulong)(j * 12);
-                    var name = _e.FName(entry);
-                    if (!string.IsNullOrEmpty(name) && name != "None") bools[name] = _m.Bytes(entry + 8, 1)[0] != 0;
-                }
-            }
-            res.Add(new { id = _e.ObjName(qd), s = _m.Bytes(q + 8, 1)[0], o = _e.FName(q + 0xC), b = bools });
+            var ints = NamedValues(q + 0x18, a => _m.I32(a));
+            var bools = NamedValues(q + 0x28, a => _m.Bytes(a, 1)[0] != 0);
+            res.Add(new { id = _e.ObjName(qd), s = _m.Bytes(q + 8, 1)[0], o = _e.FName(q + 0xC), b = bools, i = ints is { Count: > 0 } ? ints : null });
         }
         return res;
     }
+
+    // The quest locations the game has shown or hidden on its own map (QFT_UpdateQuestLocation), by location name.
+    // Locations never updated keep their placed default (bShownByDefault).
+    Dictionary<string, bool>? QuestLocations(ulong comp) =>
+        comp == 0 || _oVisibility < 0 ? null : NamedValues(comp + (ulong)_oVisibility, a => _m.Bytes(a, 1)[0] != 0);
 
     // FBoolProperty keeps FieldSize, ByteOffset, ByteMask, FieldMask after the FProperty: (byte offset, mask).
     (int, byte) BoolProp(string classPath, string name)
@@ -261,14 +276,16 @@ public sealed class Tracker
         // Creatures around the player, refreshed about twice a second.
         List<object>? players = _tick % 4 == 0 ? new() : null;
         var npcs = players != null ? Npcs(world, pawn, players) : null;
-        // Quest log, every ~3 s (it only changes when a quest moves on).
-        var quests = _tick % 20 == 0 ? Quests() : null;
+        // Quest log and the game's revealed quest locations, every ~3 s (they only change when a quest moves on).
+        ulong questComp = _tick % 20 == 0 ? QuestComponent() : 0;
+        var quests = Quests(questComp);
+        var questLocations = quests == null ? null : QuestLocations(questComp);
         var discovery = _tick % 20 == 0 ? _discovery?.Read(pc, world) : null;
         _tick++;
         // Whether the game's map is showing and the game window has the keyboard, for the overlay map.
         bool? map = MapOpen();
         bool focus = KeyWatch.GameFocused(_m.Pid);
-        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), map, focus, npcs, players, quests, discovery };
+        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), map, focus, npcs, players, quests, questLocations, discovery };
     }
 
     public void Run(int intervalMs, CancellationToken ct)

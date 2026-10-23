@@ -26,23 +26,31 @@ function flowInteractions(flows, base, text) {
     for (const entry of exports.filter(e => e.Type === 'ConversationEntryPointNode')) {
       const tag = entry.Properties?.EntryTag?.TagName;
       if (!tag) continue;
-      const context = entries.get(tag) || { quests: new Set(), dialogue: [] };
-      const visited = new Set(), pending = [entry];
+      const context = entries.get(tag) || { quests: new Set(), dialogue: [], sets: new Set(), tests: new Set(), counted: new Set() };
+      const visited = new Set(), pending = [[entry, null]];
       while (pending.length) {
-        const node = pending.pop();
+        const [node, lastBool] = pending.pop();
         if (!node || visited.has(node)) continue;
         visited.add(node);
         const p = node.Properties || {};
         for (const ref of changesQuest(node.Type) ? [].concat(p.QuestData || p['Quest Data'] || []) : []) {
           const id = base(ref); if (id) context.quests.add(id);
         }
+        // Quest bools this interaction sets, tests, and counts (a counter goes up right after the bool is set).
+        let last = lastBool;
+        if (node.Type === 'QFT_SetQuestBool_C' && p.NewValue === true && p.BoolName) { last = `${base(p.QuestData)}:${p.BoolName}`; context.sets.add(last); }
+        if (node.Type === 'QFT_ModifyQuestInt_C' && last) context.counted.add(last);
+        for (const ref of p.SubNodes || []) {
+          const test = names.get(referenceName(ref));
+          if (test?.Type === 'QFR_TestQuestBool_C') context.tests.add(`${base(test.Properties?.['Quest Data'])}:${test.Properties?.['Quest Bool Name']}`);
+        }
         if (node.Type === 'QFT_PromptMessage_C') {
           const message = sentence(text(p.Message));
           if (message && /\b(need|must|bring|find|head|return|collect|craft|make|reach|inside|vault|north|east|west|south|password|statue|pedestal|require|speak|talk|gather|mine|plant|harvest)\b/i.test(message))
             context.dialogue.push(message);
         }
-        for (const child of p.OutputConnections || []) pending.push(byGuid.get(child));
-        for (const ref of p.SubNodes || []) pending.push(names.get(referenceName(ref)));
+        for (const child of p.OutputConnections || []) pending.push([byGuid.get(child), last]);
+        for (const ref of p.SubNodes || []) pending.push([names.get(referenceName(ref)), last]);
       }
       context.dialogue = [...new Set(context.dialogue)];
       if (!context.quests.size && ownQuests.size === 1) context.quests.add([...ownQuests][0]);
@@ -50,6 +58,18 @@ function flowInteractions(flows, base, text) {
     }
   }
   return entries;
+}
+
+// The quest bool that says an interaction is finished ("Quest_X:Bool"): one it sets and also tests, so the game
+// skips it next time, preferring the one a counter follows (GhostOneComplete, VillageStoneDone, SilverthornSealBroken).
+// Otherwise the one bool only this interaction sets (Sprite1Found, TookScroll1, HasMoonStone1).
+function doneFlag(context, setters) {
+  // Flags that only record the quest's introduction say nothing about finishing this interaction.
+  const sets = [...(context?.sets || [])].filter(flag => !/:(IntroDialogueDone|IntroDone|IsQuestAccepted)$/.test(flag));
+  const guarded = sets.filter(flag => context.tests.has(flag));
+  const counted = guarded.filter(flag => context.counted.has(flag));
+  const own = (guarded.length ? guarded : sets).filter(flag => setters.get(flag) === 1);
+  return counted.length === 1 ? counted[0] : guarded.length === 1 ? guarded[0] : own.length === 1 ? own[0] : null;
 }
 
 // Reviewed against the installed quest flow and actor entry tags. Route advice is attributed.
@@ -116,6 +136,8 @@ function interactionLabel(a) {
 
 function buildQuestGuidance({ entities, flows, interactions, markers, base, text, dungeonAt, regionAt, onMap, npcVisibility = {} }) {
   const contexts = flowInteractions(flows, base, text);
+  const setters = new Map();
+  for (const context of contexts.values()) for (const flag of context.sets) setters.set(flag, (setters.get(flag) || 0) + 1);
   const quests = new Map();
   for (const q of Object.values(entities).filter(e => e.kind === 'quest')) {
     for (const version of [q, ...(q.versions || [])]) {
@@ -146,6 +168,7 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
         sourceId: actor.id, x: actor.x, y: actor.y, z: actor.z,
         region: dungeon ? dungeon.name : regionAt(actor.x, actor.y), ...(dungeon && { d: dungeon.id }),
         ...(npcVisibility[actor.id] && { npcVisibility: npcVisibility[actor.id] }),
+        ...(doneFlag(context, setters) && { doneWhen: doneFlag(context, setters) }),
         i: 'mapicons/T_NavIcons_QuestMarker_Secondary.png' };
       const list = targetMarkers.get(id) || []; list.push(marker); targetMarkers.set(id, list);
       markers.push(marker);
@@ -211,4 +234,4 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
   }
   return { quests: quests.size, steps, clarified, mapped, exact, interactionPins: [...targetMarkers.values()].reduce((sum, a) => sum + a.length, 0) };
 }
-module.exports = { buildQuestGuidance, flowInteractions, resourceText };
+module.exports = { buildQuestGuidance, flowInteractions, doneFlag, resourceText };

@@ -29,34 +29,52 @@ app.whenReady().then(async () => {
     assert(await js(`isTracked(htp.name)===${!wasTracked} && !state.detail && document.activeElement===$('#content .quest-task.q-active .track-toggle input')`), 'Ticking Track only tracks the quest');
     await js(`$('#content .quest-task.q-active .track-toggle input').click()`);
     assert.equal(await js(`isTracked(htp.name)`), wasTracked);
-    await js(`$('#content [data-mode=active]').click()`);
-    assert.equal(preferences.questBrowseMode, 'active');
-    assert(await js(`$$('#content .quest-task').length===2 && $$('#list .quest-list-text').length===2`));
+    // The journal folds into sections: In progress and Ready to start open, Not started and Completed folded until opened.
+    assert(await js(`$$('#content .quest-task.q-active').length===2 && $$('#content .quest-task.q-available').length===1 && !$('#content .quest-task.q-done')
+      && $('#content .quest-group-heading[data-group=done]').getAttribute('aria-expanded')==='false'`), 'Active and ready quests show; completed ones are folded');
+    assert(await js(`$$('#list .quest-list-text').length===3 && $('#list .filter-count').textContent.startsWith('45 quests')`), 'The sidebar folds the same groups and still counts every quest');
     await capture('desktop');
     await js(`$('#section-filter').value='Thishepen';$('#section-filter').dispatchEvent(new Event('input'))`);
     assert(await js(`$$('#content .quest-task').length===1 && $$('#list .quest-list-text').length===1`), 'Search objective text as well as quest names');
     await js(`$('#section-filter').value='no-such-quest';$('#section-filter').dispatchEvent(new Event('input'))`);
-    assert(await js(`$('#content .quest-empty').textContent.includes('Clear filters') && !$$('#content .quest-task').length`));
-    await js(`$('#content .quest-empty button').click();$('#content [data-mode=active]').click();`);
-    // Search, scroll, open the guide from anywhere on the row, pin an interior actor, then return to the exact list context.
+    assert(await js(`$('#content .quest-empty').textContent.includes('Clear filter') && !$$('#content .quest-task').length`));
+    await js(`$('#content .quest-empty button').click()`);
+    // Scroll, open the guide from anywhere on the row, pin an interior actor, then return to the exact list context.
     await js(`$('#content').scrollTop=100;window.beforeTop=$('#content').scrollTop;$('#content .quest-task.q-active .quest-now').click()`); await tick();
     assert(await js(`state.detail===htp.name`), 'Clicking a quest row opens its guide');
+    assert(await js(`$('#detail .quest-now-label').textContent==='Step 1 of 4' && $$('#detail .current-objective .quest-target').length===1`), 'A linear quest says which step you are on and lists its place');
     await js(`$('#detail .current-objective .quest-pin-button').click()`); await tick();
     assert(await js(`state.module==='map' && MapView.layer()?.name==='Thishepen Kara' && selectedQuestMarker.target==='Password statue'`));
     await js(`back()`);
-    assert(await js(`state.module==='quests' && state.detail===htp.name && questBrowseMode==='active' && $('#content').scrollTop===beforeTop`));
+    assert(await js(`state.module==='quests' && state.detail===htp.name`));
     await js(`closeDetail()`);
+    assert(await js(`beforeTop>0 && $('#content').scrollTop===beforeTop`), 'Closing the guide returns the journal to where you were');
     await js(`showItem(melody.name)`);
     assert(await js(`$('#detail .current-objective').textContent.includes('Inspiring Ring of Runecrafting') && document.activeElement===$('#detail h1')`));
     assert(await js(`!$('#detail .quest-walkthrough').open && $('#detail .progress-context').textContent.includes('Saved progress')`));
     await js(`window.itemButton=$$('#detail .current-objective .item-link').find(b=>b.textContent==='Inspiring Ring of Runecrafting');itemButton.click();back()`);
     assert(await js(`state.detail===melody.name && $('#detail .current-objective').textContent.includes('Inspiring Ring')`));
-    await js(`closeDetail();setQuestBrowseMode('done')`);
-    assert(await js(`$$('#content .quest-task').length===1 && !$('#content .track-toggle') && $('#content').textContent.includes('Ratcatcher')`), 'Completed quests have nothing to track');
+    await js(`closeDetail();$('#content .quest-group-heading[data-group=done]').click()`);
+    assert.deepEqual(JSON.parse(preferences.questGroups).sort(), ['active', 'available', 'done'], 'Opening a section is remembered');
+    assert(await js(`$$('#content .quest-task.q-done').length===1 && !$('#content .q-done .track-toggle') && $('#content .q-done').textContent.includes('Ratcatcher')
+      && document.activeElement===$('#content .quest-group-heading[data-group=done]')`), 'Completed quests have nothing to track');
     await js(`onQuestLog([{id:htp.id,s:1,o:'unrecognised-key'}]);showItem(htp.name);`);
-    assert(await js(`$('#detail .current-objective').textContent.includes('Current objective not recorded') && !$('#detail [role=progressbar]').hasAttribute('aria-valuenow')`));
-    await js(`onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'InteractedWithStone1'}]);showItem('Withering Heights');`);
-    assert(await js(`!$('#detail [role=progressbar]').hasAttribute('aria-valuenow') && !$('#detail .objectives .done') && $('#detail .current-objective').textContent.includes('1 of 3')`), 'A counter is not proof of earlier objectives being complete');
+    assert(await js(`$('#detail .current-objective').textContent.includes('Current objective not recorded') && !$('#detail [role=progressbar]')`));
+    // Places are ticked off from the quest's own bools, not guessed from the objective counter.
+    await js(`onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'InteractedWithStone1',b:{VillageStoneDone:true}}]);showItem('Withering Heights');`);
+    assert(await js(`!$('#detail .objectives > li.done') && $('#detail .current-objective .quest-target-count').textContent==='1 of 3 done'
+      && $$('#detail .current-objective .quest-target.done').length===1 && $$('#detail .current-objective .quest-pin-button').length===2`), 'A finished stone is ticked off and leaves the map buttons');
+    // A broken seal leaves the list, the tracker and the map; the rest keep their Map buttons.
+    await js(`trackedQuests=['Withering Heights'];onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'BreakTheThreeSeals',b:{SilverthornSealBroken:true}}], {VillageArea:true,FortressArea:false,FallArea:true});showItem('Withering Heights')`);
+    assert(await js(`$('#detail .quest-target.done .quest-target-where').textContent==='Done · Silverthorn Keep' && $('#detail .current-objective .quest-target-count').textContent==='1 of 3 done'
+      && questTrackerObjective(E['Withering Heights']).lines.flatMap(l=>l.markers).length===2 && !questTrackerObjective(E['Withering Heights']).lines.flatMap(l=>l.markers).some(m=>m.entry.endsWith('Silverthorn'))`), 'A finished seal is ticked off everywhere');
+    assert(await js(`$('#content .quest-task.q-active .quest-row-progress')?.textContent.includes('1 of 3 done') || $$('#content .quest-row-progress').some(p=>p.textContent==='1 of 3 done')`), 'The journal row shows how many places are done');
+    // With no exact interaction point, the areas follow the game's own map: hidden ones go, ones it shows for this quest come in.
+    await js(`onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'FindACleansingPool'}], {CleansingPoolTarget:false,StandingStonesArea:true,NPCDeath:true})`);
+    assert.deepEqual(await js(`questStepMarkers(E['Withering Heights'],'FindACleansingPool').map(m=>m.qlocation)`), ['StandingStonesArea']);
+    await js(`onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'FindACleansingPool'}])`);
+    assert.deepEqual(await js(`questStepMarkers(E['Withering Heights'],'FindACleansingPool').map(m=>m.qlocation)`), ['CleansingPoolTarget'], 'Without the game\'s map the guide keeps its own areas');
+    await js(`trackedQuests=[]`);
     await js(`window.boom=E['Things That Go Boom In The Night'];onQuestLog([{id:boom.id,s:1,o:'FindSpectralChinchompaSkulls'}]);showItem(boom.name);`);
     assert(await js(`$('#detail .current-objective .source-map-links') && $('#detail .current-objective').textContent.includes('not live sightings')`));
     await js(`$('#detail .current-objective .source-map-button').click()`); await tick();
@@ -64,22 +82,22 @@ app.whenReady().then(async () => {
     await js(`onQuestLog([{id:boom.id,s:1,o:'FindSpectralChinchompaSkulls'},{id:'Quest_FTUE_RC',s:2}])`);
     assert(await js(`MapView.navigation().highlight.markers.every(i=>db.map.markers[i].n==='Spectral Chinchompa')`), 'A progress update must preserve the chosen spawn sites');
     await js(`back()`);
-    await js(`questLog=null;closeDetail();setQuestBrowseMode('all');showItem(htp.name)`);
-    assert(await js(`$('#detail .current-objective').textContent.includes('guide preview') && $('#detail .current-objective').textContent.includes('unknown')`));
+    await js(`questLog=null;closeDetail();showItem(htp.name)`);
+    assert(await js(`$('#detail .current-objective').textContent.includes('How to start') && $('#detail .progress-context').textContent.includes('unknown')`));
     win.setSize(900, 780); await tick(); await capture('compact-guide');
-    assert(await js(`$('#detail').scrollWidth <= $('#detail').clientWidth+1 && $('#detail .current-objective .quest-pin-button').getBoundingClientRect().width>50`));
-    await js(`closeDetail();onQuestLog([{id:htp.id,s:1,o:htp.objectives[0].key},{id:melody.id,s:1,o:'Objective1'}]);setQuestBrowseMode('active')`);
+    assert(await js(`$('#detail').scrollWidth <= $('#detail').clientWidth+1 && $('#detail .current-objective .quest-pin-button').getBoundingClientRect().width>40`));
+    await js(`closeDetail();onQuestLog([{id:htp.id,s:1,o:htp.objectives[0].key},{id:melody.id,s:1,o:'Objective1'}])`);
     await capture('compact');
     assert(await js(`$('#content').scrollWidth <= $('#content').clientWidth+1 && $$('#content .track-toggle').every(b=>b.scrollWidth<=b.clientWidth+1)`));
-    assert(await js(`(()=>{const b=$('#list .quest-overview-link'),label=b.querySelector('.quest-overview-label'),r=label.getBoundingClientRect(),pane=$('#list').getBoundingClientRect();return r.left>=pane.left && r.right<=pane.right && label.scrollWidth<=label.clientWidth+1})()`), 'Overview label must fit the sidebar');
+    assert(await js(`(()=>{const b=$('#list .quest-overview-link'),label=b.querySelector('.quest-overview-label'),r=label.getBoundingClientRect(),pane=$('#list').getBoundingClientRect();return r.left>=pane.left && r.right<=pane.right && label.scrollWidth<=label.clientWidth+1})()`), 'Journal label must fit the sidebar');
     win.focus(); win.webContents.focus();
-    await js(`$('#content [data-mode=all]').focus()`);
+    await js(`$('#content .quest-group-heading[data-group=active]').focus()`);
     win.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'}); win.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});
     await tick();
-    assert(await js(`document.activeElement===$('#content [data-mode=active]') && getComputedStyle(document.activeElement).outlineStyle!=='none'`), 'Tab navigation must show a visible focus ring');
+    assert(await js(`document.activeElement.matches('#content .q-active .quest-title-link') && getComputedStyle(document.activeElement).outlineStyle!=='none'`), 'Tab navigation must show a visible focus ring');
     await win.reload(); await tick();
-    assert(await js(`questBrowseMode==='active' && $('#content [data-mode=active]').getAttribute('aria-pressed')==='true'`), 'Progress filter must hydrate from preferences');
-    console.log('PASS: shared search/status filters, one Track tickbox per row, row opens guide → exact objective pin → Back, guide → item → Back, saved/unknown/unrecognised progress, counter honesty, desktop/compact and preference hydration');
+    assert(await js(`questGroupsOpen.has('done') && $('#content .quest-group-heading[data-group=active]').getAttribute('aria-expanded')==='true' && $('#content .quest-group-heading[data-group=unknown]').getAttribute('aria-expanded')==='false'`), 'Open sections must hydrate from preferences');
+    console.log('PASS: folding journal sections remembered, sidebar groups and counts, search, row opens guide → step label → exact objective pin → Back, guide → item → Back, saved/unknown/unrecognised progress, places ticked off from quest bools, desktop/compact and preference hydration');
     clearTimeout(timer); app.exit(0);
   } catch (error) { console.error(error); clearTimeout(timer); app.exit(1); }
 });

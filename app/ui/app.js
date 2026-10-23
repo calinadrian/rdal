@@ -23,7 +23,8 @@ function h(tag, attrs = {}, ...kids) {
 let db = null;
 let E = {}; // entities by name
 const state = { module: 'zones', listSel: null, view: null, detail: null, filter: '' };
-let questBrowseMode = ['all', 'active', 'available', 'unknown', 'done'].includes(Preferences.get('questBrowseMode')) ? Preferences.get('questBrowseMode') : 'all';
+// Quest log sections that are open: In progress and Ready to start until you fold or open others.
+let questGroupsOpen = new Set(Preferences.json('questGroups', ['active', 'available']));
 let questHubScroll = 0;
 const armourChoices = Preferences.json('armourChoices', {});
 const isJournalView = () => ['journal', 'armourset'].includes(state.view?.type);
@@ -115,7 +116,7 @@ function icon(name, size = '') {
 
 function snapshot() {
   return { module: state.module, listSel: state.listSel, view: state.view, detail: state.detail,
-    filter: state.filter, search: $('#search').value, questBrowseMode,
+    filter: state.filter, search: $('#search').value,
     scroll: Object.fromEntries(['list', 'content', 'detail'].map(id => [id, $('#' + id).scrollTop])),
     mapContext: mapReady && state.module === 'map' ? MapView.navigation() : null };
 }
@@ -166,7 +167,6 @@ function back() {
 function restoreNavigation(s) {
   clearTimeout(searchTimer);
   Object.assign(state, { module: s.module, listSel: s.listSel, view: s.view, detail: s.detail, filter: s.filter || '' });
-  if (s.questBrowseMode) { questBrowseMode = s.questBrowseMode; Preferences.set('questBrowseMode', questBrowseMode); }
   $('#search').value = s.search ?? (s.view?.type === 'search' ? s.view.arg : '');
   selectedDiscoveryMarker = null;
   selectedQuestMarker = null;
@@ -210,7 +210,7 @@ function navigationBar() {
   const view = state.view;
   const label = state.module === 'map' ? (mapReady ? MapView.layer()?.name || 'World map' : 'World map')
     : view?.type === 'search' ? `Search: ${view.arg}` : view?.type === 'armourset' ? armourSet(view.arg)?.name
-    : view?.arg || ({ questlog: 'Quest log', questchain: 'Quest order' }[view?.type]);
+    : view?.arg || ({ questlog: 'Quest journal', questchain: 'Quest order' }[view?.type]);
   const detailLabel = state.module === 'map' && selectedQuestMarker?.ref === state.detail && selectedQuestMarker.target ? selectedQuestMarker.target : state.detail;
   const crumbs = h('nav', { class: 'breadcrumbs', 'aria-label': 'Breadcrumb' },
     h('button', { type: 'button', onclick: () => selectModule(state.module) }, module?.label || 'AtlasLoot'));
@@ -810,14 +810,16 @@ function refreshQuestMapHighlight() {
   highlightMapMarkers(name, markersFor(name).filter(m => questMapMarkerVisible(m, true)));
 }
 
-function showOnMap(name) {
+// every: all of a quest's places, not just its current hunting grounds or step.
+function showOnMap(name, { every = false } = {}) {
   const quest = ent(name);
   const objective = quest.kind === 'quest' && questNextObjective(quest);
-  const spawns = objective ? questStepSourceMarkers(quest,objective.key) : [];
+  const spawns = objective && !every ? questStepSourceMarkers(quest,objective.key) : [];
   if(spawns.length) { showMapLocations(name,spawns,name);return; }
   if (state.module !== 'map') history.push(snapshot());
   selectedQuestMarker = null;
   selectedDiscoveryMarker = null;
+  if (every && questMapStepMode !== 'all') { questMapStepMode = 'all'; saveQuestMapFilter(); }
   if (ent(name).kind === 'quest') includeQuestOnMap(name);
   let ms = markersFor(name).filter(m => ent(name).kind !== 'quest' || questMapMarkerVisible(m, true));
   if(ent(name).kind==='quest' && !ms.length && markersFor(name).length) {
@@ -900,15 +902,28 @@ const isContainer = (e) => e.kind !== 'monster' && e.kind !== 'quest' && e.drops
 // The game's log lists every quest you have come across: state 0 = discovered but not taken,
 // 1 = in progress, 2 = complete. Quests missing from it have not been found yet.
 const QUEST_STATES = [
-  { id: 'active', label: 'In progress', icon: '▶', hint: 'You are doing these right now.', one: 'You are doing this quest right now.' },
-  { id: 'available', label: 'Ready to start', icon: '!', hint: 'You have found these. Talk to the quest giver to begin.', one: 'You have found this quest. Talk to the quest giver to begin.' },
-  { id: 'unknown', get label() { return questLog ? 'No progress recorded' : 'Progress unknown'; }, icon: '?',
-    get hint() { return questLog ? 'These quests have no entry in your saved quest log. Their progress is unknown.' : 'Load your character to read quest progress.'; },
-    get one() { return this.hint; } },
-  { id: 'done', label: 'Completed', icon: '✓', hint: 'Finished. Nothing left to do.', one: 'Finished. Nothing left to do.' },
+  { id: 'active', label: 'In progress', icon: '▶', hint: 'You are on these quests now.' },
+  { id: 'available', label: 'Ready to start', icon: '!', hint: 'You have found these. Talk to the quest giver to begin.' },
+  { id: 'unknown', get label() { return questLog ? 'Not started' : 'Progress unknown'; }, icon: '?',
+    get hint() { return questLog ? 'You have not come across these yet.' : 'Load your character in the game to see your progress.'; } },
+  { id: 'done', label: 'Completed', icon: '✓', hint: 'Finished.' },
 ];
-let questLog = null; // { at, quests: { id: { s, o } } }
+// { at, quests: { id: { s, o, b: bools, i: counters } }, locations: { name: shown on the game's map } }
+let questLog = null;
 try { questLog = JSON.parse(localStorage.getItem('questLog')); } catch {}
+
+// Whether the game has finished this target: the quest bool its interaction sets ("Quest_X:Bool", from the quest scripts).
+function questTargetDone(marker) {
+  if (!marker.doneWhen) return false;
+  const [id, flag] = marker.doneWhen.split(':');
+  return questLog?.quests[id]?.b?.[flag] === true;
+}
+// Whether the game's own map shows this quest area now (null when unknown): what the quest scripts last set, else its default.
+function questAreaShown(marker) {
+  const live = questLog?.locations;
+  if (!live || !marker.qlocation) return null;
+  return Object.hasOwn(live, marker.qlocation) ? live[marker.qlocation] : !!marker.shown;
+}
 
 function questVersion(q) {
   if (!q.versions) return q;
@@ -1024,13 +1039,30 @@ function questMapLocations(q) {
 }
 
 function questStepGuidance(q, key) { return q.guide?.steps.find(step => step.key === key); }
-function questStepMarkers(q, key) {
+// Where an objective sends you, each with whether it is done: the exact things to interact with (a Curse Seal, a ghost),
+// else the quest areas. For the objective you are on, finished targets are ticked off from the quest log, and the
+// areas follow the game's own map: ones it has hidden drop out, ones it shows for this quest come in.
+function questStepTargets(q, key) {
   const step = questStepGuidance(q, key);
   const ids = new Set(step?.targets || []);
-  const markers = db.map.markers.filter(m => m.questId === q.id && questMarkerVisible(m) && (ids.has(m.qlocation) || m.qsteps?.includes(key)));
-  const exact = markers.filter(m => m.precision === 'interaction');
-  return exact.length ? exact : markers;
+  const linked = db.map.markers.filter(m => m.questId === q.id && questMarkerVisible(m) && (ids.has(m.qlocation) || m.qsteps?.includes(key)));
+  const current = questStatus(q) === 'active' && questProgress(q).current?.key === key;
+  const exact = linked.filter(m => m.precision === 'interaction');
+  if (exact.length) {
+    const done = exact.map(m => current && questTargetDone(m));
+    // With every target done the objective still waits on something else (often a hand-in), so none is ticked off.
+    const all = done.every(Boolean);
+    return exact.map((marker, i) => ({ marker, done: done[i] && !all }));
+  }
+  let areas = linked;
+  if (current && questLog?.locations) {
+    areas = linked.filter(m => questAreaShown(m) !== false);
+    for (const m of db.map.markers) if (m.c === 'quest' && m.questId === q.id && !m.qnpc && !areas.includes(m) && questAreaShown(m) && questMarkerVisible(m)) areas.push(m);
+    if (!areas.length) areas = linked;
+  }
+  return areas.map(marker => ({ marker, done: false }));
 }
+const questStepMarkers = (q, key) => questStepTargets(q, key).filter(t => !t.done).map(t => t.marker);
 function questStepSourceMarkers(q, key) {
   const step=questStepGuidance(q,key);
   const names = new Set(step?.mapSources || []);
@@ -1048,42 +1080,56 @@ function focusQuestTarget(q, marker) {
   showItem(q.name, { push: false });
   $('#detail').scrollTop = 0;
 }
+// An objective's places as a checklist (each with a Map button, done ones ticked), the creatures to hunt and the supplies.
 function questStepActions(q, objective) {
-  const markers = questStepMarkers(q, objective.key);
+  const targets = questStepTargets(q, objective.key);
+  const left = targets.filter(t => !t.done).map(t => t.marker);
   const sources = questStepSourceMarkers(q, objective.key);
   const resources = questStepGuidance(q, objective.key)?.resources || [];
-  const unplaced = sources.length ? (questStatus(q) === 'active' && questProgress(q).current
-    ? 'Every recorded spawn is marked on the map and minimap while this quest is active. ' : 'Use the spawn locations below to find the creatures for this objective. ')
-    + 'These are recorded spawn sites, not live sightings.'
-    : resources.length ? 'Use the item and creature location buttons below for this objective.'
-    : /\b(plant|water|harvest)\b/i.test(objective.text) ? 'Complete this step at a farming plot you have built.'
-      : /\b(build|place|construct)\b/i.test(objective.text) ? 'Use your chosen building site for this step; it has no fixed quest location.'
-        : /\b(craft|cook)\b/i.test(objective.text) ? 'Use the appropriate crafting or cooking station for this step.'
-          : 'No fixed objective location is confirmed. Quest contacts and dialogue clues may help you find the next action.';
-  const entrances = [...new Set(markers.map(m => m.d).filter(Boolean))].flatMap(id => {
-    const dungeon = db.map.dungeons.find(d => d.id === id);
-    const entrance = db.map.markers.find(m => m.enter === id);
-    return entrance ? [h('button', { type: 'button', class: 'quest-entrance-button', onclick: () => focusQuestTarget(q, entrance) }, `Entrance · ${dungeon.name}`)] : [];
-  });
+  // Only the objective you are on has places ticked off.
+  const counting = targets.length > 1 && targets.some(t => t.marker.precision === 'interaction')
+    && questStatus(q) === 'active' && questProgress(q).current?.key === objective.key;
+  const unplaced = sources.length || resources.length ? null
+    : /\b(plant|water|harvest)\b/i.test(objective.text) ? 'Do this at a farming plot you have built.'
+      : /\b(build|place|construct)\b/i.test(objective.text) ? 'Build wherever you like; this step has no fixed place.'
+        : /\b(craft|cook)\b/i.test(objective.text) ? 'Use the right crafting or cooking station; this step has no fixed place.'
+          : 'This step has no fixed place on the map. The hints from conversations below may help.';
+  const entrance = id => db.map.markers.find(m => m.enter === id);
+  const row = ({ marker: m, done }) => {
+    const dungeon = m.d && db.map.dungeons.find(d => d.id === m.d);
+    const name = m.precision === 'interaction' ? m.target : 'Search this area';
+    const where = dungeon ? `Inside ${dungeon.name}` : m.region || 'World map';
+    return h('li', { class: 'quest-target' + (done ? ' done' : '') },
+      h('span', { class: 'quest-target-tick', 'aria-hidden': 'true' }, done ? '✓' : ''),
+      h('span', { class: 'quest-target-text' }, h('span', { class: 'quest-target-name' }, name),
+        h('span', { class: 'quest-target-where' }, done ? `Done · ${where}` : where)),
+      done ? null : h('span', { class: 'quest-target-actions' },
+        h('button', { type: 'button', class: 'quest-pin-button', 'data-source-id': m.sourceId || m.qlocation,
+          title: dungeon ? `Open ${dungeon.name} on the right floor` : `Show ${name} on the map`, onclick: () => focusQuestTarget(q, m) }, 'Map'),
+        dungeon && entrance(m.d) ? h('button', { type: 'button', class: 'quest-entrance-button', title: `How to get into ${dungeon.name}`,
+          onclick: () => focusQuestTarget(q, entrance(m.d)) }, 'Entrance') : null));
+  };
+  const hunted = [...new Set(sources.map(m => m.n))];
   return h('div', { class: 'quest-step-actions' },
-    sources.length ? h('div',{},h('button',{type:'button',class:'quest-targets-map primary',onclick:()=>showMapLocations(q.name,sources,q.name)},`Show targets on map (${sources.length})`),
-      h('p',{class:'muted small'},`Targets: ${[...new Set(sources.map(m=>m.n))].join(', ')}. Recorded spawn locations; enemies may move or respawn.`)) : null,
-    markers.length ? h('div', { class: 'quest-step-targets' }, markers.map(marker => h('div', { class: 'quest-step-target' },
-      h('button', { type: 'button', class: 'quest-pin-button' + (markers.length === 1 ? ' primary' : ''), 'data-source-id': marker.sourceId || marker.qlocation,
-        onclick: () => focusQuestTarget(q, marker) }, marker.precision === 'interaction' ? `Pin ${marker.target}` : 'Show quest area'),
-      h('span', { class: 'muted small' }, marker.d ? `Inside ${db.map.dungeons.find(d => d.id === marker.d)?.name || marker.region} · opens the correct floor`
-        : marker.precision === 'interaction' ? marker.region || 'World map' : 'General area · exact interaction point not confirmed'))))
-      : h('p', { class: 'muted small quest-location-unknown' }, unplaced),
-    entrances.length ? h('div', { class: 'quest-step-entrances' }, entrances) : null,
-    sources.length ? locationButtons(q.name, sources, q.name) : null,
-    resources.length ? h('div', { class: 'quest-step-resources' }, h('span', { class: 'muted small' }, 'Supplies & creatures · open for recipes and sources'),
-      resources.map(name => h('div', { class: 'quest-step-resource' },
-        h('button', { type: 'button', class: 'item-link', onclick: () => open(name) }, name), mapButton(name)))) : null);
+    targets.length ? h('ul', { class: 'quest-targets' }, targets.map(row)) : null,
+    left.length > 1 || counting ? h('div', { class: 'quest-targets-summary' },
+      counting ? h('span', { class: 'quest-target-count' }, `${targets.length - left.length} of ${targets.length} done`) : h('span'),
+      left.length > 1 ? h('button', { type: 'button', class: 'quest-show-left', onclick: () => showMapLocations(q.name, left, q.name) }, `Show all ${left.length} on map`) : null) : null,
+    sources.length ? h('div', { class: 'quest-hunt' },
+      h('p', {}, h('strong', {}, 'Hunt: '), hunted.join(', ')),
+      h('button', { type: 'button', class: 'quest-targets-map primary', onclick: () => showMapLocations(q.name, sources, q.name) }, `Show where they live (${sources.length})`),
+      h('p', { class: 'muted small' }, 'Spots where they spawn, not live sightings.'), locationButtons(q.name, sources, q.name)) : null,
+    resources.length ? h('div', { class: 'quest-step-resources' }, h('span', { class: 'quest-need-label' }, 'You need'),
+      h('div', { class: 'quest-need-list' }, resources.map(name => h('div', { class: 'quest-step-resource' }, icon(name, 'sm'),
+        h('button', { type: 'button', class: 'item-link', title: `Open ${name}: recipes and where to find it`, onclick: () => open(name) }, name),
+        markersFor(name).length ? h('button', { type: 'button', class: 'quest-resource-map', title: `Show the ${markersFor(name).length} places to find ${name}`,
+          onclick: () => showOnMap(name) }, 'Map') : null)))) : null,
+    !targets.length && unplaced ? h('p', { class: 'muted small quest-location-unknown' }, unplaced) : null);
 }
 function questDialogueClues(q) {
   if (!q.guide?.clues.length) return null;
-  return h('details', { class: 'quest-dialogue-clues' }, h('summary', {}, 'Dialogue clues & quest contacts'),
-    h('p', { class: 'muted small' }, 'From the game’s quest conversations. These include different stages and possible dialogue outcomes.'),
+  return h('details', { class: 'quest-dialogue-clues' }, h('summary', {}, 'Hints from conversations'),
+    h('p', { class: 'muted small' }, 'What the quest’s characters say, from the game’s quest conversations. They cover every stage and answer, so some may not apply to you yet.'),
     q.guide.clues.map(clue => h('details', {}, h('summary', {}, clue.target),
       clue.lines.map(line => h('p', { class: 'quest-dialogue-line' }, line)),
       db.map.markers.filter(m => m.questId === q.id && m.sourceId === clue.sourceId && questMarkerVisible(m)).map(marker =>
@@ -1098,11 +1144,12 @@ function questStatus(q) {
 }
 const questLogAge = () => (questLog ? (gameRunning ? 'live' : 'saved') : '');
 
-function onQuestLog(list) {
-  const quests = Object.fromEntries(list.map((q) => [q.id, { s: q.s, o: q.o, ...(q.b && { b: q.b }) }]));
-  const changed = JSON.stringify(quests) !== JSON.stringify(questLog?.quests);
+// The tracker's quest log: each quest's state, objective, bools and counters, plus which quest areas the game's map shows.
+function onQuestLog(list, locations = null) {
+  const quests = Object.fromEntries(list.map((q) => [q.id, { s: q.s, o: q.o, ...(q.b && { b: q.b }), ...(q.i && { i: q.i }) }]));
+  const changed = JSON.stringify(quests) !== JSON.stringify(questLog?.quests) || JSON.stringify(locations) !== JSON.stringify(questLog?.locations ?? null);
   const before = questLog?.quests;
-  questLog = { at: Date.now(), quests };
+  questLog = { at: Date.now(), quests, ...(locations && { locations }) };
   try { localStorage.setItem('questLog', JSON.stringify(questLog)); } catch {}
   if (!changed) return;
   // Like WoW: a quest you just accepted joins the tracker, and a finished one leaves it.
@@ -1136,17 +1183,24 @@ function questMatches(q) {
   const query = state.filter.trim().toLowerCase();
   return !query || [q.name, q.region, q.type, ...(q.guide?.steps || []).flatMap(s => [s.instruction, ...(s.notes || [])])].join(' ').toLowerCase().includes(query);
 }
-function filteredQuests() { return browseQuests().filter(q => questMatches(q) && (questBrowseMode === 'all' || questStatus(q) === questBrowseMode)); }
-function setQuestBrowseMode(mode) {
-  questBrowseMode = mode;
-  Preferences.set('questBrowseMode', mode);
-  renderList(); renderContent(); saveNavigation();
-  $('#content').scrollTop = 0;
-  $(`#content .quest-filter[data-mode="${mode}"]`)?.focus({ preventScroll: true });
+const filteredQuests = () => browseQuests().filter(questMatches);
+// Sections fold only once your progress is known (until then every quest is in one), and never while filtering.
+const questGroupsFold = () => !!questLog && !state.filter.trim();
+const questGroupOpen = id => !questGroupsFold() || questGroupsOpen.has(id);
+function questGroupHeading(st, open, cls, ...content) {
+  const fold = questGroupsFold();
+  return h(fold ? 'button' : 'div', { ...(fold && { type: 'button', 'aria-expanded': String(open), onclick: () => toggleQuestGroup(st.id) }),
+    class: cls + (fold ? '' : ' fixed'), 'data-group': st.id }, fold ? h('span', { class: 'quest-group-chevron', 'aria-hidden': 'true' }) : null, ...content);
+}
+function toggleQuestGroup(id) {
+  if (questGroupsOpen.has(id)) questGroupsOpen.delete(id); else questGroupsOpen.add(id);
+  Preferences.setJSON('questGroups', [...questGroupsOpen]);
+  renderList(); renderContent();
+  $(`#content .quest-group-heading[data-group="${id}"]`)?.focus({ preventScroll: true });
 }
 function questProgressContext() {
-  return questLog ? gameRunning ? 'Live character progress' : `Saved progress · last updated ${new Date(questLog.at).toLocaleString()}`
-    : 'Progress unknown · load your character to see your current objective.';
+  return questLog ? gameRunning ? 'Live from your game' : `Saved progress · last updated ${new Date(questLog.at).toLocaleString()}`
+    : 'Progress unknown · load your character in the game to see it.';
 }
 function questNextObjective(q) {
   const p = questProgress(q), status = questStatus(q);
@@ -1261,7 +1315,8 @@ function questTrackerPanel() {
     const status = questStatus(q);
     const t = questTrackerObjective(q);
     const p = questProgress(q);
-    const stepLabel = status === 'active' && p.current && q.guide?.sequence === 'linear' ? `Step ${p.step}/${p.total}` : status === 'available' || status === 'unknown' ? 'Start' : '';
+    const stepLabel = status === 'active' && p.current && q.guide?.sequence === 'linear' ? `Step ${p.step}/${p.total}`
+      : status === 'active' ? questTargetProgress(q) || '' : status === 'available' || status === 'unknown' ? 'Start' : '';
     return h('section', { class: 'tracker-quest' + (state.detail === q.name ? ' sel' : '') },
       h('div', { class: 'tracker-quest-head' }, h('span', { class: 'tracker-num', 'aria-hidden': 'true' }, i + 1),
         h('button', { type: 'button', class: 'tracker-title', title: 'Open the quest guide', onclick: () => showItem(q.name) }, q.name),
@@ -1310,51 +1365,65 @@ function syncQuestTracker() {
   if (state.view?.type === 'questlog') renderContent();
 }
 
+// How far through the places of the objective you are on ("1 of 3 done"), when it has several.
+function questTargetProgress(q) {
+  const current = questStatus(q) === 'active' && questProgress(q).current;
+  const targets = current ? questStepTargets(q, current.key).filter(t => t.marker.precision === 'interaction') : [];
+  return targets.length > 1 ? `${targets.filter(t => t.done).length} of ${targets.length} done` : null;
+}
+// What a quest asks of you now, in a few words: the step label (linear quests) and the rewritten instruction.
+function questStepLabel(q) {
+  const p = questProgress(q);
+  return p.current && q.guide?.sequence === 'linear' ? `Step ${p.step} of ${p.total}` : null;
+}
+
+// The quest journal: one folding section per progress group, active quests first. Rows say what to do next;
+// clicking a row opens its guide and its one control is Track.
 function questOverviewPage() {
   const quests = browseQuests(), visible = filteredQuests();
   const count = id => quests.filter(q => questStatus(q) === id).length;
-  const filters = [{ id: 'all', label: 'All quests' }, ...QUEST_STATES];
-  const toolbar = h('div', { class: 'quest-toolbar' }, h('div', { class: 'quest-filters', role: 'group', 'aria-label': 'Filter quests by progress' },
-    filters.map(st => h('button', { type: 'button', class: 'quest-filter', 'data-mode': st.id, 'aria-pressed': questBrowseMode === st.id,
-      onclick: () => setQuestBrowseMode(st.id) }, st.label, h('span', { class: 'quest-filter-count' }, st.id === 'all' ? quests.length : count(st.id))))));
-  const body = [h('header', { class: 'page-head quest-page-head' }, h('div', {}, h('h1', {}, 'Quests'),
-    h('p', { class: 'page-lead progress-context' }, questProgressContext())),
+  const done = count('done');
+  const body = [h('header', { class: 'page-head quest-page-head' }, h('div', {}, h('h1', {}, 'Quest journal'),
+    h('p', { class: 'page-lead progress-context' }, gameRunning && questLog ? h('span', { class: 'quest-live' }, questProgressContext()) : questProgressContext())),
     db.questChain ? h('button', { type: 'button', onclick: () => go({ type: 'questchain', arg: '' }, { detail: null }) }, 'Story & quest order') : null),
-    h('div', { class: 'quest-summary-bar muted small' }, questLog ? `${count('done')} of ${quests.length} quests completed`
-      : `${quests.length} quests · completion unknown`), toolbar,
-    h('p', { class: 'quest-results-line muted small', role: 'status' }, `${visible.length} quest${visible.length === 1 ? '' : 's'} shown${state.filter ? ` matching “${state.filter}”` : ''}`)];
-  if (!visible.length) body.push(h('div', { class: 'quest-empty' }, h('h2', {}, state.filter ? 'No quests match these filters' : questBrowseMode === 'active' ? 'No quests recorded in progress' : 'No quests in this group'),
-    h('p', { class: 'muted' }, state.filter ? 'Try a quest name, place, item or objective. Clear the filters to browse every quest.'
-      : questLog ? 'Choose All quests to browse the guides or another progress group.' : 'Load your character to read progress, or choose All quests to browse the guides.'),
-    h('button', { type: 'button', onclick: () => { state.filter = ''; setQuestBrowseMode('all'); } }, 'Clear filters')));
+    questLog ? h('div', { class: 'quest-journal-progress' }, h('span', { class: 'quest-journal-count' }, `${done} of ${quests.length} quests completed`),
+      h('span', { class: 'quest-progress-track', role: 'progressbar', 'aria-label': 'Quests completed', 'aria-valuemin': 0, 'aria-valuemax': quests.length, 'aria-valuenow': done },
+        h('span', { class: 'quest-progress-fill', style: `width:${Math.round(done / Math.max(1, quests.length) * 100)}%` }))) : null];
+  if (state.filter.trim()) body.push(h('p', { class: 'quest-results-line muted small', role: 'status' }, `${visible.length} quest${visible.length === 1 ? '' : 's'} matching “${state.filter}”`));
+  if (!visible.length) body.push(h('div', { class: 'quest-empty' }, h('h2', {}, 'No quests match'),
+    h('p', { class: 'muted' }, 'Try a quest name, place, item or objective.'),
+    h('button', { type: 'button', onclick: () => { state.filter = ''; renderList(); renderContent(); saveNavigation(); } }, 'Clear filter')));
   const tier = q => questTier(q.name, q.id, q.region)?.min ?? 99;
   for (const st of QUEST_STATES) {
     const group = visible.filter(q => questStatus(q) === st.id).sort((a, b) => tier(a) - tier(b) || (b.type === 'Main quest') - (a.type === 'Main quest') || byName(a.name, b.name));
     if (!group.length) continue;
-    body.push(h('section', { class: `quest-task-section q-${st.id}` }, h('div', { class: 'quest-group-heading' }, h('h2', {}, st.label),
-      h('span', { class: 'muted small' }, group.length)), h('p', { class: 'muted small quest-group-hint' }, st.hint),
-      h('div', { class: 'quest-task-list' }, group.map(q => {
-        const objective = questNextObjective(q);
-        const instruction = objective && (questStepGuidance(q, objective.key)?.instruction || objective.text);
-        // The whole row opens the guide (the title is its keyboard stop); the only control is Track.
-        const row = h('article', { class: `quest-card quest-task q-${st.id}${state.detail === q.name ? ' sel' : ''}` },
-          h('div', { class: 'quest-task-body' }, h('h3', {}, h('button', { type: 'button', class: 'quest-title-link', onclick: () => showItem(q.name) }, q.name)),
-            h('div', { class: 'quest-tags' }, questTypeTag(q), questTierTag(q.name, q.id, q.region), q.region ? h('span', { class: 'muted small' }, q.region) : null),
-            instruction ? h('p', { class: 'quest-now' }, h('strong', {}, st.id === 'active' ? 'Next: ' : st.id === 'available' ? 'Start: ' : 'Guide starts: '), instruction)
-              : st.id === 'active' ? h('p', { class: 'muted small' }, 'Your current objective was not recorded. Open the guide to find the matching task.')
-                : h('p', { class: 'muted small' }, st.id === 'done' ? 'Quest completed. You can still review the guide and locations.' : q.desc),
-            st.id === 'active' && q.guide?.sequence === 'linear' ? questProgressBar(q) : null),
-          st.id !== 'done' ? trackToggle(q) : null,
-          h('span', { class: 'quest-open', 'aria-hidden': 'true' }, '›'));
-        row.addEventListener('click', ev => { if (!ev.target.closest('button, label')) showItem(q.name); });
-        return row;
-      }))));
+    const open = questGroupOpen(st.id);
+    body.push(h('section', { class: `quest-task-section q-${st.id}${open ? ' open' : ''}` },
+      questGroupHeading(st, open, 'quest-group-heading', h('h2', {}, st.label), h('span', { class: 'quest-group-count' }, group.length),
+        h('span', { class: 'quest-group-hint' }, st.hint)),
+      open ? h('div', { class: 'quest-task-list' }, group.map(q => questLogRow(q, st))) : null));
   }
   const removed = Object.values(E).filter(q => q.kind === 'quest' && !q.hidden && questRemoved(q) && questMatches(q));
-  if (questBrowseMode === 'all' && removed.length) body.push(h('details', { class: 'quest-archive' }, h('summary', {}, `Removed quests (${removed.length})`),
+  if (removed.length) body.push(h('details', { class: 'quest-archive' }, h('summary', {}, `Removed quests (${removed.length})`),
     h('p', { class: 'muted small' }, 'These quests remain in the game files but cannot be started in the current game.'),
     removed.map(q => h('button', { type: 'button', class: 'quest-archive-link', onclick: () => showItem(q.name) }, q.name))));
   return h('div', { class: 'page quest-overview' }, body);
+}
+function questLogRow(q, st) {
+  const objective = st.id === 'done' ? null : questNextObjective(q);
+  const instruction = objective && (questStepGuidance(q, objective.key)?.instruction || objective.text);
+  const progress = [questStepLabel(q), questTargetProgress(q)].filter(Boolean).join(' · ');
+  // The whole row opens the guide (the title is its keyboard stop); the only control is Track.
+  const row = h('article', { class: `quest-card quest-task q-${st.id}${state.detail === q.name ? ' sel' : ''}` },
+    h('div', { class: 'quest-task-body' }, h('h3', {}, h('button', { type: 'button', class: 'quest-title-link', onclick: () => showItem(q.name) }, q.name)),
+      h('div', { class: 'quest-tags' }, questTypeTag(q), questTierTag(q.name, q.id, q.region), q.region ? h('span', { class: 'quest-region' }, q.region) : null,
+        progress ? h('span', { class: 'quest-row-progress' }, progress) : null),
+      instruction ? h('p', { class: 'quest-now' }, h('span', { class: 'quest-now-verb' }, st.id === 'active' ? 'Next' : 'Start'), instruction)
+        : st.id === 'active' ? h('p', { class: 'quest-now muted' }, 'Your game is on a step this guide does not recognise. Open the quest to find it.') : null),
+    st.id !== 'done' ? trackToggle(q) : null,
+    h('span', { class: 'quest-open', 'aria-hidden': 'true' }, '›'));
+  row.addEventListener('click', ev => { if (!ev.target.closest('button, label')) showItem(q.name); });
+  return row;
 }
 
 // Quest order from the game's quest scripts: each storyline as a numbered timeline, then stand-alone quests by region.
@@ -1478,18 +1547,6 @@ function questTypeTag(q) {
   const label = { 'Main quest': 'Main Quest', 'Side quest': 'Side Quest' }[q.type] || q.type || 'Quest';
   return h('span', { class: 'quest-type' + (q.type === 'Main quest' ? ' main' : '') }, label);
 }
-function questProgressBar(q) {
-  const p = questProgress(q);
-  if (!p.total) return null;
-  const st = questStatus(q);
-  const linear = q.guide?.sequence === 'linear';
-  const known = st === 'done' || !!p.current && linear;
-  const label = st === 'done' ? 'Quest completed' : !linear ? p.current ? 'Current objective recorded' : 'Objective progress unknown'
-    : p.current ? `Step ${p.step} of ${p.total}` : `${p.total} steps · progress unknown`;
-  return h('div', { class: `quest-progress q-${st}` }, h('span', { class: 'quest-progress-label' }, label),
-    h('span', { class: 'quest-progress-track', role: 'progressbar', 'aria-label': !known ? 'Progress unknown' : label, 'aria-valuemin': 0, 'aria-valuemax': p.total, 'aria-valuenow': known ? p.done : null },
-      h('span', { class: 'quest-progress-fill', style: `width:${known ? Math.round(p.done / p.total * 100) : 0}%` })));
-}
 
 // Objectives as a checklist: done before the current one, current highlighted, the rest still to do.
 function questChecklist(q) {
@@ -1515,6 +1572,75 @@ function questChecklist(q) {
       questStepActions(q, o),
       guide?.instruction && guide.instruction !== o.text ? h('details', { class: 'quest-original-objective' }, h('summary', {}, 'In-game objective'), h('p', {}, o.text)) : null));
   }));
+}
+
+/* ---------- Quest guide: a quest's page, read like a page of a quest journal ---------- */
+
+// What to do now and where first, then the rewards, then everything else folded away.
+function questGuide(e, star) {
+  const removed = questRemoved(e);
+  const st = removed ? { id: 'removed', label: 'Removed from the game' } : QUEST_STATES.find(s => s.id === questStatus(e));
+  const tier = !removed && questTier(e.name, e.id, e.region);
+  const out = [h('header', { class: `quest-hero q-${st.id}` },
+    h('div', { class: 'quest-hero-meta' }, questTypeTag(e), e.region ? h('span', {}, e.region) : null,
+      tier ? h('span', { title: tier.estimated ? `Estimated from the usual power level of ${e.region}` : `Power level of ${tier.regions.join(', ')}` },
+        `Recommended ${tierText(tier)}${tier.estimated ? ' (est.)' : ''}`) : null),
+    h('h1', {}, e.name),
+    h('div', { class: 'quest-hero-status' }, h('span', { class: `quest-status q-${st.id}` }, st.label),
+      removed ? null : h('span', { class: 'progress-context' + (gameRunning && questLog ? ' quest-live' : '') }, questProgressContext())),
+    h('div', { class: 'quest-hero-actions' }, !removed && st.id !== 'done' ? trackButton(e) : null, star))];
+  out.push(removed ? h('p', { class: 'quest-removed-note' }, 'You can’t get this quest anymore. ', e.availability.reason) : questNowCard(e, st));
+  const mounts = e.rewards?.filter(r => r.kind === 'quest-mount') || [];
+  const rewards = e.rewards?.filter(r => r.kind !== 'quest-mount') || [];
+  if (mounts.length || rewards.length) out.push(h('section', { class: 'quest-rewards-block' }, h('h2', {}, 'Rewards'),
+    mounts.length ? h('p', { class: 'quest-mount-reward' }, h('strong', {}, `${mounts.map(r => r.item).join(', ')} mount. `), 'Hold your Mount key (Alt by default on PC) after finishing the quest.') : null,
+    e.id === 'Quest_FH_WitherBeast' ? h('p', { class: 'muted small' }, 'After unlocking the mount, Vannaka offers 50 Soul Fragments for another 3 Primordial Hearts. This is a repeatable exchange for extra hearts.') : null,
+    rewards.length ? h('div', { class: 'quest-rewards mats' }, rewards.map(r => h('button', { type: 'button', class: 'mat', onclick: () => showItem(r.item) }, icon(r.item, 'sm'),
+      r.qty != null && r.kind !== 'quest-recipe' ? h('span', { class: 'q' }, `${r.qty}×`) : null, h('span', { class: 'mat-name' }, r.item),
+      r.kind === 'quest-recipe' ? h('span', { class: 'reward-kind' }, 'Recipe') : null))) : null));
+  if (selectedQuestMarker?.ref === e.name && document.body.classList.contains('map-mode')) {
+    const info = questMarkerInfo(selectedQuestMarker);
+    out.push(h('div', { class: 'quest-marker-context' }, h('strong', {}, info.label), h('div', {}, info.location),
+      ...info.steps.map(s => h('p', {}, `${s.number}. ${s.text}`)),
+      info.steps.length ? null : h('p', {}, 'The game data does not confirm which step uses this location.')));
+  }
+  if (e.objectives?.length) out.push(h('details', { class: 'quest-walkthrough quest-fold', open: st.id === 'active' && !questProgress(e).current },
+    h('summary', {}, 'All steps'),
+    e.guide?.sequence !== 'linear' ? h('p', { class: 'muted small' }, 'Some steps are alternatives or counters, so this is a guide rather than a checklist.') : null,
+    questChecklist(e)));
+  if (e.desc) out.push(h('details', { class: 'quest-story quest-fold' }, h('summary', {}, 'Story'), h('p', { class: 'desc' }, e.desc)));
+  const locations = questMapLocations(e);
+  if (locations) out.push(h('details', { class: 'quest-map-overview quest-fold' }, h('summary', {}, 'Every place in this quest'),
+    h('button', { type: 'button', class: 'quest-show-map', onclick: () => showOnMap(e.name, { every: true }) }, `Show all on map (${markersFor(e.name).length})`), locations));
+  const clues = questDialogueClues(e);
+  if (clues) out.push(clues);
+  const order = db.questChain && questOrderLinks(e);
+  const people = questPeople(e);
+  if (people.length || order) out.push(h('details', { class: 'quest-background quest-fold' }, h('summary', {}, 'Related quests & people'), order, ...people));
+  if (e.guide?.sources.length) out.push(h('p', { class: 'muted small quest-guide-sources' }, 'Route reference: ',
+    e.guide.sources.map(source => h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer' }, source.title))));
+  return out;
+}
+// The card at the top of a quest: the step you are on (or how to start), its places ticked off as you go, and tips.
+function questNowCard(e, st) {
+  if (st.id === 'done') return h('section', { class: 'current-objective quest-now-card q-done' }, h('div', { class: 'quest-now-label' }, 'Quest complete'),
+    h('p', { class: 'quest-current-instruction' }, e.completedDesc || 'Nothing left to do.'));
+  const current = questProgress(e).current;
+  const next = questNextObjective(e);
+  if (!next) return h('section', { class: 'current-objective quest-now-card q-active' }, h('div', { class: 'quest-now-label' }, 'Current objective not recorded'),
+    h('p', { class: 'quest-current-instruction' }, 'Your game is on a step this guide does not recognise.'),
+    h('p', { class: 'quest-tip' }, 'Open All steps below and find the one your game’s quest log shows.'));
+  const guidance = questStepGuidance(e, next.key);
+  // The places checklist counts for itself; the objective's own "1 of 3 recorded" would repeat it.
+  const counted = questTargetProgress(e);
+  const notes = (guidance?.notes || (next.hint ? [next.hint] : [])).filter(note => note && !(counted && /recorded in this objective/.test(note)));
+  return h('section', { class: `current-objective quest-now-card q-${st.id}` },
+    h('div', { class: 'quest-now-label' }, current ? questStepLabel(e) || 'What to do now' : 'How to start'),
+    h('p', { class: 'quest-current-instruction' }, guidance?.instruction || next.text),
+    !current && st.id === 'unknown' && questLog ? h('p', { class: 'quest-tip' }, 'You have not found this quest yet. This is where it begins.') : null,
+    questStepActions(e, next),
+    notes.map(note => h('p', { class: 'quest-tip' }, note)),
+    e.guide?.preparation.length ? h('p', { class: 'quest-tip' }, h('strong', {}, 'Bring: '), e.guide.preparation.join(' ')) : null);
 }
 
 // Where to talk to people for a quest (givers / turn-ins), with distance if the game is running.
@@ -1641,16 +1767,17 @@ function renderList() {
   } else if (state.module === 'quests') {
     // Grouped by your live progress, like a quest log: active first, completed last.
     rows.push(h('button', { type: 'button', class: 'list-item quest-overview-link' + (!state.detail && state.view?.type === 'questlog' ? ' sel' : ''),
-      onclick: () => state.view?.type === 'questlog' ? closeDetail() : go({ type: 'questlog', arg: '' }, { detail: null }) }, h('span', { class: 'quest-overview-label' }, 'Quest overview'), h('span', { class: 'count' }, questLogAge())));
+      onclick: () => state.view?.type === 'questlog' ? closeDetail() : go({ type: 'questlog', arg: '' }, { detail: null }) }, h('span', { class: 'quest-overview-label' }, 'Quest journal'), h('span', { class: 'count' }, questLogAge())));
     if (db.questChain) rows.push(h('button', { type: 'button', class: 'list-item', onclick: () => go({ type: 'questchain', arg: '' }, { detail: null }) }, 'Story & quest order'));
     const quests = filteredQuests();
-    const removed = questBrowseMode === 'all' && f ? Object.values(E).filter((e) => e.kind === 'quest' && !e.hidden && questRemoved(e) && questMatches(e)) : [];
+    const removed = f ? Object.values(E).filter((e) => e.kind === 'quest' && !e.hidden && questRemoved(e) && questMatches(e)) : [];
     for (const st of QUEST_STATES) {
       const qs = quests.filter((q) => questStatus(q) === st.id)
         .sort((a, b) => byName(a.region || '~', b.region || '~') || (b.type === 'Main quest') - (a.type === 'Main quest') || byName(a.name, b.name));
       if (!qs.length) continue;
-      rows.push(h('div', { class: `list-group q-${st.id}` }, `${st.icon} ${st.label}`, h('span', { class: 'count' }, qs.length)));
-      rows.push(...qs.map((q) =>
+      const open = questGroupOpen(st.id);
+      rows.push(questGroupHeading(st, open, `list-group quest-list-group q-${st.id}`, st.label, h('span', { class: 'count' }, qs.length)));
+      if (open) rows.push(...qs.map((q) =>
         h('div', { class: `list-item indent q-${st.id}` + (state.detail === q.name ? ' sel' : ''), title: `${q.type}${q.region ? ' · ' + q.region : ''}`, onclick: () => showItem(q.name) },
           h('span', { class: 'quest-list-text' }, h('span', { class: 'quest-list-name' }, q.name),
             h('span', { class: 'quest-list-region' }, [q.region, tierText(questTier(q.name, q.id, q.region))].filter(Boolean).join(' · '))))));
@@ -1666,7 +1793,9 @@ function renderList() {
   }
   const caption = rows.length && LIST_CAPTIONS[state.module] ? h('div', { class: 'list-caption' }, LIST_CAPTIONS[state.module]) : null;
   results.replaceChildren(...(rows.length ? [caption, ...rows].filter(Boolean) : []));
-  const count = results.querySelectorAll(state.module === 'quests' ? '.quest-list-text' : '.list-item, .journal-item').length;
+  // Folded quest groups still count.
+  const count = state.module === 'quests' ? filteredQuests().length + results.querySelectorAll('.q-removed .quest-list-text').length
+    : results.querySelectorAll('.list-item, .journal-item').length;
   list.querySelector('.filter-count').textContent = `${count} ${state.module === 'quests' ? 'quests' : 'entries'}${f ? ' found' : ''}`;
   if (!count && !results.querySelector('.empty')) results.append(h('div', { class: 'empty' },
     h('p', {}, f ? `No matches for “${state.filter}”. Try a shorter name or clear the filter.` : state.module === 'wishlist' ? 'Add an item to your wishlist from its details.' : 'No entries are available in this section.')));
@@ -2210,6 +2339,7 @@ function renderDetail() {
   document.body.classList.toggle('map-detail-open', !!state.detail || !!selectedDiscoveryMarker);
   document.body.classList.toggle('quests-mode', state.module === 'quests');
   const d = $('#detail');
+  d.classList.remove('quest-page');
   const close = () => h('div', { class: 'detail-controls' }, h('div', { class: 'detail-navigation' }, navigationBar()),
     h('button', { type: 'button', class: 'detail-close', onclick: closeDetail, 'aria-label': 'Close details' }, 'Close details'));
   if (selectedDiscoveryMarker && document.body.classList.contains('map-mode')) {
@@ -2231,6 +2361,8 @@ function renderDetail() {
   const e = ent(state.detail);
   const star = h('button', { type: 'button', class: 'wishlist-action' + (wish.has(e.name) ? ' on' : ''),
     onclick: () => { wish.has(e.name) ? wish.delete(e.name) : wish.add(e.name); saveWish(); renderDetail(); renderModules(); if (state.view?.type === 'wishlist') renderContent(); } }, wish.has(e.name) ? 'Remove from wishlist' : 'Add to wishlist');
+  d.classList.toggle('quest-page', e.kind === 'quest');
+  if (e.kind === 'quest') { d.replaceChildren(close(), ...questGuide(e, star).filter(Boolean)); return; }
 
   const body = [
     close(),
@@ -2258,63 +2390,6 @@ function renderDetail() {
     setMapMode(false); go({type:'armourset',arg:e.armourSet},{detail:null,push:false});
   } }, 'View armour set'));
 
-  if (e.kind === 'quest') {
-    const st = QUEST_STATES.find((s) => s.id === questStatus(e));
-    body.push(questRemoved(e)
-      ? h('div', { class: 'quest-status-block q-removed' }, h('div', { class: 'quest-status q-removed' }, '✕ Removed from the game'),
-        h('p', {}, 'You can’t get this quest anymore. ', e.availability.reason))
-      : h('div', { class: `quest-status-block quest-reader-status q-${st.id}` }, h('span', { class: `quest-status q-${st.id}` }, st.label),
-        h('span', { class: 'progress-context muted small' }, questLog ? questProgressContext() : 'Load your character to read progress.')));
-    const current = questProgress(e).current;
-    const next = questNextObjective(e);
-    const mounts = e.rewards?.filter(r=>r.kind==='quest-mount') || [];
-    if (mounts.length) body.push(h('p',{class:'quest-preparation'},h('strong',{},'Completion reward: '),mounts.map(r=>r.item).join(', '),'. Hold your Mount key (Alt by default on PC) after completing the quest.'));
-    if (next && !questRemoved(e)) {
-      const guidance = questStepGuidance(e, next.key);
-      body.push(h('section', { class: 'current-objective' }, h('h2', {}, current ? 'What to do next' : st.id === 'available' ? 'Start here' : 'First objective · guide preview'),
-        !current && st.id === 'unknown' ? h('p', { class: 'muted small' }, 'Your current objective is unknown. This previews the beginning of the guide.') : null,
-        h('p', { class: 'quest-current-instruction' }, guidance?.instruction || next.text),
-        (guidance?.notes || (next.hint ? [next.hint] : [])).map(note => h('p', { class: 'muted small' }, note)), questStepActions(e, next)));
-    } else if (st.id === 'active') {
-      body.push(h('section', { class: 'current-objective' }, h('h2', {}, 'Current objective not recorded'),
-        h('p', {}, 'Load your character to refresh this quest, or open the objective guide below to find the task shown in your game.')));
-    }
-    if (e.guide?.preparation.length && st.id !== 'done') body.push(h('p', { class: 'quest-preparation muted small' }, h('strong', {}, 'Bring with you: '), e.guide.preparation.join(' ')));
-    const tier = !questRemoved(e) && questTier(e.name, e.id, e.region);
-    if (tier) body.push(h('p', { class: 'quest-reader-meta muted small' }, [e.region, `Recommended ${tierText(tier)}${tier.estimated ? ' (estimated)' : ''}`].filter(Boolean).join(' · ')));
-    const currentSpawns=next ? questStepSourceMarkers(e,next.key) : [];
-    const questLocations=currentSpawns.length ? currentSpawns : markersFor(e.name);
-    body.push(h('div',{class:'actions quest-secondary-actions'},h('button',{type:'button',class:'quest-show-map',disabled:!questLocations.length,
-      title:questLocations.length ? 'Show this quest’s confirmed locations' : 'No confirmed map locations in the extracted game data',
-      onclick:()=>showOnMap(e.name)},`${currentSpawns.length ? 'Show current targets' : 'All quest locations'}${questLocations.length ? ' ('+questLocations.length+')' : ''}`),
-      !questRemoved(e) && st.id !== 'done' ? trackButton(e) : null, star),
-      !questLocations.length ? h('p',{class:'muted small'},'No confirmed map locations in the extracted game data.') : null);
-    if (st.id === 'done' && e.completedDesc && e.completedDesc !== e.desc) body.push(h('p', { class: 'desc' }, e.completedDesc));
-    if (selectedQuestMarker?.ref === e.name && document.body.classList.contains('map-mode')) {
-      const info = questMarkerInfo(selectedQuestMarker);
-      body.push(h('div', { class: 'quest-marker-context' }, h('strong', {}, info.label), h('div', {}, info.location),
-        ...info.steps.map(s => h('p', {}, `${s.number}. ${s.text}`)),
-        info.steps.length ? null : h('p', {}, 'The game data does not confirm which step uses this location.')));
-    }
-    if (e.objectives?.length) body.push(questProgressBar(e), h('details', { class: 'quest-walkthrough', open: st.id === 'active' && !current },
-      h('summary', {}, e.guide?.sequence === 'linear' ? 'Full walkthrough' : 'All objective guidance'),
-      e.guide?.sequence !== 'linear' ? h('p', { class: 'muted small' }, 'This quest has alternate objectives or collection counters. Only your current objective and overall quest status are confirmed; this list is a reference, not a completion checklist.') : null,
-      questChecklist(e)));
-    if (e.rewards?.some(r=>r.kind!=='quest-mount')) body.push(h('h2',{},'You get during this quest'),
-      e.id==='Quest_FH_WitherBeast' ? h('p',{class:'muted small'},'After unlocking the mount, Vannaka offers 50 Soul Fragments for another 3 Primordial Hearts. This is a repeatable exchange for extra hearts.') : null,
-      h('div',{class:'quest-rewards mats'},e.rewards.filter(r=>r.kind!=='quest-mount').map(r=>
-      h('button',{type:'button',class:'mat',onclick:()=>showItem(r.item)},icon(r.item,'sm'),
-        r.qty != null && r.kind!=='quest-recipe' ? h('span',{class:'q'},`${r.qty}×`) : null,h('span',{class:'mat-name'},r.item),
-        r.kind==='quest-recipe' ? h('span',{class:'reward-kind'},'Recipe') : null))));
-    const locations = questMapLocations(e);
-    if (locations) body.push(h('details', { class: 'quest-map-overview' }, h('summary', {}, 'All quest locations'), locations));
-    body.push(questDialogueClues(e));
-    if (e.guide?.sources.length) body.push(h('p', { class: 'muted small quest-guide-sources' }, 'Route reference: ',
-      e.guide.sources.map(source => h('a', { href: source.url, target: '_blank', rel: 'noopener noreferrer' }, source.title))));
-    const order = db.questChain && questOrderLinks(e);
-    const people = questPeople(e);
-    if (people.length || order) body.push(h('details', { class: 'quest-background' }, h('summary', {}, 'Related quests & contacts'), order, ...people));
-  }
 
   // The creature's 3D model from the game files: drag to turn it, wheel to zoom.
   // Keep one interactive viewer: the selected creature page owns it while open.
@@ -2470,7 +2545,7 @@ function minimapQuests() {
   return trackedList().map((q, i) => {
     const status = questStatus(q), p = questProgress(q), objective = status === 'done' ? null : questNextObjective(q);
     return { index: i + 1, name: q.name, done: status === 'done',
-      step: status === 'active' ? (p.current && q.guide?.sequence === 'linear' ? `Step ${p.step}/${p.total}` : '') : status === 'done' ? '' : 'Start',
+      step: status === 'active' ? (p.current && q.guide?.sequence === 'linear' ? `Step ${p.step}/${p.total}` : questTargetProgress(q) || '') : status === 'done' ? '' : 'Start',
       text: status === 'done' ? 'Completed' : objective ? questStepGuidance(q, objective.key)?.instruction || objective.text
         : 'Objective not recorded. Load your character to refresh it.' };
   });
@@ -2487,7 +2562,7 @@ function onPlayer(p) {
     MapView.redraw(); renderDiscoveryProgress();
     if (selectedDiscoveryMarker) renderDetail();
   }
-  if (p.quests) onQuestLog(p.quests);
+  if (p.quests) onQuestLog(p.quests, p.questLocations);
   // Co-op: other players arrive with the creature scan; they disappear when you leave the game.
   if (p.players) MapView.setOthers(p.players);
   else if (!p.ok) MapView.setOthers([]);

@@ -22,7 +22,7 @@ app.whenReady().then(async () => {
       onQuestLog([{id:quest.id,s:1,o:quest.objectives[0].key}]); showItem(quest.name);`);
     assert(await js(`$('#detail .current-objective').textContent.includes('Enter Thishepen Kara') && $('#detail .current-objective').textContent.includes('Pthentorok')`));
     assert(await js(`$('#detail').clientWidth>600 && $('#detail .objectives').children.length===4`));
-    assert(await js(`$('#detail .current-objective .quest-entrance-button').textContent.includes('Thishepen Kara')`));
+    assert(await js(`$('#detail .current-objective .quest-entrance-button').title.includes('Thishepen Kara') && $('#detail .current-objective .quest-target-where').textContent==='Inside Thishepen Kara'`));
     await screenshot('desktop');
     await js(`window.password=db.map.markers.find(m=>m.questId===quest.id && m.target==='Password statue');
       $('#detail .current-objective .quest-entrance-button').click();`);
@@ -47,11 +47,11 @@ app.whenReady().then(async () => {
     await js(`back();onQuestLog([{id:quest.id,s:2}]);renderDetail();focusQuestTarget(quest,password);`); await wait();
     assert(await js(`MapView.layer()?.id===password.d && questMapStepMode==='all' && questMapMarkerVisible(password,true)`));
     await js(`back();questLog=null;selectModule('quests');showItem(quest.name);`);
-    assert(await js(`$('#detail').textContent.includes('Progress unknown') && !$('#detail [role=progressbar]').hasAttribute('aria-valuenow')`));
+    assert(await js(`$('#detail').textContent.includes('Progress unknown') && !$('#detail [role=progressbar]')`));
     win.setSize(900, 780); await wait();
     await screenshot('compact');
     assert(await js(`$('#detail').scrollWidth<=$('#detail').clientWidth+1 && $('#detail .detail-navigation').getBoundingClientRect().width>0`));
-    await js(`for(const q of Object.values(E).filter(e=>e.kind==='quest')){showItem(q.name,{push:false});if(!$('#detail .detail-head h1'))throw Error('Missing quest reader: '+q.name)}`);
+    await js(`for(const q of Object.values(E).filter(e=>e.kind==='quest')){showItem(q.name,{push:false});if(!$('#detail .quest-hero h1') || !$('#detail .quest-now-card, #detail .quest-removed-note'))throw Error('Missing quest reader: '+q.name)}`);
     console.log('PASS: all quest readers; clear walkthrough/current objective; entrance vs exact interior pin; map picking with filters off; three pedestals; completed/unknown progress; Back context; desktop/compact layouts');
     clearTimeout(timeout); app.exit(0);
   } catch (error) { console.error(error); clearTimeout(timeout); app.exit(1); }

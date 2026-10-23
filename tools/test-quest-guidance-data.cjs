@@ -87,4 +87,19 @@ const combatFixture={name:'Combat test',kind:'quest',id:'Quest_CombatTest',objec
 require('../importer/quest-guidance').buildQuestGuidance({entities:{'Combat test':combatFixture},flows:{},interactions:[],markers:[{c:'monster',n:'Goblin Warrior'},{c:'creature',n:'Terrorbird'}],base,text:v=>v,dungeonAt:()=>null,regionAt:()=>'',onMap:()=>true});
 assert.deepEqual(combatFixture.guide.steps[0].mapSources,['Goblin Warrior'],'Plural kill targets resolve automatically across monster-category spawns');
 assert.deepEqual(combatFixture.guide.steps[1].mapSources,[],'Reward mentions must not become hunt targets');
-console.log(`PASS: ${quests.length} quest entries and all versions have ordered guidance; exact pins use real actor coordinates; dungeon statue, three pedestals and quest-ID isolation`);
+// Placed copies of one class keep their own tags: the three Curse Seals are three different seals, each with its own done flag.
+const withering = db.entities['Withering Heights'];
+const targetsOf = (quest, key) => quest.guide.steps.find(s => s.key === key).targets.map(id => db.map.markers.find(m => m.questId === quest.id && m.qlocation === id));
+for (const key of ['BreakTheThreeSeals', 'BreakRemainingtwoSeals', 'BreakTheFinalSeal']) {
+  const seals = targetsOf(withering, key);
+  assert.deepEqual(seals.map(m => m.entry.split('.').pop()).sort(), ['Emberwood', 'Silverthorn', 'Waterfall'], key + ': the seals, not the standing stones already read');
+  assert.deepEqual(seals.map(m => m.doneWhen).sort(), ['Quest_DeathQuestMain:EmberwoodSealBroken', 'Quest_DeathQuestMain:SilverthornSealBroken', 'Quest_DeathQuestMain:WaterfallSealBroken']);
+}
+assert.equal(targetsOf(withering, 'BreakTheThreeSeals').find(m => m.entry.endsWith('Waterfall')).region, 'Vekchenven Kara', 'The waterfall seal is inside the vault behind the waterfall');
+assert.deepEqual(targetsOf(withering, 'InteractedWithStone1').map(m => m.doneWhen.split(':')[1]).sort(), ['FortressStoneDone', 'VillageStoneDone', 'WaterfallStoneDone']);
+const ghosts = db.entities['Even More Restless Ghosts'];
+for (const key of ['FindGhosts0/3', 'FindGhosts1/3', 'FindGhosts2/3'])
+  assert.deepEqual(targetsOf(ghosts, key).map(m => m.doneWhen.split(':')[1]).sort(), ['GhostOneComplete', 'GhostThreeComplete', 'GhostTwoComplete'], key + ': the three ghosts, not Zanik who gave the quest');
+assert(db.map.markers.find(m => m.qlocation === 'DoricNPC')?.shown && !db.map.markers.find(m => m.qlocation === 'VillageArea')?.shown, 'Quest areas keep the game map\'s default visibility');
+assert(!db.map.markers.some(m => /:(IntroDialogueDone|IsQuestAccepted)$/.test(m.doneWhen || '')), 'A quest introduction does not finish a target');
+console.log(`PASS: ${quests.length} quest entries and all versions have ordered guidance; exact pins use real actor coordinates; dungeon statue, three pedestals and quest-ID isolation; per-copy seal tags, done flags for seals, stones and ghosts, default area visibility`);

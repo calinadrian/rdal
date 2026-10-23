@@ -16,7 +16,7 @@ app.whenReady().then(async()=>{
  try {
   await win.loadFile(path.join(target,'app/ui/index.html'));win.showInactive();await tick();
   await js(`selectModule('quests');window.hunt=ent('The Wild Hunt');onQuestLog([{id:hunt.id,s:1,o:'HuntBeast'}]);showItem(hunt.name);`);
-  assert(await js(`$('#detail .quest-preparation').textContent.includes('Completion reward: Terrorbird mount')`));
+  assert(await js(`$('#detail .quest-mount-reward').textContent.includes('Terrorbird mount')`));
   assert(await js(`$('#detail .current-objective').textContent.includes('loot 3 Primordial Hearts') && $('#detail .current-objective').textContent.includes('white, glowing terrorbirds')`));
   assert.equal(await js(`$('#detail .current-objective').querySelectorAll('.quest-pin-button').length`),0);
   assert.equal(await js(`$('#detail .current-objective').querySelectorAll('.source-map-button').length`),5);
@@ -31,9 +31,9 @@ app.whenReady().then(async()=>{
   await js(`back()`);
   assert(await js(`state.module==='quests' && state.detail===hunt.name && state.filter==='Wild'`));
   await js(`onQuestLog([{id:hunt.id,s:1,o:'BringHeart'}]);renderDetail()`);
-  assert(await js(`$('#detail .current-objective .quest-pin-button').textContent==='Pin Vannaka' && $('#detail .current-objective').textContent.includes('unlock the Terrorbird mount')`));
+  assert(await js(`$('#detail .current-objective .quest-target-name').textContent==='Vannaka' && $('#detail .current-objective').querySelectorAll('.quest-pin-button').length===1 && $('#detail .current-objective').textContent.includes('unlock the Terrorbird mount')`));
   await js(`questLog=null;renderDetail()`);
-  assert(await js(`$('#detail').textContent.includes('Progress unknown') && !$('#detail [role=progressbar]').hasAttribute('aria-valuenow')`));
+  assert(await js(`$('#detail').textContent.includes('Progress unknown') && !$('#detail [role=progressbar]')`));
   console.log('PASS: Wild Hunt mount reward, post-Vannaka instructions, five real spirit sites, map filters/Back, hand-in and unknown progress, desktop/compact layouts');
   clearTimeout(timer);app.exit(0);
  }catch(e){console.error(e);clearTimeout(timer);app.exit(1)}

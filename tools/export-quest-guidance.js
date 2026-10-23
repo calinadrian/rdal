@@ -48,7 +48,8 @@ for (const pkg of packages) {
     if (!e.Type.endsWith('_C') || !(/PersistentLevel'?$/.test(e.Outer || '') || e.Outer?.ObjectName?.includes('PersistentLevel'))) continue;
     const d = defaults.get(e.Type) || {};
     const participant = resolve(p.DomConversationParticipant)?.Properties || {};
-    const entry = tag(p['Conversation Entry Tag']) || tag(participant.EntryPointTag)
+    // Placed copies of one class (the three Curse Seals) set their own tags on the actor.
+    const entry = tag(p['Conversation Entry Tag']) || tag(p.EntryPointTag) || tag(participant.EntryPointTag)
       || tag(p.ConversationOnClosedTag) || tag(p.ConversationOnInteractionTag) || d.entry;
     if (!entry && !p.Quest && !p.QuestData) continue;
     const rootComponent = resolve(p.RootComponent);
@@ -56,7 +57,7 @@ for (const pkg of packages) {
     const source = world.find(a => a.name === e.Name);
     if (!loc && !source) continue;
     actors.push({ id: e.Name, cls: e.Type, entry, label: text(p.DisplayName) || d.label || (/LoreItem/.test(e.Type) ? 'Quest lore' : null),
-      participant: tag(participant.ParticipantTag) || d.participant,
+      participant: tag(p.ParticipantTag) || tag(participant.ParticipantTag) || d.participant,
       quest: p.Quest || p.QuestData || null,
       x: Math.round(loc?.X ?? source.x), y: Math.round(loc?.Y ?? source.y), z: Math.round(loc?.Z ?? source.z),
       level: path.basename(pkg, '.umap') });

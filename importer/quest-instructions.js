@@ -2,6 +2,9 @@
 // Entry tags identify the actual interaction, never a nearby actor or a guessed location.
 const entry = suffix => 'QuestFlow.Entry.' + suffix;
 const step = (instruction, notes = [], entries = []) => ({ instruction, notes, entries: entries.map(entry) });
+// The standing stones' clues: Emberwood village west of the tower, Silverthorn Keep to the east, and the vault behind the waterfall.
+const seals = ['One is in the heart of Emberwood village, one at Silverthorn Keep (guarded by its last protector), and one inside Vekchenven Kara, the vault behind the tainted waterfall near the Lake of Lost Souls.'];
+const sealEntries = ['DeathQuestMain.Seals.Emberwood', 'DeathQuestMain.Seals.Silverthorn', 'DeathQuestMain.Seals.Waterfall'];
 const instructions = {
   Quest_AMelodyRemebered: {
     Objective1: step('Bring an Inspiring Ring of Runecrafting to the Jewellery Box and insert it into the ring slot.', ['The ring is consumed by the box. Open its item entry below to check the recipe and how to obtain it.'], ['AMelodyRemebered']),
@@ -91,9 +94,9 @@ const instructions = {
     GoThroughDoorToFH: step('Become Soul Rifted in the red area near Postie Pete, then pass through the gate into Fellhollow.', ['Once through the gate, go straight to a Purification Pool to remove Soul Rift.']),
     FindACleansingPool: step('Find a glowing Purification Pool in Fellhollow and use it to remove Soul Rift.'),
     InvestigateStandingStones: step('Find Cathan at the standing stones in Fellhollow and speak to him.', [], ['DeathQuestMain.Cathan']),
-    BreakTheThreeSeals: step('Follow the three standing-stone clues to the curse seals and collect one curse fragment from each.', ['The clues point to the village west of the tower, the fortress to the east, and the remaining location described by the third stone. Read the stones before setting out.']),
-    BreakRemainingtwoSeals: step('Collect two more curse fragments from the remaining curse seals described by the standing stones.'),
-    BreakTheFinalSeal: step('Collect the final curse fragment from the remaining curse seal.'),
+    BreakTheThreeSeals: step('Break the three Curse Seals the standing stones told you about and take a curse fragment from each.', seals, sealEntries),
+    BreakRemainingtwoSeals: step('Break the two Curse Seals you have not broken yet and take their curse fragments.', seals, sealEntries),
+    BreakTheFinalSeal: step('Break the last Curse Seal and take its curse fragment.', seals, sealEntries),
     ChallangeImaru: step('Enter the Shattered Spire and defeat Imaru.'),
     ReturnToDeath: step('Bring Imaru’s Head to Death and speak to him.', [], ['DeathQuestMain.Death']),
   },
@@ -221,7 +224,8 @@ function clarifyObjective(id, objective) {
   if (id === 'Quest_DeathQuestMain' && /ReachedStandingStones|InteractedWithStone/.test(objective.key))
     return step('Read each of the three standing stones in Fellhollow to learn where the curse fragments are hidden.', [count || 'Read the stones’ inscriptions before looking for the fragments.'], ['DeathQuestMain.StandingStones.EmberwoodStone', 'DeathQuestMain.StandingStones.SilverThornLodgeStone', 'DeathQuestMain.StandingStones.WaterfallStone']);
   if (id === 'Quest_BrinkOfExtinction' && /^Objective2/.test(objective.key)) return step(`Ride your magic carpet to the four large black pedestals and touch each one to complete the Gauntlet of Fire.`, [count, 'You can visit the pedestals in any order.'].filter(Boolean));
-  if (id === 'Quest_FH_GhostQuest' && /^FindGhosts/.test(objective.key)) return step('Find the three ghosts in Fellhollow, speak to each and fulfil their requests.', [count]);
+  if (id === 'Quest_FH_GhostQuest' && /^FindGhosts/.test(objective.key)) return step('Find the three ghosts in Fellhollow, speak to each and fulfil their requests.', [count],
+    ['FH_GhostQuest.GhostOne', 'FH_GhostQuest.GhostTwo', 'FH_GhostQuest.GhostThree']);
   if (id === 'Quest_FH_LettersForTheDead' && counter) return step('Find the missing letters in Fellhollow and deliver them to the postboxes for Postie Pete.', [count]);
   if (id === 'Quest_GreatBodyRobbery' && /^BodyParts/.test(objective.key)) return step('Dig up three body parts from graves around Bloodblight Swamp, then take them to Fenkenstrain’s tower.', [count]);
   if (id === 'Quest_SQ2_AnimalLover' && counter) return step('Find the three missing Journal Pages in Dowdun Reach, then return them to Vannaka.', [count]);

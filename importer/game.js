@@ -447,6 +447,8 @@ function categorize(a) {
     return {
       c: 'quest', n: q ? `${q}${npc ? ` · ${who}` : ''}` : 'Quest location', ref: q || null, questId, qnpc: npc || undefined,
       qlocation, qsteps: [...(questSteps.get(questId + '|' + qlocation) || [])],
+      // The game's map shows this before any quest script reveals or hides it (the live tracker reports the rest).
+      ...(!/^False/.test(a.props.bShownByDefault || '') && { shown: true }),
       ...(nearbyNpc && npcVisibility[nearbyNpc.name] && { npcVisibility: npcVisibility[nearbyNpc.name] }),
       ...(side && { i: 'mapicons/T_NavIcons_QuestMarker_Secondary.png' }),
     };
