@@ -1,0 +1,15 @@
+.waypoint { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #20201f; color: #efeeeb; border: 1px solid #7e6a3f; border-radius: 6px; font: 12px 'Segoe UI', sans-serif; }
+.waypoint[hidden] { display: none; }
+.waypoint svg { width: 40px; height: 40px; flex: none; fill: #ffd040; stroke: #362a12; stroke-width: 2; }
+.waypoint > div { min-width: 0; flex: 1; }
+.waypoint strong, .waypoint span { display: block; }
+.waypoint strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.waypoint span { color: #d2cdc1; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.waypoint button { color: #efeeeb; background: #30302e; border: 1px solid #68665f; padding: 5px 8px; border-radius: 4px; cursor: pointer; }
+.waypoint button:hover { background: #41413c; }
+.waypoint button:focus-visible { outline: 2px solid #ffd040; outline-offset: 2px; }
+#map-waypoint { position: absolute; top: var(--map-controls-bottom, 64px); left: 50%; transform: translateX(-50%); width: min(340px, calc(100% - 32px)); box-sizing: border-box; z-index: 3; }
+#waypoint-slot { width: 100%; }
+#minimap-waypoint { margin: 4px 4px 8px; }
+#minimap-waypoint strong { max-width: 174px; }
+#map.placing-waypoint { cursor: crosshair; }

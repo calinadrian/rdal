@@ -66,7 +66,7 @@ app.whenReady().then(async () => {
         quests:[...document.querySelectorAll('#quest-tracker .tracker-quest')].map(b=>b.querySelector('.tracker-title').textContent),
         lineButtons:document.querySelectorAll('#quest-tracker .tracker-map, #quest-tracker .tracker-remove').length}})()`);
     assert.deepEqual(chrome.views, ['Quests', 'Explore', 'Gather', 'Everything'], 'Four views');
-    assert.deepEqual(chrome.tools, ['map-zoom-in', 'map-zoom-out', 'map-center'], 'Only zoom and centre on me: ' + chrome.tools);
+    assert.deepEqual(chrome.tools, ['map-add-waypoint', 'map-zoom-in', 'map-zoom-out', 'map-center'], 'Waypoint placement, zoom and centre on me: ' + chrome.tools);
     assert.deepEqual(chrome.quests, ['The Wild Hunt', 'Dragon Slayer'], 'Your quests, simply');
     assert.equal(chrome.lineButtons, 0, 'No Map or × buttons on the quests');
 

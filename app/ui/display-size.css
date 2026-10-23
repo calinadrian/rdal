@@ -1,0 +1,26 @@
+:root { --minimap-buttons-scale: 1; --minimap-icons-scale: 1; --minimap-text-scale: 1; --quest-text-scale: 1; --quest-width-scale: 1; }
+.display-size-settings { margin: 24px 0; padding: 0; border: 0; }
+.display-size-settings legend { font-size: 16px; font-weight: 600; }
+.display-size-settings label { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; }
+.display-size-settings input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.display-size-settings output { font-variant-numeric: tabular-nums; color: var(--accent-hover); }
+.display-size-settings small { display: block; color: var(--muted); margin: 8px 0; }
+.size-preview { display: grid; gap: 8px; padding: 12px; background: var(--panel); border-radius: 6px; margin: 12px 0; }
+.size-preview-controls { display: flex; align-items: center; gap: 14px; }
+.size-preview button { width: calc(22px * var(--minimap-buttons-scale)); height: calc(22px * var(--minimap-buttons-scale)); padding: 0; border-radius: 50%; font-size: calc(15px * var(--minimap-buttons-scale)); line-height: 1; }
+.size-preview button:disabled { opacity: 1; }
+.size-preview img { width: calc(22px * var(--minimap-icons-scale)); height: calc(22px * var(--minimap-icons-scale)); object-fit: contain; }
+.size-preview-map { font-size: calc(12px * var(--minimap-text-scale)); }
+.size-preview-quest { width: min(100%, calc(210px * var(--quest-width-scale))); font-size: calc(12px * var(--quest-text-scale)); color: #ffd040; overflow-wrap: anywhere; }
+/* Only minimap surfaces use these selectors. */
+.zoom { width: calc(22px * var(--minimap-buttons-scale)); height: calc(22px * var(--minimap-buttons-scale)); margin: calc(-11px * var(--minimap-buttons-scale)); font-size: calc(15px * var(--minimap-buttons-scale)); }
+.zoom { --button-growth: max(0, calc(var(--minimap-buttons-scale) - 1)); }
+.zoom.in { left: min(95.3%, calc(100% - 11px * var(--minimap-buttons-scale))); top: calc(71.1% - 60px * var(--button-growth)); }
+.zoom.out { left: min(calc(82.1% + 20px * var(--button-growth)), calc(100% - 11px * var(--minimap-buttons-scale))); top: calc(88.3% - 36px * var(--button-growth)); }
+.zone { font-size: calc(12px * var(--minimap-text-scale)); height: auto; min-height: 22px; line-height: 1.6; }
+.clock { font-size: calc(11px * var(--minimap-text-scale)); height: auto; min-height: 18px; line-height: 1.5; }
+#minimap-waypoint { font-size: calc(12px * var(--minimap-text-scale)); }
+#minimap-waypoint strong { font-size: calc(13px * var(--minimap-text-scale)); }
+#quests { zoom: var(--quest-text-scale); align-self: flex-end; flex: none; width: min(calc(max(var(--size), 248px) * var(--quest-width-scale) / var(--quest-text-scale)), calc((100vw - 16px) / var(--quest-text-scale))); }
+#quests .quest-title { white-space: normal; overflow-wrap: anywhere; }
+#quests .quest-step { -webkit-line-clamp: unset; }

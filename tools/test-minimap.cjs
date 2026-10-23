@@ -124,6 +124,51 @@ app.whenReady().then(async () => {
     const large = await show({ minimapSize: 260, minimapZoom: 2 }, 'minimap-dungeon.png');
     assert(large.mm.getSize()[0] === 276 && large.mm.getSize()[1] > 308, 'The large size grows the window: ' + large.mm.getSize());
 
+    // Readability preferences reach the overlay and grow quest text without cutting off instructions.
+    await js(`document.querySelector('#size-questText').value='160'; document.querySelector('#size-questText').dispatchEvent(new Event('input'));
+      document.querySelector('#size-minimapButtons').value='160'; document.querySelector('#size-minimapButtons').dispatchEvent(new Event('input'));
+      document.querySelector('#size-minimapIcons').value='160'; document.querySelector('#size-minimapIcons').dispatchEvent(new Event('input'));
+      document.querySelector('#size-minimapText').value='140'; document.querySelector('#size-minimapText').dispatchEvent(new Event('input'));`);
+    const sized = await lastScene({ ok: true, x: takla.x, y: takla.y, z: takla.z, yaw: 0 }); await tick(300);
+    assert.equal(sized.displaySizes.questText, 160, 'Quest size reaches scene');
+    assert.equal(sized.displaySizes.minimapIcons, 160, 'Icon size reaches overlay');
+    assert(Math.abs(await large.run(`document.querySelector('#zoom-in').getBoundingClientRect().width`) - 35.2) < .2, 'Minimap buttons grow');
+    assert(Math.abs(await large.run(`parseFloat(getComputedStyle(document.querySelector('#clock')).fontSize)`) - 15.4) < .1, 'Clock text grows');
+    assert(Math.abs(await large.run(`parseFloat(getComputedStyle(document.querySelector('#zone')).fontSize)`) - 16.8) < .1, 'Location text grows');
+    assert.equal(await large.run(`Number(getComputedStyle(document.querySelector('#quests')).zoom)`), 1.6, 'Minimap quest text scales');
+    assert.equal(await large.run(`document.body.scrollWidth <= innerWidth`), true, 'Large text fits the overlay');
+    if (!process.env.ATLAS_NO_CAPTURES) fs.writeFileSync(path.join(root, 'test-fixtures/minimap-text-large.png'), (await large.mm.webContents.capturePage()).toPNG());
+    const smallSized = await show({minimapSize:160}, 'minimap-small-large-text.png');
+    assert.equal(await smallSized.run(`(() => {
+      const bounds = document.body.getBoundingClientRect();
+      return [...document.querySelectorAll('.zoom')].every(el => { const r=el.getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && r.bottom<=bounds.bottom; });
+    })()`), true, 'Large zoom buttons fit even on the small minimap');
+    assert.equal(await smallSized.run(`(() => {
+      const a=document.querySelector('#zoom-in').getBoundingClientRect(), b=document.querySelector('#zoom-out').getBoundingClientRect(), clock=document.querySelector('#clock').getBoundingClientRect();
+      const apart=(a,b)=>a.right<=b.left || b.right<=a.left || a.bottom<=b.top || b.bottom<=a.top;
+      return apart(a,b) && apart(a,clock) && apart(b,clock);
+    })()`), true, 'Large buttons stay separate from each other and the clock');
+    await js(`for (const key of ['minimapButtons','minimapIcons','minimapText','questText']) {
+      const el=document.getElementById('size-'+key);el.value='80';el.dispatchEvent(new Event('input'));
+    }`);
+    await lastScene({ ok:true, x:takla.x, y:takla.y, z:takla.z, yaw:0 }); await tick(200);
+    assert(Math.abs(await smallSized.run(`document.querySelector('#zoom-in').getBoundingClientRect().width`) - 17.6) < .2, 'Small button setting applies live');
+    assert.equal(await smallSized.run(`Number(getComputedStyle(document.querySelector('#quests')).zoom)`), .8, 'Small quest text applies live');
+
+    // Width changes resize the transparent host too, without moving the minimap's right edge.
+    const rightEdge = smallSized.mm.getBounds().x + smallSized.mm.getBounds().width;
+    await js(`{const widthSlider=document.querySelector('#size-questWidth');widthSlider.value='180';widthSlider.dispatchEvent(new Event('input'));}`);
+    await lastScene({ok:true,x:takla.x,y:takla.y,z:takla.z,yaw:0}); await tick(300);
+    assert(Math.abs(await smallSized.run(`document.querySelector('#quests').getBoundingClientRect().width`) - 248 * 1.8) < 2, 'Quest list widens independently of text scale');
+    assert.equal(smallSized.mm.getBounds().x + smallSized.mm.getBounds().width, rightEdge, 'Right edge stays anchored');
+    assert.equal(await smallSized.run(`Number(getComputedStyle(document.querySelector('#quests')).zoom)`), .8, 'Changing width preserves text size');
+    assert.equal(await smallSized.run(`document.querySelector('#minimap').getBoundingClientRect().width`), 160, 'Changing width preserves minimap diameter');
+    if (!process.env.ATLAS_NO_CAPTURES) fs.writeFileSync(path.join(root, 'test-fixtures/minimap-quest-wide.png'), (await smallSized.mm.webContents.capturePage()).toPNG());
+    await js(`{const widthSlider=document.querySelector('#size-questWidth');widthSlider.value='70';widthSlider.dispatchEvent(new Event('input'));}`);
+    await lastScene({ok:true,x:takla.x,y:takla.y,z:takla.z,yaw:0}); await tick(200);
+    assert(Math.abs(await smallSized.run(`document.querySelector('#quests').getBoundingClientRect().width`) - 248 * .7) < 2, 'Quest list narrows independently');
+    assert.equal(await smallSized.run(`document.body.scrollWidth <= innerWidth`), true, 'Narrow list stays inside overlay');
+
     // Leaving the game empties it; the game closing removes it.
     assert.equal((await lastScene({ ok: false })).ok, false, 'No position, no scene');
     minimap.sync(false);

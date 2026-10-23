@@ -5,6 +5,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data: blob:; style-src 'self' 'unsafe-inline'">
   <title>AtlasLoot minimap</title>
   <link rel="stylesheet" href="minimap.css">
+  <link rel="stylesheet" href="waypoint.css">
+  <link rel="stylesheet" href="display-size.css">
 </head>
 <body>
   <div class="minimap">
@@ -16,6 +18,7 @@
       <time id="clock" class="clock"></time>
     </div>
   </div>
+  <div id="waypoint-slot"></div>
   <section id="quests" class="quests" hidden>
     <button type="button" id="quests-toggle" class="quests-toggle" aria-expanded="true" aria-controls="quest-list">
       <span>Quests</span><span id="quest-count" class="quest-count"></span><span id="quests-chevron" class="chevron" aria-hidden="true">▾</span>
@@ -23,6 +26,8 @@
     <ol id="quest-list" class="quest-list"></ol>
   </section>
   <script src="map-icons.js"></script>
+  <script src="waypoint.js"></script>
+  <script src="display-size.js"></script>
   <script src="minimap.js"></script>
 </body>
 </html>

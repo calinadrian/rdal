@@ -4,7 +4,7 @@
 (() => {
   const bridge = window.minimap;
   const ZOOMS = [4000, 7000, 11000, 17000, 26000]; // world units from the centre to the rim (40–260 m)
-  const ICON = 16, MONSTER = 7, QUEST = 18;
+  let iconScale = 1, ICON = 16, MONSTER = 7, QUEST = 18;
   const AREA_UNITS = 3000;     // same shaded radius around tracked spawns as the map
   const CHUNK = 2048;          // image px kept around you (the world picture is 6144 px square)
   const canvas = document.getElementById('minimap'), ctx = canvas.getContext('2d');
@@ -19,6 +19,7 @@
   let shown = null;            // position drawn, gliding towards the latest sample: { x, y, yaw }
   let dirty = true;
   let areaCanvas = null;
+  const updateWaypoint = Waypoint.mount('minimap-waypoint', document.getElementById('waypoint-slot'));
   const icons = MapIcons(() => { dirty = true; });
   const cat = (c) => scene.categories?.find((k) => k.id === c) || {};
 
@@ -123,6 +124,7 @@
 
   function draw() {
     dirty = false;
+    updateWaypoint(scene.waypoint, scene.ok ? shown : null);
     const c = size / 2, r = c - 3;
     ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     ctx.clearRect(0, 0, size, size);
@@ -222,8 +224,8 @@
     for (const n of scene.npcs) {
       const [sx, sy] = toScreen(n.x, n.y);
       if (!inView(sx, sy, 6)) continue;
-      if (n.alert) { ctx.beginPath(); ctx.arc(sx, sy, 6.5, 0, Math.PI * 2); ctx.lineWidth = 1.5; ctx.strokeStyle = n.combat ? 'rgba(255,60,40,.9)' : 'rgba(255,190,60,.9)'; ctx.stroke(); }
-      ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+      if (n.alert) { ctx.beginPath(); ctx.arc(sx, sy, 6.5 * iconScale, 0, Math.PI * 2); ctx.lineWidth = 1.5; ctx.strokeStyle = n.combat ? 'rgba(255,60,40,.9)' : 'rgba(255,190,60,.9)'; ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(sx, sy, 3.5 * iconScale, 0, Math.PI * 2);
       ctx.fillStyle = n.combat ? '#d03030' : '#e8a020'; ctx.fill();
       ctx.lineWidth = 1; ctx.strokeStyle = '#fff'; ctx.stroke();
     }
@@ -233,6 +235,7 @@
       const [sx, sy] = toScreen(o.x, o.y);
       if (!inView(sx, sy, 10)) continue;
       ctx.save(); ctx.translate(sx, sy); ctx.rotate(((o.yaw + 90) * Math.PI) / 180 + rot);
+      ctx.scale(iconScale, iconScale);
       ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(-5, 6); ctx.lineTo(0, 3); ctx.lineTo(5, 6); ctx.closePath();
       ctx.fillStyle = '#5fe36a'; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = '#0b2a0e'; ctx.stroke();
       ctx.restore();
@@ -242,8 +245,9 @@
     for (const t of scene.targets) {
       const [sx, sy] = toScreen(t.x, t.y);
       if (inView(sx, sy, -ICON / 2)) continue;
-      const a = Math.atan2(sy - c, sx - c), ex = c + Math.cos(a) * (r - 12), ey = c + Math.sin(a) * (r - 12);
+      const a = Math.atan2(sy - c, sx - c), ex = c + Math.cos(a) * (r - 12 * iconScale), ey = c + Math.sin(a) * (r - 12 * iconScale);
       ctx.save(); ctx.translate(ex, ey); ctx.rotate(a);
+      ctx.scale(iconScale, iconScale);
       ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(3, -6); ctx.lineTo(3, 6); ctx.closePath();
       ctx.fillStyle = '#ffd040'; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = '#2a1e00'; ctx.stroke();
       ctx.restore();
@@ -251,7 +255,17 @@
     }
 
     // You: the game's arrow, the way the camera looks.
+    if (scene.waypoint && !scene.waypoint.blocked) {
+      const [sx, sy] = toScreen(scene.waypoint.x, scene.waypoint.y);
+      const a = Math.atan2(sy - c, sx - c), distance = Math.hypot(sx - c, sy - c);
+      const reach = Math.min(distance, r - 14 * iconScale), ex = c + Math.cos(a) * reach, ey = c + Math.sin(a) * reach;
+      ctx.save(); ctx.translate(ex, ey); ctx.rotate(a);
+      ctx.scale(iconScale, iconScale);
+      ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-8, -7); ctx.lineTo(-4, 0); ctx.lineTo(-8, 7); ctx.closePath();
+      ctx.fillStyle = '#ffd040'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#362a12'; ctx.stroke(); ctx.restore();
+    }
     ctx.save(); ctx.translate(c, c); ctx.rotate(((shown.yaw + 90) * Math.PI) / 180 + rot);
+    ctx.scale(iconScale, iconScale);
     const arrow = icons.image('mapicons/T_NavIcons_Player_Self.png');
     ctx.shadowColor = '#3cf'; ctx.shadowBlur = 6;
     if (arrow) ctx.drawImage(arrow, -11, -11, 22, 22);
@@ -264,11 +278,13 @@
 
   // The tracker number in a gold disc.
   function badge(x, y, n, fill = '#ffd040', ink = '#2a1e00') {
+    ctx.save(); ctx.translate(x, y); ctx.scale(iconScale, iconScale); x = y = 0;
     ctx.font = '700 9px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const w = Math.max(13, ctx.measureText(String(n)).width + 6);
     ctx.beginPath(); ctx.roundRect(x - w / 2, y - 6.5, w, 13, 6.5); ctx.fillStyle = fill; ctx.fill();
     ctx.lineWidth = 1; ctx.strokeStyle = ink; ctx.stroke();
     ctx.fillStyle = ink; ctx.fillText(String(n), x, y + 0.5);
+    ctx.restore();
   }
 
   // At most 30 frames a second: smooth for a minimap, and less work on top of the game than the screen's 60 or more.
@@ -286,6 +302,9 @@
   bridge.onPlayer((p) => { live = p; });
   bridge.onScene((next) => {
     scene = next;
+    MapAppearance.apply(scene.displaySizes);
+    iconScale = MapAppearance.sizes().minimapIcons / 100;
+    ICON = 16 * iconScale; MONSTER = 7 * iconScale; QUEST = 18 * iconScale;
     if (scene.ok) loadImage(scene.image); else shown = null;
     // The name bar names where you are; while your character loads it keeps the last place.
     if (scene.ok && zone.textContent !== scene.place) zone.textContent = scene.place;

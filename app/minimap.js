@@ -15,11 +15,19 @@ function createMinimap({ settings, update, icon }) {
   let scene = { ok: false };
   let content = 0; // the page's height with its quest list, as the minimap window reports it
   const size = () => SIZES.includes(settings().minimapSize) ? settings().minimapSize : 200;
+  function questWidth() {
+    let saved = {};
+    try { saved = JSON.parse(settings().ui?.displaySizes || '{}'); } catch {}
+    const percent = Number(scene.displaySizes?.questWidth ?? saved.questWidth ?? 100);
+    return Math.max(size(), WIDTH - 16) * (Number.isFinite(percent) ? Math.min(200, Math.max(70, Math.round(percent / 10) * 10)) : 100) / 100;
+  }
   function bounds() {
     // The window grows with the quest list; only the name bar and minimap are kept on screen.
-    const width = Math.max(size() + 16, WIDTH), dial = size() + 48, height = Math.max(dial, content);
+    let width = Math.max(size() + 16, Math.round(questWidth()) + 16);
+    const dial = size() + 48, height = Math.max(dial, content);
     const saved = settings().minimapPosition, screen = electron.screen; // usable once the app is ready
     const area = (saved ? screen.getDisplayMatching({ ...saved, width, height }) : screen.getPrimaryDisplay()).workArea;
+    width = Math.min(width, area.width - 32);
     // Top-right corner by default; a dragged position is kept on whichever screen it is on (or the nearest).
     const x = saved ? saved.x : area.x + area.width - width - 16, y = saved ? saved.y : area.y + 16;
     return { width, height,
@@ -55,6 +63,7 @@ function createMinimap({ settings, update, icon }) {
 
   ipcMain.on('minimap:scene', (_, next) => {
     scene = next;
+    if (win && !win.isDestroyed() && win.getBounds().width !== bounds().width) win.setBounds(bounds());
     if (win && !win.isDestroyed()) win.webContents.send('minimap:scene', scene);
   });
   ipcMain.on('minimap:interactive', (_, on) => win?.setIgnoreMouseEvents(!on, { forward: true }));

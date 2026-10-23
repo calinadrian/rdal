@@ -379,13 +379,15 @@ function initMap() {
   if (!db?.map || mapReady) return;
   mapReady = true;
   MapView.init($('#map'), db.map, (m) => {
-    if (m.enter) { history.push(snapshot()); MapView.setLayer(db.map.dungeons.find(d => d.id === m.enter)); renderNavigation(); return; }
+    if (m.enter) return; // Left-click navigates to the entrance; right-click opens its floor plan.
     selectedQuestMarker = m.c === 'quest' ? m : null;
     selectedDiscoveryMarker = ['lore', 'shrine'].includes(m.c) ? m : null;
     if (selectedDiscoveryMarker) renderDetail();
     // A tracked spawn or source opens the quest it is tracked for; quest markers open their own quest.
     else if (MapView.trackedEntry(m) && m.c !== 'quest') showItem(MapView.trackedEntry(m).quest);
     else if (m.ref) showItem(m.ref);
+  }, m => {
+    history.push(snapshot()); MapView.setLayer(db.map.dungeons.find(d => d.id === m.enter)); renderNavigation();
   });
   MapView.setTracked(trackedMapEntries());
   MapView.setQuestStatus((name) => questStatus(ent(name)));
@@ -2751,6 +2753,7 @@ async function init() {
   if (minimapOn) initMap();
   render();
   renderStatus(settings);
+  MapAppearance.bind(sendMinimap);
 
   const clearSearch = () => {
     clearTimeout(searchTimer);
@@ -2888,7 +2891,7 @@ async function init() {
       renderNavigation();
       // Like the game's own map: clean, on you and still (no following, no earlier search results).
       if (MapView.isFollowing()) MapView.setFollow(false);
-      MapView.setHighlight(null); syncMapHighlight();
+      MapView.setHighlight(null, null, { preserveDestination: true }); syncMapHighlight();
       MapView.centerOnPlayer(0.5);
       renderQuestTracker(); renderMapViews();
     } else if (!on && gameMapReturn) {

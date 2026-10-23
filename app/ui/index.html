@@ -6,6 +6,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: https: data: blob:; connect-src 'self' blob:; style-src 'self' 'unsafe-inline'">
   <title>Dragonwilds AtlasLoot</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="waypoint.css">
+  <link rel="stylesheet" href="display-size.css">
 </head>
 <body>
   <header class="titlebar">
@@ -37,6 +39,7 @@
         <label class="map-select-label" id="map-level-label" hidden>Floor<select id="map-level" aria-label="Dungeon level" title="All floors together, or a single level. Live entry follows your current level." hidden></select></label>
         <button id="map-filters" aria-controls="map-legend" aria-expanded="false">Filters</button>
         <button id="map-follow" title="Keep me in the middle of the map (stays on until you turn it off)">◎ Follow me</button>
+        <button id="map-add-waypoint" type="button" aria-pressed="false" title="Place your own waypoint. You can also right-click the map. Right-click a dungeon icon to open it.">Add waypoint</button>
         <div class="map-zoom-controls">
           <button id="map-zoom-in" title="Zoom in">+</button>
           <button id="map-zoom-out" title="Zoom out">−</button>
@@ -108,6 +111,31 @@
         <small id="minimap-hint">Shows while the game runs, with your map filters, the day and time, and your tracked quests listed under it. Clicks go through it to the game.
           Drag its name bar to move it; double-click the bar to put it back in the top-right corner.</small>
       </div>
+      <fieldset class="display-size-settings">
+        <legend>Minimap sizes</legend>
+        <small id="size-hint">Adjust each size independently. Changes apply and save immediately.</small>
+        <label for="size-minimapButtons">Minimap buttons <output id="size-minimapButtons-value" for="size-minimapButtons">100%</output>
+          <input id="size-minimapButtons" type="range" min="80" max="160" step="10" value="100" aria-describedby="size-hint">
+        </label>
+        <label for="size-minimapIcons">Minimap icons <output id="size-minimapIcons-value" for="size-minimapIcons">100%</output>
+          <input id="size-minimapIcons" type="range" min="80" max="160" step="10" value="100" aria-describedby="size-hint">
+        </label>
+        <label for="size-minimapText">Clock &amp; location text <output id="size-minimapText-value" for="size-minimapText">100%</output>
+          <input id="size-minimapText" type="range" min="80" max="160" step="10" value="100" aria-describedby="size-hint">
+        </label>
+        <label for="size-questText">Quest text <output id="size-questText-value" for="size-questText">100%</output>
+          <input id="size-questText" type="range" min="80" max="160" step="10" value="100" aria-describedby="size-hint">
+        </label>
+        <label for="size-questWidth">Quest list width <output id="size-questWidth-value" for="size-questWidth">100%</output>
+          <input id="size-questWidth" type="range" min="70" max="200" step="10" value="100" aria-describedby="size-hint">
+        </label>
+        <div class="size-preview" aria-label="Size preview">
+          <div class="size-preview-controls"><button type="button" disabled aria-label="Minimap zoom button preview">+</button><img src="../../data/mapicons/T_NavIcons_Player_Self.png" alt="Minimap player icon preview"></div>
+          <span class="size-preview-map">Bramblemead Valley · 150 m</span>
+          <span class="size-preview-quest">The Wild Hunt · Hunt deer</span>
+        </div>
+        <button id="size-reset" type="button">Reset sizes</button>
+      </fieldset>
       <label for="set-hotkey">Show / hide hotkey</label>
       <div class="hotkey-field">
         <input id="set-hotkey" readonly aria-describedby="hotkey-hint" title="Click, then press the new key combination">
@@ -144,6 +172,7 @@
     </form>
   </dialog>
 
+  <script src="waypoint.js"></script>
   <script src="preferences.js"></script>
 </body>
 </html>

@@ -50,6 +50,39 @@ window.MapView = (() => {
   let highlight = null;        // { label, markers:Set }
   let tracked = new Map();     // marker -> { index, quest, kind, label } for pinned quests' current objectives
   let player = null;
+  let destination = null, updateWaypoint = () => {}, placingWaypoint = false;
+  function setWaypointPlacement(on) {
+    placingWaypoint = on;
+    canvas.classList.toggle('placing-waypoint', on);
+    const button = document.getElementById('map-add-waypoint');
+    button.classList.toggle('on', on);
+    button.setAttribute('aria-pressed', String(on));
+    button.textContent = on ? 'Click map · Cancel' : 'Add waypoint';
+  }
+  function placeWaypoint(e) {
+    if (W <= 1) return;
+    const r = canvas.getBoundingClientRect(), f = frame();
+    const u = (e.clientX - r.left - ox) / scale, v = (e.clientY - r.top - oy) / scale;
+    if (u < 0 || v < 0 || u > W || v > H) return;
+    const floor = layer ? level < 0 ? playerLayer === layer ? playerLevel : 0 : level : 0;
+    selectDestination({ x: f.minX + u * f.res, y: f.minY + v * f.res,
+      d: layer?.id, _level: floor, custom: true,
+      n: layer?.levels?.length > 1 ? `My waypoint · Level ${floor + 1}` : 'My waypoint' });
+    setWaypointPlacement(false);
+    hover = null; document.getElementById('map-tip').hidden = true;
+  }
+  function selectDestination(marker) {
+    destination = marker && Number.isFinite(marker.x) && Number.isFinite(marker.y) ? marker : null;
+    dirty = true;
+  }
+  function waypoint() {
+    if (!destination) return null;
+    const d = destination.d ? map.dungeons.find(d => d.id === destination.d) : null;
+    const blocked = !player?.ok ? null : (destination.d || null) !== (playerLayer?.id || null)
+      ? d ? `Enter ${d.name}` : 'Return to the world map'
+      : d && markerLevel(destination) !== playerLevel ? `Go to Level ${markerLevel(destination) + 1}` : null;
+    return { x: destination.x, y: destination.y, n: destination.n, blocked };
+  }
   let npcs = [];               // live creatures around the player: { n, ref, hostile, alert, x, y }
   let others = [];             // other players in your world (co-op): { n, x, y, z, yaw }
   let follow = false;          // keep the player centred (stays on until toggled off)
@@ -100,19 +133,36 @@ window.MapView = (() => {
   const drawIcon = (sx, sy, s, c, iconPath, ring, markerColor) => icons.drawIcon(ctx, sx, sy, s, cat(c), iconPath, ring, markerColor);
   const drawVent = (sx, sy, marker, hovered) => icons.paintVent(ctx, sx, sy, MARKER_SIZE, marker, hovered);
 
-  function init(cnv, mapData, selectFn) {
+  function init(cnv, mapData, selectFn, openDungeon) {
     canvas = cnv;
     ctx = canvas.getContext('2d');
     map = mapData;
     onSelect = selectFn;
+    updateWaypoint = Waypoint.mount('map-waypoint', canvas.parentElement, () => selectDestination(null));
+    document.getElementById('map-add-waypoint').onclick = () => setWaypointPlacement(!placingWaypoint);
+    window.addEventListener('keydown', e => { if (e.key === 'Escape' && placingWaypoint) setWaypointPlacement(false); });
     loadLayerImage();
 
     let drag = null;
-    canvas.addEventListener('mousedown', (e) => { drag = { x: e.clientX, y: e.clientY, ox, oy, moved: false }; });
+    canvas.addEventListener('mousedown', (e) => { if (e.button === 0) drag = { x: e.clientX, y: e.clientY, ox, oy, moved: false }; });
     window.addEventListener('mouseup', (e) => {
-      if (drag && !drag.moved && hover) onSelect(hover);
+      if (drag && !drag.moved && e.button === 0 && e.target === canvas) {
+        if (placingWaypoint) placeWaypoint(e);
+        else {
+          pick(e);
+          if (hover?.custom && hover === destination) {
+            selectDestination(null); hover = null; document.getElementById('map-tip').hidden = true;
+          } else if (hover) { selectDestination(hover); onSelect(hover); }
+        }
+      }
       if (drag?.moved) { followPause = performance.now() + 3000; saveViewport(); } // look around, then glide back to the player
       drag = null;
+    });
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault(); drag = null;
+      pick(e);
+      if (hover?.enter) { setWaypointPlacement(false); openDungeon?.(hover); }
+      else placeWaypoint(e);
     });
     window.addEventListener('mousemove', (e) => {
       if (drag) {
@@ -259,8 +309,6 @@ window.MapView = (() => {
     return s === 'active' ? '#4fc3ff' : m.qnpc && s !== 'done' ? '#ffd040' : null;
   };
   // Ring around a quest's target creatures and drop sources, in its shaded area's colour.
-  // Lodestones players have built: green, like other players on the map.
-  const builtRing = (m) => m.built ? '#5fe36a' : null;
   const targetRing = (m) => {
     const t = tracked.get(m);
     return t && t.kind !== 'goto' && m.c !== 'quest' ? t.kind === 'kill' ? '#ff6a4a' : '#ffd040' : null;
@@ -271,13 +319,13 @@ window.MapView = (() => {
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     let best = null, bd = 100;
     const live = [...(enabled.has('npc') && playerHere() ? npcs : []), ...others.filter(otherHere)];
-    for (const m of [...live, ...map.markers]) {
-      if (!m.live && (!visible(m) || questHidden.has(m))) continue;
-      const [sx, sy] = toScreen(m.x, m.y);
+    for (const m of [...(destination?.custom && onLayer(destination) ? [destination] : []), ...live, ...map.markers]) {
+      if (!m.custom && !m.live && (!visible(m) || questHidden.has(m))) continue;
+      const [sx, rawY] = toScreen(m.x, m.y), sy = rawY - (m.custom ? 10 : 0);
       const d = (sx - mx) ** 2 + (sy - my) ** 2;
       const info = m.c === 'quest' ? questInfo(m) : null;
       const hit = d < (markerSize(m) / 2 + 1) ** 2;
-      const priority = info?.current ? 30 : info?.pickup ? 15 : 0;
+      const priority = m.custom ? 100 : info?.current ? 30 : info?.pickup ? 15 : 0;
       const score = d - priority;
       if (hit && (!best || score < bd)) { bd = score; best = m; }
     }
@@ -305,7 +353,7 @@ window.MapView = (() => {
         const discovery = ['lore', 'shrine'].includes(hover.c) ? { discovered: 'Discovered', undiscovered: 'Undiscovered', unknown: 'Discovery not confirmed yet' }[MapDiscovery.state(hover)] : '';
         const about = [mood.replace(/^ · /, ''), dist.replace(/^ · /, ''), hover.region, discovery].filter(Boolean).join(' · ');
         card(tip, `${hover.live ? '● ' : ''}${hover.n}`, [about],
-          hover.enter ? 'Click to open its map' : hover.ref || ['lore', 'shrine'].includes(hover.c) ? 'Click for details' : '');
+          hover.custom ? 'Click to remove waypoint' : hover.enter ? 'Left-click to navigate · Right-click to open its map' : hover.ref || ['lore', 'shrine'].includes(hover.c) ? 'Click for details' : '');
       }
       tip.style.left = Math.max(8, Math.min(mx + 14, r.width - tip.offsetWidth - 8)) + 'px';
       tip.style.top = Math.max(8, Math.min(my + 10, r.height - tip.offsetHeight - 8)) + 'px';
@@ -409,6 +457,7 @@ window.MapView = (() => {
   }
 
   function draw() {
+    updateWaypoint(waypoint(), player);
     dirty = false;
     const dpr = devicePixelRatio;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -478,10 +527,17 @@ window.MapView = (() => {
         if (more > 0) pill(sx + MARKER_SIZE / 2 + 2, sy + MARKER_SIZE / 2 + 1, '+' + more, '#2b2a27', '#e8dcc0');
       } else if (m.c === 'vent') {
         drawVent(sx, sy, m, m === hover);
-      } else drawIcon(sx, sy, markerSize(m), m.c, m.i, m === hover ? '#fff' : questRing(m) || targetRing(m) || builtRing(m), m.color);
+      } else drawIcon(sx, sy, markerSize(m), m.c, m.i, m === hover ? '#fff' : questRing(m) || targetRing(m), m.color);
     }
 
     drawTrackedPins(cw, ch);
+    if (destination?.custom && onLayer(destination)) {
+      const [x, y] = toScreen(destination.x, destination.y);
+      ctx.save(); ctx.translate(x, y);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-9, -15); ctx.arc(0, -15, 9, Math.PI, 0); ctx.closePath();
+      ctx.fillStyle = '#ffd040'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#362a12'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, -15, 3, 0, Math.PI * 2); ctx.fillStyle = '#362a12'; ctx.fill(); ctx.restore();
+    }
 
     // Live creatures around the player: amber, turning red with a pulsing ring when alerted/in combat.
     if (enabled.has('npc') && playerHere()) {
@@ -554,6 +610,18 @@ window.MapView = (() => {
     // Player: the game's own arrow, pointing where the camera looks (yaw 0 = +X = right), large on a soft halo so
     // you find yourself at a glance.
     if (playerHere()) {
+      if (destination && !waypoint().blocked && onLayer(destination)) {
+        const [px, py] = toScreen(player.x, player.y), [tx, ty] = toScreen(destination.x, destination.y);
+        const angle = Math.atan2(ty - py, tx - px);
+        ctx.save(); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(tx, ty);
+        ctx.setLineDash([7, 7]); ctx.lineWidth = 2; ctx.strokeStyle = '#ffd040'; ctx.stroke(); ctx.setLineDash([]);
+        if (Math.hypot(tx - px, ty - py) > 36) {
+          ctx.translate(px + Math.cos(angle) * 36, py + Math.sin(angle) * 36); ctx.rotate(angle);
+          ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-8, -7); ctx.lineTo(-4, 0); ctx.lineTo(-8, 7); ctx.closePath();
+          ctx.fillStyle = '#ffd040'; ctx.fill(); ctx.strokeStyle = '#362a12'; ctx.stroke();
+        }
+        ctx.restore();
+      }
       const [sx, sy] = toScreen(player.x, player.y);
       ctx.beginPath(); ctx.arc(sx, sy, 22, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(60,200,255,0.16)'; ctx.fill();
@@ -577,6 +645,8 @@ window.MapView = (() => {
 
   return {
     init,
+    setDestination: selectDestination,
+    waypoint,
     resize: () => { resize(); },
     redraw: () => { dirty = true; hover = null; const tip = document.getElementById('map-tip'); if (tip) tip.hidden = true; },
     setEnabled(cat, on) { on ? enabled.add(cat) : enabled.delete(cat); Preferences.setJSON('mapCategories', [...enabled]); dirty = true; },
@@ -613,7 +683,14 @@ window.MapView = (() => {
       const types = ventTypes === null ? new Set((map?.markers || []).filter(m => m.c === 'vent').map(m => m.ventType || 'unknown')) : new Set(ventTypes);
       on ? types.add(type) : types.delete(type); setVentTypes(types);
     },
-    setHighlight(label, markers) {
+    setHighlight(label, markers, { preserveDestination = false } = {}) {
+      // Choose once; movement must not silently switch between nearby copies of a resource.
+      if (markers?.length && !markers.includes(destination)) {
+        const here = player?.ok ? markers.filter(m => onStorey(m, playerLayer, playerLevel)) : [];
+        const candidates = here.length ? here : markers;
+        selectDestination(player?.ok ? candidates.reduce((a, b) =>
+          Math.hypot(a.x - player.x, a.y - player.y) <= Math.hypot(b.x - player.x, b.y - player.y) ? a : b) : candidates[0]);
+      } else if (!markers?.length && !preserveDestination) selectDestination(null);
       highlight = markers && markers.length ? { label, markers: new Set(markers) } : null;
       if (highlight && follow) { follow = false; followChanged(false); } // framing the results beats following
       if (highlight) {
@@ -686,7 +763,7 @@ window.MapView = (() => {
     // within `range` world units that the filters let through (search highlights aside), live creatures,
     // other players, and the nearest target of each tracked quest so it can point at those past its rim.
     minimapScene(range) {
-      if (!map || !player?.ok) return { ok: false };
+      if (!map || !player?.ok) return { ok: false, waypoint: waypoint(), displaySizes: MapAppearance.sizes() };
       const l = playerLayer, lv = playerLevel;
       const near = (p) => Math.abs(p.x - player.x) < range && Math.abs(p.y - player.y) < range;
       const markers = [], targets = new Map();
@@ -699,7 +776,7 @@ window.MapView = (() => {
         }
         if (!near(m) || !(t || filtered(m, false) && enabled.has(m.c))) continue;
         const info = m.c === 'quest' ? questInfo(m) : null;
-        markers.push({ x: m.x, y: m.y, c: m.c, i: m.i, color: m.color, ventType: m.ventType, ring: questRing(m) || targetRing(m) || builtRing(m),
+        markers.push({ x: m.x, y: m.y, c: m.c, i: m.i, color: m.color, ventType: m.ventType, ring: questRing(m) || targetRing(m),
           quest: info && { badge: info.badge, color: info.color, current: info.current, pickup: info.pickup },
           track: t && { index: t.index, area: t.kind !== 'goto' && m.c !== 'quest' ? t.kind : null } });
       }
@@ -721,6 +798,8 @@ window.MapView = (() => {
         image: l ? l.levels?.[lv]?.image || l.image : map.image,
         frame: l ? { minX: l.frame.minX, minY: l.frame.minY, res: l.frame.res } : { minX: map.bounds.minX, minY: map.bounds.minY, size: map.bounds.size },
         categories: map.categories,
+        displaySizes: MapAppearance.sizes(),
+        waypoint: waypoint(),
         markers,
         targets: [...targets.values()].map(({ x, y, index }) => ({ x, y, index })),
         npcs: enabled.has('npc') ? npcs.filter(near).map(n => ({ x: n.x, y: n.y, alert: !!n.alert, combat: !!n.combat })) : [],
@@ -728,6 +807,7 @@ window.MapView = (() => {
       };
     },
     focusMarker(marker) {
+      selectDestination(marker);
       if (highlight && !highlight.markers.has(marker)) highlight = null;
       hover = null;
       document.getElementById('map-tip').hidden = true;
