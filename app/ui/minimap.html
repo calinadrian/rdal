@@ -7,12 +7,21 @@
   <link rel="stylesheet" href="minimap.css">
 </head>
 <body>
-  <div id="zone" class="zone" title="Drag to move · double-click to put it back in the corner">Minimap</div>
-  <div class="dial">
-    <canvas id="minimap" role="img" aria-label="Minimap"></canvas>
-    <button type="button" id="zoom-in" class="zoom in" aria-label="Zoom in" title="Zoom in">+</button>
-    <button type="button" id="zoom-out" class="zoom out" aria-label="Zoom out" title="Zoom out">−</button>
+  <div class="minimap">
+    <div id="zone" class="zone" title="Drag to move · double-click to put it back in the corner">Dragonwilds</div>
+    <div class="dial">
+      <canvas id="minimap" role="img" aria-label="Minimap"></canvas>
+      <button type="button" id="zoom-in" class="zoom in" aria-label="Zoom in" title="Zoom in">+</button>
+      <button type="button" id="zoom-out" class="zoom out" aria-label="Zoom out" title="Zoom out">−</button>
+      <time id="clock" class="clock"></time>
+    </div>
   </div>
+  <section id="quests" class="quests" hidden>
+    <button type="button" id="quests-toggle" class="quests-toggle" aria-expanded="true" aria-controls="quest-list">
+      <span>Quests</span><span id="quest-count" class="quest-count"></span><span id="quests-chevron" class="chevron" aria-hidden="true">▾</span>
+    </button>
+    <ol id="quest-list" class="quest-list"></ol>
+  </section>
   <script src="map-icons.js"></script>
   <script src="minimap.js"></script>
 </body>

@@ -16,7 +16,7 @@ app.whenReady().then(async()=>{
  try {
   await win.loadFile(path.join(target,'app/ui/index.html'));win.showInactive();await tick();
   await js(`localStorage.removeItem('questLog');questLog=null;trackedQuests=[];selectModule('quests');`);
-  assert(await js(`$('#content .quest-tracker .tracker-empty')!==null`),'Overview explains how to track quests');
+  assert(await js(`!$('#content .quest-tracker') && document.querySelectorAll('#content .quest-task .track-toggle').length>0`),'Overview rows carry a Track tickbox instead of a second tracker');
 
   // Pin from the guide: the kill target and the item it drops are both tracked, with the amount from the objective.
   await js(`window.q=ent('The Wild Hunt');onQuestLog([{id:q.id,s:1,o:'HuntBeast'}]);showItem(q.name)`);
@@ -25,7 +25,7 @@ app.whenReady().then(async()=>{
   const lines=await js(`questTrackerObjective(q).lines.map(l=>[l.kind,l.name,l.qty,l.markers.length])`);
   assert(lines.some(([k,n,,c])=>k==='kill'&&n==='Nature Spirit'&&c>0),JSON.stringify(lines));
   assert(lines.some(([k,n,qty,c])=>k==='loot'&&n==='Primordial Heart'&&qty===3&&c>0),JSON.stringify(lines));
-  assert(await js(`$('#content .quest-tracker').textContent.includes('drops from Nature Spirit')`),'Overview tracker names the drop source');
+  assert(await js(`$('#quest-tracker').textContent.includes('drops from Nature Spirit')`),'The tracker names the drop source');
 
   // Regional creature variants read as the base creature; the antler shows the creature that drops it.
   await js(`q=ent('Dragon Slayer');onQuestLog([{id:ent('The Wild Hunt').id,s:1,o:'HuntBeast'},{id:q.id,s:1,o:'Find and hunt a deer'}])`);

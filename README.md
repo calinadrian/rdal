@@ -39,8 +39,10 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   (top-right by default; Small, Medium or Large). It follows your position and facing, north up or turned with the
   camera, and names the region or dungeon floor you are in. It shows what the map shows around you with the same
   filters: places, spawns, live creatures, other players, and your quests' target areas and tracked numbered gold
-  rings, with an arrow on the rim pointing at each tracked objective that is out of view. Clicks go through it to
-  the game; **+** and **−** zoom, dragging the name bar moves it, and double-clicking the bar puts it back in the corner.
+  rings, with an arrow on the rim pointing at each tracked objective that is out of view. The day and local time sit
+  on the bottom of the rim, and like WoW your tracked quests are listed under the minimap, numbered as on the map,
+  each with what to do next (click **Quests** to fold the list away). Clicks go through it to the game; **+** and
+  **−** zoom, dragging the name bar moves it, and double-clicking the bar puts it back in the corner.
 - In item/monster/chest/quest panels, **Show locations** and named map links highlight where to find the selected entry.
 - **Search everything** searches across the database; each section has a separately labeled filter, result count, and **Clear filter** button.
   **Clear search** returns to the page you searched from. Breadcrumbs and **Back** help you retrace item, source, recipe, and map links while keeping filters and scroll positions.
@@ -56,8 +58,8 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   The map explains when filters, zoom, or missing live creature data leave no markers visible. The Map and Floor selectors identify what you are viewing.
 - Quest and recipe panels label saved progress with its last-read time. Unknown progress stays explicitly unknown; active quests put the current objective and its confirmed locations first.
 - **Quests** offers persistent progress filters shared by the sidebar and overview. Search a quest name, place, item or objective;
-  active quest rows show the rewritten next action with **Continue guide** and a direct objective map button.
-- **Track quest** pins a quest to the WoW-style quest tracker, shown on the map and at the top of the quest overview.
+  each row shows the rewritten next action; click anywhere on a row to open its guide. A row's one control is **Track**.
+- **Track** (or **Track quest** in a guide) pins a quest to the WoW-style quest tracker, listed under the minimap and on the map.
   Each tracked quest lists its current objective with what to do: places to go, creatures to slay and items to loot
   (with the creatures that drop them and the amount the objective asks for). Every line has a **Map** button. Tracked
   targets stay on the map whatever the filters: numbered gold rings mark places to go, and shaded areas mark where

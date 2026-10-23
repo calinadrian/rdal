@@ -1,28 +1,32 @@
-// WoW-style minimap: a small round window in a corner of the game while it runs. It never takes focus and lets
-// clicks through to the game, except on its name bar (drag to move, double-click to put it back) and zoom
-// buttons. The main window works out what it shows (minimap:scene); this relays it to the minimap window.
+// WoW-style minimap: a small round window in a corner of the game while it runs, with the tracked quests listed
+// under it. It never takes focus and lets clicks through to the game, except on its name bar (drag to move,
+// double-click to put it back), zoom buttons and the quest list's heading (fold it away). The main window works
+// out what it shows (minimap:scene); this relays it to the minimap window.
 const path = require('path');
 const electron = require('electron');
 const { BrowserWindow, ipcMain } = electron;
 
 const SIZES = [160, 200, 260];
+const WIDTH = 264; // room for the quest list, which is wider than the small and medium minimaps
 
 // settings() returns the current settings; update(patch) changes and saves them.
 function createMinimap({ settings, update, icon }) {
   let win = null;
   let scene = { ok: false };
+  let content = 0; // the page's height with its quest list, as the minimap window reports it
   const size = () => SIZES.includes(settings().minimapSize) ? settings().minimapSize : 200;
   function bounds() {
-    const width = size() + 16, height = size() + 38;
+    // The window grows with the quest list; only the name bar and minimap are kept on screen.
+    const width = Math.max(size() + 16, WIDTH), dial = size() + 48, height = Math.max(dial, content);
     const saved = settings().minimapPosition, screen = electron.screen; // usable once the app is ready
     const area = (saved ? screen.getDisplayMatching({ ...saved, width, height }) : screen.getPrimaryDisplay()).workArea;
     // Top-right corner by default; a dragged position is kept on whichever screen it is on (or the nearest).
     const x = saved ? saved.x : area.x + area.width - width - 16, y = saved ? saved.y : area.y + 16;
     return { width, height,
       x: Math.round(Math.min(Math.max(x, area.x), area.x + area.width - width)),
-      y: Math.round(Math.min(Math.max(y, area.y), area.y + area.height - height)) };
+      y: Math.round(Math.min(Math.max(y, area.y), area.y + area.height - dial)) };
   }
-  const options = () => ({ size: size(), rotate: !!settings().minimapRotate, zoom: settings().minimapZoom });
+  const options = () => ({ size: size(), rotate: !!settings().minimapRotate, zoom: settings().minimapZoom, questsFolded: !!settings().minimapQuestsFolded });
 
   // Shown while the setting is on and the game runs; closed otherwise.
   function sync(gameRunning) {
@@ -62,6 +66,12 @@ function createMinimap({ settings, update, icon }) {
     win.setBounds(bounds());
   });
   ipcMain.on('minimap:zoom', (_, zoom) => { if (Number.isInteger(zoom)) update({ minimapZoom: zoom }); });
+  ipcMain.on('minimap:fold', (_, folded) => update({ minimapQuestsFolded: !!folded }));
+  ipcMain.on('minimap:height', (_, height) => {
+    if (!Number.isFinite(height) || Math.round(height) === content) return;
+    content = Math.round(height);
+    if (win) win.setBounds({ ...win.getBounds(), height: bounds().height });
+  });
 
   return { sync, bounds, window: () => win };
 }

@@ -1,13 +1,17 @@
-/* The minimap window is transparent: only the name bar, the round map and its zoom buttons show. */
+/* The minimap window is transparent: only the name bar, the round map with its zoom buttons and clock, and the
+   tracked quests under it show. The minimap keeps to the window's right edge, as in WoW's top-right corner. */
 :root {
   --size: 200px;
   --accent: #d6a756;
   --accent-hover: #e6bc70;
+  --quest: #ffd040;
   font-family: "Segoe UI", system-ui, sans-serif;
   color-scheme: dark;
 }
 html, body { margin: 0; background: transparent; overflow: hidden; user-select: none; }
-body { display: flex; flex-direction: column; align-items: center; padding: 4px 8px 8px; }
+body { display: flex; flex-direction: column; align-items: flex-end; padding: 4px 8px 8px; }
+
+.minimap { display: flex; flex-direction: column; align-items: center; width: var(--size); }
 
 .zone {
   box-sizing: border-box; max-width: calc(var(--size) - 16px); height: 22px; padding: 0 12px;
@@ -18,7 +22,7 @@ body { display: flex; flex-direction: column; align-items: center; padding: 4px 
 }
 .zone:active { cursor: grabbing; }
 
-.dial { position: relative; width: var(--size); height: var(--size); margin-top: 4px; }
+.dial { position: relative; width: var(--size); height: var(--size); margin: 4px 0 10px; }
 .dial canvas { display: block; width: 100%; height: 100%; }
 
 /* Zoom buttons sit on the rim at about four and five o'clock, as in WoW. */
@@ -32,3 +36,49 @@ body { display: flex; flex-direction: column; align-items: center; padding: 4px 
 .zoom:disabled { opacity: .45; cursor: default; }
 .zoom.in { left: 95.3%; top: 71.1%; }
 .zoom.out { left: 82.1%; top: 88.3%; }
+
+/* Day and local time on the bottom of the rim, where WoW keeps its clock. */
+.clock {
+  position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%);
+  height: 18px; padding: 0 9px; font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap;
+  color: #f1dfb0; background: #1a160f; border: 1px solid #b8924e; border-radius: 9px;
+  font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; box-shadow: 0 1px 3px rgba(0, 0, 0, .7);
+}
+
+/* Tracked quests: gold titles and their next step in white, readable over the game on a faint backdrop. */
+.quests {
+  align-self: stretch; margin-top: 4px; overflow: hidden;
+  color: #f2efe6; font-size: 12px; line-height: 1.4; text-shadow: 0 1px 2px #000, 0 0 3px #000;
+}
+.quests[hidden] { display: none; }
+.quests-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 8px; border: 0; border-radius: 0;
+  background: linear-gradient(to right, rgba(10, 8, 5, .85), rgba(10, 8, 5, .5));
+  border-bottom: 1px solid rgba(255, 208, 64, .45);
+  font: 600 13px/1.4 "Segoe UI", system-ui, sans-serif; color: var(--quest); text-align: left; text-shadow: inherit;
+  cursor: pointer;
+}
+.quests-toggle:hover { color: #ffe27a; }
+.quest-count { color: #b9b2a2; font-weight: 400; font-size: 11px; }
+.chevron { margin-left: auto; color: #b9b2a2; font-size: 11px; }
+.quest-list {
+  list-style: none; margin: 0; padding: 4px 8px 6px;
+  background: linear-gradient(to right, rgba(10, 8, 5, .7), rgba(10, 8, 5, .4));
+  border-radius: 0 0 6px 6px;
+}
+.quest-list[hidden] { display: none; }
+.quest + .quest { margin-top: 6px; }
+.quest-name { display: flex; align-items: baseline; gap: 6px; color: var(--quest); font-weight: 600; }
+.quest-num {
+  flex: none; display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--quest); color: #2a1e00; font-size: 10px; font-weight: 700; line-height: 1; text-shadow: none;
+  transform: translateY(2px);
+}
+.quest-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quest-step {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  margin: 1px 0 0 21px; color: #ece7dc;
+}
+.quest-step::before { content: '– '; color: #b9b2a2; }
+.quest-step-label { color: #b9b2a2; }
+.quest.done .quest-step { color: #7fd17f; }

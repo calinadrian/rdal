@@ -22,7 +22,13 @@ app.whenReady().then(async () => {
     await js(`window.$$=selector=>[...document.querySelectorAll(selector)];selectModule('quests'); window.htp=E['Highlighting the Problem']; window.melody=E['A Melody Remembered'];
       onQuestLog([{id:htp.id,s:1,o:htp.objectives[0].key},{id:melody.id,s:1,o:'Objective1'},{id:'Quest_FTUE_RC',s:2},{id:'Quest_FTUE_LO',s:0}]);`);
     assert(await js(`$('#content .quest-task.q-active').textContent.includes('Enter Thishepen Kara')`), 'Overview must show rewritten guidance');
-    assert(await js(`$('#content .quest-task.q-active .quest-next-map').textContent.includes('Password statue')`));
+    // One control per row: Track. Ticking it tracks the quest without opening the guide, and keeps focus.
+    assert(await js(`[...$('#content .quest-task.q-active').querySelectorAll('button, label')].filter(el=>!el.matches('.quest-title-link')).map(el=>el.className).join()==='track-toggle'+(isTracked(htp.name)?' on':'')`), 'A quest row has the Track tickbox as its only control');
+    const wasTracked = await js(`isTracked(htp.name)`);
+    await js(`$('#content .quest-task.q-active .track-toggle input').click()`);
+    assert(await js(`isTracked(htp.name)===${!wasTracked} && !state.detail && document.activeElement===$('#content .quest-task.q-active .track-toggle input')`), 'Ticking Track only tracks the quest');
+    await js(`$('#content .quest-task.q-active .track-toggle input').click()`);
+    assert.equal(await js(`isTracked(htp.name)`), wasTracked);
     await js(`$('#content [data-mode=active]').click()`);
     assert.equal(preferences.questBrowseMode, 'active');
     assert(await js(`$$('#content .quest-task').length===2 && $$('#list .quest-list-text').length===2`));
@@ -32,18 +38,21 @@ app.whenReady().then(async () => {
     await js(`$('#section-filter').value='no-such-quest';$('#section-filter').dispatchEvent(new Event('input'))`);
     assert(await js(`$('#content .quest-empty').textContent.includes('Clear filters') && !$$('#content .quest-task').length`));
     await js(`$('#content .quest-empty button').click();$('#content [data-mode=active]').click();`);
-    // Search, scroll, pin an interior actor, then return to the exact list context.
-    await js(`$('#content').scrollTop=100;window.beforeTop=$('#content').scrollTop;$('#content .quest-task.q-active .quest-next-map').click()`); await tick();
+    // Search, scroll, open the guide from anywhere on the row, pin an interior actor, then return to the exact list context.
+    await js(`$('#content').scrollTop=100;window.beforeTop=$('#content').scrollTop;$('#content .quest-task.q-active .quest-now').click()`); await tick();
+    assert(await js(`state.detail===htp.name`), 'Clicking a quest row opens its guide');
+    await js(`$('#detail .current-objective .quest-pin-button').click()`); await tick();
     assert(await js(`state.module==='map' && MapView.layer()?.name==='Thishepen Kara' && selectedQuestMarker.target==='Password statue'`));
     await js(`back()`);
-    assert(await js(`state.module==='quests' && !state.detail && questBrowseMode==='active' && $('#content').scrollTop===beforeTop`));
+    assert(await js(`state.module==='quests' && state.detail===htp.name && questBrowseMode==='active' && $('#content').scrollTop===beforeTop`));
+    await js(`closeDetail()`);
     await js(`showItem(melody.name)`);
     assert(await js(`$('#detail .current-objective').textContent.includes('Inspiring Ring of Runecrafting') && document.activeElement===$('#detail h1')`));
     assert(await js(`!$('#detail .quest-walkthrough').open && $('#detail .progress-context').textContent.includes('Saved progress')`));
     await js(`window.itemButton=$$('#detail .current-objective .item-link').find(b=>b.textContent==='Inspiring Ring of Runecrafting');itemButton.click();back()`);
     assert(await js(`state.detail===melody.name && $('#detail .current-objective').textContent.includes('Inspiring Ring')`));
     await js(`closeDetail();setQuestBrowseMode('done')`);
-    assert(await js(`$$('#content .quest-task').length===1 && !$('#content .quest-next-map') && $('#content').textContent.includes('Ratcatcher')`));
+    assert(await js(`$$('#content .quest-task').length===1 && !$('#content .track-toggle') && $('#content').textContent.includes('Ratcatcher')`), 'Completed quests have nothing to track');
     await js(`onQuestLog([{id:htp.id,s:1,o:'unrecognised-key'}]);showItem(htp.name);`);
     assert(await js(`$('#detail .current-objective').textContent.includes('Current objective not recorded') && !$('#detail [role=progressbar]').hasAttribute('aria-valuenow')`));
     await js(`onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'InteractedWithStone1'}]);showItem('Withering Heights');`);
@@ -61,7 +70,7 @@ app.whenReady().then(async () => {
     assert(await js(`$('#detail').scrollWidth <= $('#detail').clientWidth+1 && $('#detail .current-objective .quest-pin-button').getBoundingClientRect().width>50`));
     await js(`closeDetail();onQuestLog([{id:htp.id,s:1,o:htp.objectives[0].key},{id:melody.id,s:1,o:'Objective1'}]);setQuestBrowseMode('active')`);
     await capture('compact');
-    assert(await js(`$('#content').scrollWidth <= $('#content').clientWidth+1 && $$('#content .quest-task-buttons button').every(b=>b.scrollWidth<=b.clientWidth+1)`));
+    assert(await js(`$('#content').scrollWidth <= $('#content').clientWidth+1 && $$('#content .track-toggle').every(b=>b.scrollWidth<=b.clientWidth+1)`));
     assert(await js(`(()=>{const b=$('#list .quest-overview-link'),label=b.querySelector('.quest-overview-label'),r=label.getBoundingClientRect(),pane=$('#list').getBoundingClientRect();return r.left>=pane.left && r.right<=pane.right && label.scrollWidth<=label.clientWidth+1})()`), 'Overview label must fit the sidebar');
     win.focus(); win.webContents.focus();
     await js(`$('#content [data-mode=all]').focus()`);
@@ -70,7 +79,7 @@ app.whenReady().then(async () => {
     assert(await js(`document.activeElement===$('#content [data-mode=active]') && getComputedStyle(document.activeElement).outlineStyle!=='none'`), 'Tab navigation must show a visible focus ring');
     await win.reload(); await tick();
     assert(await js(`questBrowseMode==='active' && $('#content [data-mode=active]').getAttribute('aria-pressed')==='true'`), 'Progress filter must hydrate from preferences');
-    console.log('PASS: shared search/status filters, exact objective pin → Back, guide → item → Back, saved/unknown/unrecognised progress, counter honesty, desktop/compact and preference hydration');
+    console.log('PASS: shared search/status filters, one Track tickbox per row, row opens guide → exact objective pin → Back, guide → item → Back, saved/unknown/unrecognised progress, counter honesty, desktop/compact and preference hydration');
     clearTimeout(timer); app.exit(0);
   } catch (error) { console.error(error); clearTimeout(timer); app.exit(1); }
 });

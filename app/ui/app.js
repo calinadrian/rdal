@@ -1113,21 +1113,6 @@ function questNextObjective(q) {
   const startKey = { Quest_SW_MainQuest: 'AccessSW', Quest_UmS_MainQuest: 'EnterUmS' }[q.id];
   return p.current || (['unknown', 'available'].includes(status) ? q.objectives?.find(o => o.key === startKey) || q.objectives?.[0] : null);
 }
-function questNextMapButton(q, objective) {
-  if (!objective) return null;
-  const fixed = questStepMarkers(q, objective.key);
-  const markers = fixed.length ? fixed : questStepSourceMarkers(q, objective.key);
-  if (!markers.length) return null;
-  return h('button', { type: 'button', class: 'quest-next-map', onclick: () => {
-    if (markers.length === 1) focusQuestTarget(q, markers[0]);
-    else {
-      history.push(snapshot()); includeQuestOnMap(q.name); state.module = 'map'; setMapMode(true); renderModules();
-      if (questMapStepMode === 'current' && markers.some(m => !questMapMarkerVisible(m, true))) { questMapStepMode = 'all'; saveQuestMapFilter(); }
-      selectedQuestMarker = null; MapView.setHighlight(q.name, markers); syncMapHighlight(); showItem(q.name, { push: false });
-    }
-  } }, !fixed.length ? 'Map · creature spawn locations' : markers.length === 1 && markers[0].precision === 'interaction' ? `Map · ${markers[0].target}` : `Map · ${markers.length} objective location${markers.length === 1 ? '' : 's'}`);
-}
-
 /* ---------- Quest tracker: pinned quests with their current objective, like WoW's objective tracker ---------- */
 
 let trackedQuests = Preferences.json('trackedQuests', []).filter(n => typeof n === 'string');
@@ -1146,6 +1131,16 @@ function trackButton(q) {
   return h('button', { type: 'button', class: 'track-button' + (on ? ' on' : ''), 'aria-pressed': on,
     title: on ? 'Remove from the quest tracker' : 'Pin to the quest tracker: its objective and target locations stay on the map',
     onclick: ev => { ev.stopPropagation(); setTracked(q.name, !on); } }, on ? 'Untrack' : 'Track quest');
+}
+// The quest list's one control: ticked quests are listed under the minimap and their targets marked on the map.
+function trackToggle(q) {
+  const on = isTracked(q.name);
+  return h('label', { class: 'track-toggle' + (on ? ' on' : ''),
+    title: on ? 'Listed under the minimap with its targets on the map. Untick to stop tracking.' : 'List under the minimap and mark its targets on the map' },
+    h('input', { type: 'checkbox', checked: on, 'data-quest': q.name, onchange: () => {
+      setTracked(q.name, !on);
+      $(`#content .track-toggle input[data-quest="${CSS.escape(q.name)}"]`)?.focus();
+    } }), on ? 'Tracked' : 'Track');
 }
 
 // What the current objective asks for, split into trackable lines: places to go, creatures to kill
@@ -1212,16 +1207,14 @@ function trackerShowLine(q, line) {
   else showMapLocations(q.name, line.markers, q.name);
 }
 
-function questTrackerPanel({ inMap = false } = {}) {
+function questTrackerPanel() {
   const quests = trackedList();
-  if (!quests.length && inMap) return null;
+  if (!quests.length) return null;
   const toggle = h('button', { type: 'button', class: 'tracker-toggle', 'aria-expanded': !trackerCollapsed,
     title: trackerCollapsed ? 'Expand the quest tracker' : 'Collapse the quest tracker',
-    onclick: () => { trackerCollapsed = !trackerCollapsed; Preferences.set('trackerCollapsed', trackerCollapsed ? '1' : '0'); renderQuestTracker(); if (state.view?.type === 'questlog') renderContent(); } },
+    onclick: () => { trackerCollapsed = !trackerCollapsed; Preferences.set('trackerCollapsed', trackerCollapsed ? '1' : '0'); renderQuestTracker(); } },
     h('span', { class: 'tracker-heading' }, 'Quests'), h('span', { class: 'tracker-count' }, quests.length), h('span', { class: 'tracker-chevron', 'aria-hidden': 'true' }, trackerCollapsed ? '▸' : '▾'));
   if (trackerCollapsed) return h('div', { class: 'quest-tracker collapsed' }, toggle);
-  if (!quests.length) return h('div', { class: 'quest-tracker' }, toggle,
-    h('p', { class: 'muted small tracker-empty' }, 'No tracked quests. Use Track quest on a quest to pin its objective and target locations to the map.'));
   return h('div', { class: 'quest-tracker' }, toggle, quests.map((q, i) => {
     const status = questStatus(q);
     const t = questTrackerObjective(q);
@@ -1249,7 +1242,7 @@ function questTrackerPanel({ inMap = false } = {}) {
 function renderQuestTracker() {
   const box = $('#quest-tracker');
   if (!box) return;
-  const panel = db && questTrackerPanel({ inMap: true });
+  const panel = db && questTrackerPanel();
   box.hidden = !panel;
   box.replaceChildren(...(panel ? [panel] : []));
 }
@@ -1257,6 +1250,7 @@ function syncQuestTracker() {
   if (!db) return;
   if (mapReady) MapView.setTracked(trackedMapEntries());
   renderQuestTracker();
+  sendMinimap();
   if (state.view?.type === 'questlog') renderContent();
 }
 
@@ -1271,7 +1265,7 @@ function questOverviewPage() {
     h('p', { class: 'page-lead progress-context' }, questProgressContext())),
     db.questChain ? h('button', { type: 'button', onclick: () => go({ type: 'questchain', arg: '' }, { detail: null }) }, 'Story & quest order') : null),
     h('div', { class: 'quest-summary-bar muted small' }, questLog ? `${count('done')} of ${quests.length} quests completed`
-      : `${quests.length} quests · completion unknown`), questTrackerPanel(), toolbar,
+      : `${quests.length} quests · completion unknown`), toolbar,
     h('p', { class: 'quest-results-line muted small', role: 'status' }, `${visible.length} quest${visible.length === 1 ? '' : 's'} shown${state.filter ? ` matching “${state.filter}”` : ''}`)];
   if (!visible.length) body.push(h('div', { class: 'quest-empty' }, h('h2', {}, state.filter ? 'No quests match these filters' : questBrowseMode === 'active' ? 'No quests recorded in progress' : 'No quests in this group'),
     h('p', { class: 'muted' }, state.filter ? 'Try a quest name, place, item or objective. Clear the filters to browse every quest.'
@@ -1286,15 +1280,18 @@ function questOverviewPage() {
       h('div', { class: 'quest-task-list' }, group.map(q => {
         const objective = questNextObjective(q);
         const instruction = objective && (questStepGuidance(q, objective.key)?.instruction || objective.text);
-        return h('article', { class: `quest-card quest-task q-${st.id}${state.detail === q.name ? ' sel' : ''}` },
+        // The whole row opens the guide (the title is its keyboard stop); the only control is Track.
+        const row = h('article', { class: `quest-card quest-task q-${st.id}${state.detail === q.name ? ' sel' : ''}` },
           h('div', { class: 'quest-task-body' }, h('h3', {}, h('button', { type: 'button', class: 'quest-title-link', onclick: () => showItem(q.name) }, q.name)),
             h('div', { class: 'quest-tags' }, questTypeTag(q), questTierTag(q.name, q.id, q.region), q.region ? h('span', { class: 'muted small' }, q.region) : null),
             instruction ? h('p', { class: 'quest-now' }, h('strong', {}, st.id === 'active' ? 'Next: ' : st.id === 'available' ? 'Start: ' : 'Guide starts: '), instruction)
               : st.id === 'active' ? h('p', { class: 'muted small' }, 'Your current objective was not recorded. Open the guide to find the matching task.')
                 : h('p', { class: 'muted small' }, st.id === 'done' ? 'Quest completed. You can still review the guide and locations.' : q.desc),
             st.id === 'active' && q.guide?.sequence === 'linear' ? questProgressBar(q) : null),
-          h('div', { class: 'quest-task-buttons' }, h('button', { type: 'button', class: st.id === 'active' ? 'primary' : '', onclick: () => showItem(q.name) }, st.id === 'active' ? 'Continue guide' : 'Open guide'),
-            st.id !== 'done' ? questNextMapButton(q, objective) : null, st.id !== 'done' ? trackButton(q) : null));
+          st.id !== 'done' ? trackToggle(q) : null,
+          h('span', { class: 'quest-open', 'aria-hidden': 'true' }, '›'));
+        row.addEventListener('click', ev => { if (!ev.target.closest('button, label')) showItem(q.name); });
+        return row;
       }))));
   }
   const removed = Object.values(E).filter(q => q.kind === 'quest' && !q.hidden && questRemoved(q) && questMatches(q));
@@ -2412,6 +2409,19 @@ let lastPlayer = null;
 // Its farthest zoom reaches 260 m from the player, so markers within 270 m are enough.
 let minimapOn = false;
 const MINIMAP_RANGE = 27000;
+// Like WoW, the tracked quests are listed under the minimap: the number their map targets carry and what to do now.
+function minimapQuests() {
+  return trackedList().map((q, i) => {
+    const status = questStatus(q), p = questProgress(q), objective = status === 'done' ? null : questNextObjective(q);
+    return { index: i + 1, name: q.name, done: status === 'done',
+      step: status === 'active' ? (p.current && q.guide?.sequence === 'linear' ? `Step ${p.step}/${p.total}` : '') : status === 'done' ? '' : 'Start',
+      text: status === 'done' ? 'Completed' : objective ? questStepGuidance(q, objective.key)?.instruction || objective.text
+        : 'Objective not recorded. Load your character to refresh it.' };
+  });
+}
+function sendMinimap() {
+  if (minimapOn && mapReady) window.atlas.sendMinimap({ ...MapView.minimapScene(MINIMAP_RANGE), quests: minimapQuests() });
+}
 function onPlayer(p) {
   lastPlayer = p;
   MapView.setPlayer(p);
@@ -2427,7 +2437,7 @@ function onPlayer(p) {
   else if (!p.ok) MapView.setOthers([]);
   if (p.npcs && mapReady) onNpcs(p.npcs, p);
   else if (!p.ok && mapReady) { liveCreatures = []; renderLiveCreatures(); }
-  if (minimapOn && mapReady) window.atlas.sendMinimap(MapView.minimapScene(MINIMAP_RANGE));
+  sendMinimap();
   const el = $('#status-progress');
   if (el.dataset.importing) return;
   el.textContent = p.ok ? `● Live: ${MapView.playerDungeon()?.name || p.region || p.world} (${Math.round(p.x / 100)}, ${Math.round(p.y / 100)})` : !gameRunning ? '○ Waiting for RuneScape: Dragonwilds to start' : '◐ Game detected, waiting for your character…';

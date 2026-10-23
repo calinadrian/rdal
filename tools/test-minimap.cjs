@@ -1,5 +1,6 @@
 // Minimap: the main window's scene follows the map's filters and tracked quests around the player, and the
-// minimap window (app/minimap.js) draws it over the game. Captures test-fixtures/minimap*.png.
+// minimap window (app/minimap.js) draws it over the game with the tracked quests listed under it.
+// Captures test-fixtures/minimap*.png.
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const fs = require('fs'), path = require('path'), assert = require('assert/strict');
 const root = path.resolve(__dirname, '..');
@@ -42,6 +43,8 @@ app.whenReady().then(async () => {
     assert(scene.npcs.some(n => n.combat), 'Creatures in combat are marked');
     assert.equal(scene.others.length, 1, 'Other players nearby are on the minimap');
     assert(scene.markers.every(m => Math.abs(m.x - me.x) < 27000 && Math.abs(m.y - me.y) < 27000), 'Only markers in reach are sent');
+    assert.deepEqual(scene.quests.map(q => [q.index, q.name]), [[1, 'The Wild Hunt']], 'The tracked quests go with the scene');
+    assert(scene.quests[0].text.length > 10, 'Each tracked quest says what to do now: ' + scene.quests[0].text);
 
     // The map's filters apply: hiding monster spawns drops untracked ones but keeps the tracked targets.
     assert(scene.markers.some(m => m.c === 'monster' && !m.track), 'Monster spawns show by default');
@@ -64,13 +67,33 @@ app.whenReady().then(async () => {
     await lastScene({ ...me, npcs, players });
     const north = await show({}, 'minimap.png');
     const area = screen.getPrimaryDisplay().workArea, at = north.mm.getBounds();
-    assert.deepEqual([at.x, at.y, at.width, at.height], [area.x + area.width - 232, area.y + 16, 216, 238], 'It starts in the top-right corner: ' + JSON.stringify(at));
+    assert.deepEqual([at.x, at.y, at.width], [area.x + area.width - 280, area.y + 16, 264], 'It starts in the top-right corner: ' + JSON.stringify(at));
     assert(!north.mm.isFocusable() && north.mm.isAlwaysOnTop() && north.mm.isVisible(), 'It floats over the game without taking focus');
-    const { width } = north.shot.getSize(), px = north.shot.toBitmap(), k = width / 216;
+    const dial = await north.run(`(()=>{const r=document.querySelector('.dial').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width}})()`);
+    assert.equal(Math.round(dial.x + dial.w), 264 - 8, 'The minimap keeps to the right, in the corner');
+    const { width } = north.shot.getSize(), px = north.shot.toBitmap(), k = width / 264;
     const alpha = (x, y) => px[(Math.round(y * k) * width + Math.round(x * k)) * 4 + 3];
-    assert(alpha(108, 134) > 0, 'The map is drawn inside the circle');
-    assert.equal(alpha(2, 236), 0, 'Outside the circle the window is see-through');
+    assert(alpha(dial.x + 100, dial.y + 100) > 0, 'The map is drawn inside the circle');
+    assert.equal(alpha(dial.x + 2, dial.y + 2), 0, 'Outside the circle the window is see-through');
     assert.equal(await north.run(`document.getElementById('zone').textContent`), scene.place, 'The name bar shows the place');
+    assert(await north.run(`/\\d:\\d\\d/.test(document.getElementById('clock').textContent) && /[A-Za-z]/.test(document.getElementById('clock').textContent)`), 'The rim shows the day and local time');
+    const listed = await north.run(`[...document.querySelectorAll('.quest')].map(q=>q.querySelector('.quest-num').textContent+' '+q.querySelector('.quest-title').textContent)`);
+    assert.deepEqual(listed, ['1 The Wild Hunt'], 'The tracked quest is listed under the minimap');
+    const page = await north.run(`Math.ceil(document.body.getBoundingClientRect().height)`);
+    assert(Math.abs(north.mm.getBounds().height - page) <= 1 && page > 248, 'The window grows to fit the quest list: ' + page);
+
+    // Folding the list keeps only its heading, and is remembered.
+    await north.run(`document.getElementById('quests-toggle').click()`); await tick(300);
+    assert(stored.minimapQuestsFolded && await north.run(`document.getElementById('quest-list').hidden`), 'The quest list folds away');
+    assert(north.mm.getBounds().height < page, 'Folding shrinks the window');
+    await north.run(`document.getElementById('quests-toggle').click()`); await tick(300);
+    assert(!stored.minimapQuestsFolded, 'Unfolding is remembered');
+
+    // While the character loads the bar keeps the last place, never a generic title.
+    await js(`onPlayer({ ok: false })`); await tick(300);
+    assert.equal(await north.run(`document.getElementById('zone').textContent`), scene.place, 'The name bar keeps the last place');
+    assert.equal(await north.run(`document.querySelectorAll('.quest').length`), 1, 'Quests stay listed while the character loads');
+    await lastScene({ ...me, npcs, players }); await tick(300);
     const turned = await show({ minimapRotate: true, minimapZoom: 1 }, 'minimap-rotated.png');
     assert(await turned.run(`!document.getElementById('zoom-in').disabled && !document.getElementById('zoom-out').disabled`), 'Zoom buttons work between the limits');
     const close = await show({ minimapRotate: false, minimapZoom: 0 }, 'minimap-zoomed.png');
@@ -83,7 +106,7 @@ app.whenReady().then(async () => {
     assert.deepEqual(stored.minimapPosition, { x: area.x + 40, y: area.y + 60 }, 'A dragged position is saved');
     assert.deepEqual(minimap.window().getPosition(), [area.x + 40, area.y + 60], 'The window moved');
     await close.run(`minimap.place(true)`); await tick(300);
-    assert(!stored.minimapPosition && minimap.window().getPosition()[0] === area.x + area.width - 232, 'Double-clicking the bar puts it back in the corner');
+    assert(!stored.minimapPosition && minimap.window().getPosition()[0] === area.x + area.width - 280, 'Double-clicking the bar puts it back in the corner');
 
     // Inside a dungeon it shows that storey's plan and names the dungeon.
     const takla = await js(`(()=>{const d=db.map.dungeons.find(d=>d.name==='Takla Kara');const m=db.map.markers.find(m=>m.d===d.id&&m.c==='chest');return {id:d.id,x:m.x,y:m.y,z:m.z}})()`);
@@ -92,13 +115,13 @@ app.whenReady().then(async () => {
     assert(inside.image.startsWith('dungeons/'), 'In a dungeon the minimap shows its floor plan');
     assert(inside.markers.some(m => m.c === 'chest'), 'Dungeon markers are on the dungeon minimap');
     const large = await show({ minimapSize: 260, minimapZoom: 2 }, 'minimap-dungeon.png');
-    assert.deepEqual(large.mm.getSize(), [276, 298], 'The large size grows the window');
+    assert(large.mm.getSize()[0] === 276 && large.mm.getSize()[1] > 308, 'The large size grows the window: ' + large.mm.getSize());
 
     // Leaving the game empties it; the game closing removes it.
     assert.equal((await lastScene({ ok: false })).ok, false, 'No position, no scene');
     minimap.sync(false);
     assert.equal(minimap.window(), null, 'Closed when the game is not running');
-    console.log('PASS: minimap scene with region name, filters, tracked targets, live creatures and players; window top-right, see-through, unfocusable; north-up, rotated, zoomed and in a dungeon; zoom, drag and reset saved');
+    console.log('PASS: minimap scene with region name, filters, tracked targets, live creatures and players; window top-right, see-through, unfocusable; day and time, tracked quests listed and foldable, last place kept; north-up, rotated, zoomed and in a dungeon; zoom, drag and reset saved');
     clearTimeout(timer); app.exit(0);
   } catch (e) { console.error(e); clearTimeout(timer); app.exit(1); }
 });

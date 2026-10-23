@@ -1,5 +1,6 @@
-// WoW-style minimap: the area around you, north up or turning with the camera. The main window works out
-// what to show (MapView.minimapScene, with the map's filters and tracked quests) and main.js relays it here.
+// WoW-style minimap: the area around you, north up or turning with the camera, named after where you are, with
+// the day and local time on its rim and the tracked quests listed under it. The main window works out what to
+// show (MapView.minimapScene with the map's filters and tracked quests, plus the quest list) and main.js relays it.
 (() => {
   const bridge = window.minimap;
   const ZOOMS = [4000, 7000, 11000, 17000, 26000]; // world units from the centre to the rim (40–260 m)
@@ -9,7 +10,10 @@
   const canvas = document.getElementById('minimap'), ctx = canvas.getContext('2d');
   const zone = document.getElementById('zone');
   const zoomIn = document.getElementById('zoom-in'), zoomOut = document.getElementById('zoom-out');
-  let size = 200, rotate = false, zoom = 2;
+  const clock = document.getElementById('clock');
+  const questBox = document.getElementById('quests'), questToggle = document.getElementById('quests-toggle');
+  const questList = document.getElementById('quest-list');
+  let size = 200, rotate = false, zoom = 2, folded = false;
   let scene = { ok: false };
   let shown = null;            // position drawn, gliding towards the latest sample: { x, y, yaw }
   let dirty = true;
@@ -49,11 +53,54 @@
 
   function layout(options) {
     size = options.size; rotate = !!options.rotate; zoom = Math.min(ZOOMS.length - 1, Math.max(0, options.zoom ?? 2));
+    if ('questsFolded' in options) fold(options.questsFolded);
     document.documentElement.style.setProperty('--size', size + 'px');
     canvas.width = canvas.height = Math.round(size * devicePixelRatio);
     zoomIn.disabled = zoom === 0; zoomOut.disabled = zoom === ZOOMS.length - 1;
     dirty = true;
   }
+  // Tracked quests as WoW lists them: the number their targets carry on the minimap, the quest and what to do now.
+  let questsShown = '';
+  function renderQuests(quests = []) {
+    const key = JSON.stringify(quests);
+    if (key === questsShown) return;
+    questsShown = key;
+    questBox.hidden = !quests.length;
+    document.getElementById('quest-count').textContent = quests.length;
+    questList.replaceChildren(...quests.map((q) => {
+      const li = document.createElement('li'), name = document.createElement('div'), step = document.createElement('div');
+      li.className = 'quest' + (q.done ? ' done' : '');
+      name.className = 'quest-name';
+      name.append(Object.assign(document.createElement('span'), { className: 'quest-num', textContent: q.index }),
+        Object.assign(document.createElement('span'), { className: 'quest-title', textContent: q.name, title: q.name }));
+      step.className = 'quest-step';
+      if (q.step) step.append(Object.assign(document.createElement('span'), { className: 'quest-step-label', textContent: q.step + ' · ' }));
+      step.append(q.text);
+      li.append(name, step);
+      return li;
+    }));
+  }
+  function fold(on) {
+    folded = !!on;
+    questList.hidden = folded;
+    questToggle.setAttribute('aria-expanded', String(!folded));
+    questToggle.title = folded ? 'Show the tracked quests' : 'Fold the quest list away';
+    document.getElementById('quests-chevron').textContent = folded ? '▸' : '▾';
+  }
+  // Long lists stop at well over half the screen; the window grows with the page (main.js keeps it in place).
+  questBox.style.maxHeight = Math.round(screen.availHeight * 0.6) + 'px';
+  new ResizeObserver(() => bridge.height(Math.ceil(document.body.getBoundingClientRect().height))).observe(document.body);
+
+  // The day and local time, e.g. "Fri 14:05", kept to the minute.
+  const day = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+  function tick() {
+    const now = new Date();
+    clock.textContent = day.format(now) + ' ' + time.format(now);
+    clock.dateTime = now.toISOString();
+    setTimeout(tick, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50);
+  }
+
   function setZoom(next) {
     next = Math.min(ZOOMS.length - 1, Math.max(0, next));
     if (next === zoom) return;
@@ -218,20 +265,22 @@
   bridge.onScene((next) => {
     scene = next;
     if (scene.ok) loadImage(scene.image); else shown = null;
-    const place = scene.ok ? scene.place : 'Minimap';
-    if (zone.textContent !== place) zone.textContent = place;
+    // The name bar names where you are; while your character loads it keeps the last place.
+    if (scene.ok && zone.textContent !== scene.place) zone.textContent = scene.place;
+    renderQuests(scene.quests);
     dirty = true;
   });
 
-  // Click-through except on the name bar and zoom buttons, so it never gets in the way of the game.
+  // Click-through except on the name bar, zoom buttons and quest heading, so it never gets in the way of the game.
   let drag = null;
-  for (const el of [zone, zoomIn, zoomOut]) {
+  for (const el of [zone, zoomIn, zoomOut, questToggle]) {
     el.addEventListener('mouseenter', () => bridge.interactive(true));
     el.addEventListener('mouseleave', () => { if (!drag) bridge.interactive(false); });
-    el.addEventListener('wheel', (e) => setZoom(zoom + (e.deltaY > 0 ? 1 : -1)), { passive: true });
   }
+  for (const el of [zone, zoomIn, zoomOut]) el.addEventListener('wheel', (e) => setZoom(zoom + (e.deltaY > 0 ? 1 : -1)), { passive: true });
   zoomIn.onclick = () => setZoom(zoom - 1);
   zoomOut.onclick = () => setZoom(zoom + 1);
+  questToggle.onclick = () => { fold(!folded); bridge.fold(folded); };
   zone.addEventListener('pointerdown', (e) => {
     if (e.button) return;
     drag = { x: e.screenX - window.screenX, y: e.screenY - window.screenY, moved: false };
@@ -250,5 +299,6 @@
   zone.addEventListener('dblclick', () => { bridge.place(true); bridge.interactive(false); });
 
   layout({ size, rotate, zoom });
+  tick();
   requestAnimationFrame(loop);
 })();
