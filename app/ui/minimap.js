@@ -189,18 +189,30 @@
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 0.34; ctx.drawImage(areaCanvas, 0, 0); ctx.restore();
     }
 
+    // Quest places closer than a disc merge, like the map: the top one is drawn with +N and the tracker numbers combine.
+    const groups = new Map(), hidden = new Set(), kept = [];
+    for (const m of [...scene.markers].reverse()) {
+      if (!m.quest && !(m.track && !m.track.area)) continue;
+      const [sx, sy] = toScreen(m.x, m.y);
+      const near = kept.find(k => (k.sx - sx) ** 2 + (k.sy - sy) ** 2 < QUEST ** 2);
+      if (near) { groups.get(near.m).push(m); hidden.add(m); } else { kept.push({ m, sx, sy }); groups.set(m, [m]); }
+    }
     for (const m of scene.markers) {
       const [sx, sy] = toScreen(m.x, m.y);
-      if (!inView(sx, sy, ICON)) continue;
+      if (!inView(sx, sy, ICON) || hidden.has(m)) continue;
+      const group = groups.get(m) || [m];
       if (m.quest) icons.paintQuest(ctx, sx, sy, QUEST, m.quest, false);
       else if (m.c === 'vent') icons.paintVent(ctx, sx, sy, ICON, m, false);
       else icons.drawIcon(ctx, sx, sy, m.c === 'monster' ? MONSTER : ICON, cat(m.c), m.i, m.ring, m.color);
       // Places to go for a tracked quest: the map's gold ring with the tracker number.
-      if (m.track && !m.track.area) {
+      const places = group.filter(g => g.track && !g.track.area);
+      if (places.length) {
         ctx.beginPath(); ctx.arc(sx, sy, QUEST / 2 + 3, 0, Math.PI * 2);
         ctx.lineWidth = 2; ctx.strokeStyle = '#ffd040'; ctx.shadowColor = '#ffb000'; ctx.shadowBlur = 6; ctx.stroke(); ctx.shadowBlur = 0;
-        if (m.track.index) badge(sx + QUEST / 2 + 1, sy - QUEST / 2 - 1, m.track.index);
+        const numbers = [...new Set(places.map(g => g.track.index).filter(Boolean))].sort((x, y) => x - y).join(',');
+        if (numbers) badge(sx + QUEST / 2 + 1, sy - QUEST / 2 - 1, numbers);
       }
+      if (group.length > 1) badge(sx + QUEST / 2 + 1, sy + QUEST / 2, '+' + (group.length - 1), '#2b2a27', '#e8dcc0');
     }
 
     // Live creatures: amber dots, red in combat, with a ring while they are alert.
@@ -248,11 +260,12 @@
   }
 
   // The tracker number in a gold disc.
-  function badge(x, y, n) {
-    ctx.beginPath(); ctx.arc(x, y, 6.5, 0, Math.PI * 2); ctx.fillStyle = '#ffd040'; ctx.fill();
-    ctx.lineWidth = 1; ctx.strokeStyle = '#2a1e00'; ctx.stroke();
+  function badge(x, y, n, fill = '#ffd040', ink = '#2a1e00') {
     ctx.font = '700 9px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#2a1e00'; ctx.fillText(String(n), x, y + 0.5);
+    const w = Math.max(13, ctx.measureText(String(n)).width + 6);
+    ctx.beginPath(); ctx.roundRect(x - w / 2, y - 6.5, w, 13, 6.5); ctx.fillStyle = fill; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = ink; ctx.stroke();
+    ctx.fillStyle = ink; ctx.fillText(String(n), x, y + 0.5);
   }
 
   function loop() {

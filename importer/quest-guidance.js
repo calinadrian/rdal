@@ -4,6 +4,51 @@ const referenceName = value => (value?.ObjectName || '').split(':').pop().replac
 const normal = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const sentence = value => String(value || '').replace(/<[^>]+>/g, '').replace(/^\[TEMP\]\s*/i, '').replace(/\s+/g, ' ').trim();
 const { clarifyObjective, readableTarget } = require('./quest-instructions');
+
+// Follow compiled dialogue links across databases. A location is a pickup only if
+// it can give the quest without first requiring that same quest to be underway.
+function questStartEntries(flows, base) {
+  const nodes = new Map(), entries = new Map(), questIds = new Set();
+  for (const [file, exports] of Object.entries(flows)) {
+    const names = new Map(exports.map(e => [e.Name, e]));
+    const key = guid => file + '|' + guid;
+    const addEntry = (tag, destinations) => {
+      if (tag) entries.set(tag, [...new Set([...(entries.get(tag) || []), ...destinations])]);
+    };
+    for (const e of exports) {
+      const p = e.Properties || {};
+      if (p.Compiled_NodeGUID) nodes.set(key(p.Compiled_NodeGUID), { e, names, key });
+      if (e.Type === 'ConversationEntryPointNode') addEntry(p.EntryTag?.TagName, (p.OutputConnections || []).map(key));
+      if (e.Type === 'ConversationDatabase') for (const entry of p.EntryTags || [])
+        addEntry(entry.EntryTag?.TagName, (entry.DestinationList || []).map(key));
+      if (e.Type === 'QFT_GiveQuest_C') {
+        const id = base(p.QuestData); if (id) questIds.add(id);
+      }
+    }
+  }
+  const result = new Map();
+  for (const [tag, destinations] of entries) {
+    const gives = new Set();
+    for (const id of questIds) {
+      const visited = new Set(), pending = [...destinations];
+      while (pending.length) {
+        const key = pending.pop(), node = nodes.get(key);
+        if (!node || visited.has(key)) continue;
+        visited.add(key);
+        const p = node.e.Properties || {};
+        const guards = (p.SubNodes || []).map(ref => node.names.get(referenceName(ref))).filter(Boolean);
+        if (guards.some(g => g.Type === 'QFR_HasQuestState_C' && base(g.Properties?.QuestData || g.Properties?.['Quest Data']) === id
+          && /::(Given|Complete)$/.test(g.Properties?.QuestState || ''))) continue;
+        if (node.e.Type === 'QFT_GiveQuest_C' && base(p.QuestData) === id) { gives.add(id); break; }
+        if (/^QFT_CompleteQuests?_C$/.test(node.e.Type) && [].concat(p.QuestData || p['Quest Data'] || []).some(ref => base(ref) === id)) continue;
+        pending.push(...(p.OutputConnections || []).map(node.key));
+        if (p.RemoteEntryTag?.TagName) pending.push(...(entries.get(p.RemoteEntryTag.TagName) || []));
+      }
+    }
+    result.set(tag, gives);
+  }
+  return result;
+}
 // These are named quest objects, not mentions of the building material Stone.
 // Mask the whole phrase before looking for items inside the objective prose.
 function resourceText(content, targets = []) {
@@ -26,7 +71,7 @@ function flowInteractions(flows, base, text) {
     for (const entry of exports.filter(e => e.Type === 'ConversationEntryPointNode')) {
       const tag = entry.Properties?.EntryTag?.TagName;
       if (!tag) continue;
-      const context = entries.get(tag) || { quests: new Set(), dialogue: [], sets: new Set(), tests: new Set(), counted: new Set() };
+      const context = entries.get(tag) || { quests: new Set(), gives: new Set(), dialogue: [], sets: new Set(), tests: new Set(), counted: new Set() };
       const visited = new Set(), pending = [[entry, null]];
       while (pending.length) {
         const [node, lastBool] = pending.pop();
@@ -34,7 +79,11 @@ function flowInteractions(flows, base, text) {
         visited.add(node);
         const p = node.Properties || {};
         for (const ref of changesQuest(node.Type) ? [].concat(p.QuestData || p['Quest Data'] || []) : []) {
-          const id = base(ref); if (id) context.quests.add(id);
+          const id = base(ref);
+          if (id) {
+            context.quests.add(id);
+            if (node.Type === 'QFT_GiveQuest_C') context.gives.add(id);
+          }
         }
         // Quest bools this interaction sets, tests, and counts (a counter goes up right after the bool is set).
         let last = lastBool;
@@ -136,6 +185,7 @@ function interactionLabel(a) {
 
 function buildQuestGuidance({ entities, flows, interactions, markers, base, text, dungeonAt, regionAt, onMap, npcVisibility = {} }) {
   const contexts = flowInteractions(flows, base, text);
+  const starts = questStartEntries(flows, base);
   const setters = new Map();
   for (const context of contexts.values()) for (const flag of context.sets) setters.set(flag, (setters.get(flag) || 0) + 1);
   const quests = new Map();
@@ -157,7 +207,7 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
   for (const actor of Array.isArray(interactions) ? interactions : []) {
     if (/QuestLocation|QuestTrigger|Volume/.test(actor.cls)) continue;
     const context = contexts.get(actor.entry);
-    const ids = new Set([...(context?.quests || []), ...(forcedEntries.get(actor.entry) || []), base(actor.quest)].filter(id => quests.has(id)));
+    const ids = new Set([...(context?.quests || []), ...(starts.get(actor.entry) || []), ...(forcedEntries.get(actor.entry) || []), base(actor.quest)].filter(id => quests.has(id)));
     const dungeon = dungeonAt(actor);
     if (!dungeon && !onMap(actor)) continue;
     for (const id of ids) {
@@ -165,7 +215,7 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
       // Keep exact actors separate from the game's broad quest-area markers.
       const marker = { c: 'quest', n: `${q.name} · ${label}`, ref: q.name, questId: id,
         qlocation: actor.id, qsteps: [], target: label, precision: 'interaction', entry: actor.entry,
-        sourceId: actor.id, x: actor.x, y: actor.y, z: actor.z,
+        sourceId: actor.id, ...(starts.get(actor.entry)?.has(id) && { qstart: true }), x: actor.x, y: actor.y, z: actor.z,
         region: dungeon ? dungeon.name : regionAt(actor.x, actor.y), ...(dungeon && { d: dungeon.id }),
         ...(npcVisibility[actor.id] && { npcVisibility: npcVisibility[actor.id] }),
         ...(doneFlag(context, setters) && { doneWhen: doneFlag(context, setters) }),
@@ -186,6 +236,7 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
   for (const [id, versions] of quests) {
     const q = versions[0], targets = targetMarkers.get(id) || [];
     const guide = { sequence: [HTP, 'Quest_GraniteMauled', 'Quest_FH_WitherWard', 'Quest_RestlessGhosts', 'Quest_DogDays', 'Quest_AnimalMagnetism'].includes(id) ? 'linear' : 'reference',
+      starts: targets.filter(m => m.qstart).map(m => m.sourceId),
       preparation: id === HTP ? ['Bring Windstep to reach the password statue and the tower pedestals. Keep one inventory slot free for the orb.'] : [],
       sources: id === HTP ? [{ title: 'Quest walkthrough', url: 'https://dragonwilds.runescape.wiki/w/Highlighting_the_Problem' }] : id === 'Quest_FH_WitherBeast' ? [{ title: 'The Wild Hunt walkthrough', url: 'https://dragonwilds.runescape.wiki/w/The_Wild_Hunt' }] : [],
       steps: (q.objectives || []).map(objective => {
@@ -234,4 +285,4 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
   }
   return { quests: quests.size, steps, clarified, mapped, exact, interactionPins: [...targetMarkers.values()].reduce((sum, a) => sum + a.length, 0) };
 }
-module.exports = { buildQuestGuidance, flowInteractions, doneFlag, resourceText };
+module.exports = { buildQuestGuidance, flowInteractions, questStartEntries, doneFlag, resourceText };

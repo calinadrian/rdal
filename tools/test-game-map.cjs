@@ -42,8 +42,12 @@ app.whenReady().then(async () => {
     const home = win.getBounds();
     const screenBounds = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
 
-    // The game's map opens while you play: the app's map covers that screen, with nothing else of the app.
+    // Opened at a lodestone (E) to teleport, the game's own map stays: the app does not cover it.
     gameMap.follow(false, true);
+    gameMap.follow(true, true, true); await tick();
+    assert(!gameMap.shown() && suspended.length === 0, 'A lodestone teleport map is left to the game');
+    gameMap.follow(false, true);
+    // The game's map opens while you play: the app's map covers that screen, with nothing else of the app.
     gameMap.follow(true, true); await tick();
     let now = await covering();
     assert(now.shown && now.visible && now.page, 'Opening the game map shows only the app map: ' + JSON.stringify(now));

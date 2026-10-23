@@ -5,7 +5,7 @@
 // game; the mouse pans, zooms and hovers as usual. Afterwards the app is put back as it was, on the page you had
 // open: an overlay hides again, and a normal window returns to where it stood (or waits in the taskbar when it
 // stood on the game's screen, so it never ends up over the game). The show/hide hotkey puts the map away until the
-// game's map next opens.
+// game's map next opens. A map opened at a lodestone to teleport is always left to the game.
 const electron = require('electron');
 
 // window() is the main window, settings() the current settings; applyMode comes from main.js.
@@ -17,7 +17,9 @@ function createGameMap({ window, settings, applyMode, minimap }) {
   let remaximize = null;  // maximizes it again the next time it shows
   const overlay = () => settings().mode === 'overlay';
 
-  function follow(next, focused) {
+  // teleport: the game's map was opened at a lodestone (E) to pick where to go, so the game's own map stays.
+  function follow(next, focused, teleport = false) {
+    if (teleport) next = false;
     open = next;
     if (!next) dismissed = false;
     if (!settings().mapOnM) { if (shown) hide(); return; }

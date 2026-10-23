@@ -51,6 +51,8 @@ public sealed class Tracker
         }
         catch { _oQuestComp = -1; }
         try { _oVisibility = Prop("/Script/Dominion.QuestProgressComponent", "VisibilityTrackers"); } catch { _oVisibility = -1; }
+        try { _oLodestones = Prop("/Script/Dominion.GameplayObjectRegistry", "Lodestones"); } catch { _oLodestones = -1; }
+        try { _oVisibilityProp = Prop("/Script/UMG.Widget", "Visibility"); } catch { _oVisibilityProp = -1; }
         _discovery = new DiscoveryReader(_e, Prop);
         try { (_oActive, _activeMask) = BoolProp("/Script/CommonUI.CommonActivatableWidget", "bIsActive"); } catch { _oActive = -1; }
 
@@ -260,6 +262,68 @@ public sealed class Tracker
         return _mapPanels.Any(p => (_m.Read<byte>(p.Obj + (ulong)_oActive) & _activeMask) != 0);
     }
 
+    // Offset of a property on a live object's class (or its supers), -1 when it has none.
+    readonly Dictionary<(ulong, string), int> _propOn = new();
+    int PropOn(ulong cls, string name)
+    {
+        if (_propOn.TryGetValue((cls, name), out var o)) return o;
+        o = -1;
+        for (ulong c = cls; c != 0 && o < 0; c = _m.Ptr(c + (ulong)_l.SuperStruct))
+            for (ulong f = _m.Ptr(c + (ulong)_l.ChildProperties); f != 0 && o < 0; f = _m.Ptr(f + (ulong)_l.FieldNext))
+                if (_e.FName(f + (ulong)_l.FieldName) == name) o = _m.I32(f + (ulong)_l.PropOffset);
+        return _propOn[(cls, name)] = o;
+    }
+
+    // Opening the map at a lodestone (E) shows the map's lodestone panel (the teleport cost): the player is choosing
+    // where to teleport, so the overlay must leave the game's map alone. UWidget.Visibility: Visible, Collapsed,
+    // Hidden, HitTestInvisible, SelfHitTestInvisible.
+    int _oVisibilityProp = -1;
+    bool MapTeleporting()
+    {
+        if (_oActive < 0 || _oVisibilityProp < 0) return false;
+        foreach (var (obj, cls) in _mapPanels)
+        {
+            if ((_m.Read<byte>(obj + (ulong)_oActive) & _activeMask) == 0) continue;
+            int o = PropOn(cls, "LodestoneWidget");
+            ulong widget = o < 0 ? 0 : _m.Ptr(obj + (ulong)o);
+            if (widget != 0 && _m.Read<byte>(widget + (ulong)_oVisibilityProp) is 0 or 3 or 4) return true;
+        }
+        return false;
+    }
+
+    // Every lodestone in the world, built ones included, from the GameplayObjectRegistry actor's Lodestones
+    // (TArray<FLodestoneData>, 64 bytes each: Location, RespawnLocation, Guid). Looked up again with the world.
+    int _oLodestones = -1;
+    ulong _registry, _registryCls;
+    DateTime _registryScan;
+    List<object>? Lodestones()
+    {
+        if (_oLodestones < 0) return null;
+        if (_registry == 0 || _e.ClassOf(_registry) != _registryCls)
+        {
+            if (DateTime.Now < _registryScan) return null;
+            _registryScan = DateTime.Now.AddSeconds(20);
+            _registry = _e.Objects().Select(x => x.Obj).FirstOrDefault(o => (_m.I32(o + Engine.OFlags) & 0x10) == 0 && IsRegistryClass(_e.ClassOf(o)));
+            _registryCls = _registry == 0 ? 0 : _e.ClassOf(_registry);
+            if (_registry == 0) return null;
+        }
+        ulong data = _m.Ptr(_registry + (ulong)_oLodestones);
+        int count = _m.I32(_registry + (ulong)_oLodestones + 8);
+        if (count < 0 || count > 1000 || (count > 0 && data == 0)) return null;
+        var res = new List<object>();
+        for (int i = 0; i < count; i++)
+        {
+            ulong d = data + (ulong)(i * 64);
+            res.Add(new { x = Math.Round(_m.Read<double>(d)), y = Math.Round(_m.Read<double>(d + 8)), z = Math.Round(_m.Read<double>(d + 16)) });
+        }
+        return res;
+    }
+    bool IsRegistryClass(ulong cls)
+    {
+        for (ulong c = cls; c != 0; c = _m.Ptr(c + (ulong)_l.SuperStruct)) if (_e.ObjName(c) == "GameplayObjectRegistry") return true;
+        return false;
+    }
+
     public object Sample()
     {
         _m.ClearCache();
@@ -281,11 +345,15 @@ public sealed class Tracker
         var quests = Quests(questComp);
         var questLocations = quests == null ? null : QuestLocations(questComp);
         var discovery = _tick % 20 == 0 ? _discovery?.Read(pc, world) : null;
+        // Lodestones change only when someone builds or removes one.
+        var lodestones = _tick % 20 == 0 ? Lodestones() : null;
         _tick++;
         // Whether the game's map is showing and the game window has the keyboard, for the overlay map.
         bool? map = MapOpen();
+        // Opened at a lodestone to teleport: the game's map is the one to use.
+        bool teleport = map == true && MapTeleporting();
         bool focus = KeyWatch.GameFocused(_m.Pid);
-        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), map, focus, npcs, players, quests, questLocations, discovery };
+        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), map, teleport, focus, npcs, players, quests, questLocations, lodestones, discovery };
     }
 
     public void Run(int intervalMs, CancellationToken ct)

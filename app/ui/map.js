@@ -259,6 +259,8 @@ window.MapView = (() => {
     return s === 'active' ? '#4fc3ff' : m.qnpc && s !== 'done' ? '#ffd040' : null;
   };
   // Ring around a quest's target creatures and drop sources, in its shaded area's colour.
+  // Lodestones players have built: green, like other players on the map.
+  const builtRing = (m) => m.built ? '#5fe36a' : null;
   const targetRing = (m) => {
     const t = tracked.get(m);
     return t && t.kind !== 'goto' && m.c !== 'quest' ? t.kind === 'kill' ? '#ff6a4a' : '#ffd040' : null;
@@ -270,7 +272,7 @@ window.MapView = (() => {
     let best = null, bd = 100;
     const live = [...(enabled.has('npc') && playerHere() ? npcs : []), ...others.filter(otherHere)];
     for (const m of [...live, ...map.markers]) {
-      if (!m.live && !visible(m)) continue;
+      if (!m.live && (!visible(m) || questHidden.has(m))) continue;
       const [sx, sy] = toScreen(m.x, m.y);
       const d = (sx - mx) ** 2 + (sy - my) ** 2;
       const info = m.c === 'quest' ? questInfo(m) : null;
@@ -296,8 +298,9 @@ window.MapView = (() => {
       } else if (info) {
         // One step: the one this place is for now (current, or where the quest starts), else its first.
         const step = info.steps.find(s => String(s.number) === info.badge) || info.steps[0];
+        const more = (questGroups.get(hover)?.length || 1) - 1;
         card(tip, info.title, [t ? `Tracked · ${t.label}` : '', `${info.label} · ${info.location}`,
-          step ? step.text : 'Step not confirmed in the game data'], 'Click for the quest guide');
+          step ? step.text : 'Step not confirmed in the game data', more ? `+${more} more quest place${more > 1 ? 's' : ''} here · zoom in to see ${more > 1 ? 'them' : 'it'}` : ''], 'Click for the quest guide');
       } else {
         const discovery = ['lore', 'shrine'].includes(hover.c) ? { discovered: 'Discovered', undiscovered: 'Undiscovered', unknown: 'Discovery not confirmed yet' }[MapDiscovery.state(hover)] : '';
         const about = [mood.replace(/^ · /, ''), dist.replace(/^ · /, ''), hover.region, discovery].filter(Boolean).join(' · ');
@@ -364,21 +367,45 @@ window.MapView = (() => {
     ctx.restore();
   }
   // Places to go: a gold ring with the quest's tracker number, above everything but the player.
+  // One per merged group: a quest's numbers share one badge ("1,3") and one ring.
   function drawTrackedPins(cw, ch) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    for (const [m, t] of tracked) {
-      if ((t.kind !== 'goto' && m.c !== 'quest') || !onLayer(m)) continue;
+    for (const [m, group] of questGroups) {
+      const ts = group.map(g => tracked.get(g)).filter(t => t && (t.kind === 'goto' || m.c === 'quest'));
+      if (!ts.length) continue;
       const [sx, sy] = toScreen(m.x, m.y);
-      if (sx < -30 || sy < -30 || sx > cw + 30 || sy > ch + 30) continue;
       ctx.beginPath(); ctx.arc(sx, sy, MARKER_SIZE / 2 + 5, 0, Math.PI * 2);
       ctx.lineWidth = 3; ctx.strokeStyle = '#ffd040'; ctx.shadowColor = '#ffb000'; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
-      if (!t.index) continue; // an untracked active quest's place has no tracker number
-      const bx = sx + MARKER_SIZE / 2 + 2, by = sy - MARKER_SIZE / 2 - 2;
-      ctx.beginPath(); ctx.arc(bx, by, 8, 0, Math.PI * 2); ctx.fillStyle = '#ffd040'; ctx.fill();
-      ctx.lineWidth = 1.5; ctx.strokeStyle = '#2a1e00'; ctx.stroke();
-      ctx.font = '700 11px Segoe UI'; ctx.fillStyle = '#2a1e00'; ctx.fillText(String(t.index), bx, by + 0.5);
+      // An untracked active quest's place has no tracker number.
+      const label = [...new Set(ts.map(t => t.index).filter(Boolean))].sort((a, b) => a - b).join(',');
+      if (label) pill(sx + MARKER_SIZE / 2 + 2, sy - MARKER_SIZE / 2 - 2, label, '#ffd040', '#2a1e00');
     }
     ctx.textBaseline = 'alphabetic';
+  }
+  // A small rounded label centred on (x, y): tracker numbers, and the +N of merged quest places.
+  function pill(x, y, text, fill, ink) {
+    ctx.save();
+    ctx.font = '700 11px Segoe UI';
+    const w = Math.max(16, ctx.measureText(text).width + 8);
+    ctx.beginPath(); ctx.roundRect(x - w / 2, y - 8, w, 16, 8); ctx.fillStyle = fill; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = ink; ctx.stroke();
+    ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 0.5);
+    ctx.restore();
+  }
+
+  // Quest places closer than a marker's width merge into one, so their discs, rings and numbers never pile up: the
+  // most important (a tracked quest's, the current step, a start) is drawn with +N. Zooming in separates them.
+  let questGroups = new Map(), questHidden = new Set();
+  function groupQuestMarkers(infos, cw, ch) {
+    questGroups = new Map(); questHidden = new Set();
+    const rank = m => (tracked.get(m)?.index ? 8 : 0) + (infos.get(m)?.current ? 4 : 0) + (infos.get(m)?.pickup ? 2 : 0) + (tracked.has(m) ? 1 : 0);
+    const kept = [];
+    for (const it of [...infos.keys()].filter(visible).map(m => { const [x, y] = toScreen(m.x, m.y); return { m, x, y, r: rank(m) }; })
+      .filter(i => i.x > -40 && i.y > -40 && i.x < cw + 40 && i.y < ch + 40).sort((a, b) => b.r - a.r)) {
+      const near = kept.find(k => (k.x - it.x) ** 2 + (k.y - it.y) ** 2 < MARKER_SIZE ** 2);
+      if (near) { questGroups.get(near.m).push(it.m); questHidden.add(it.m); }
+      else { kept.push(it); questGroups.set(it.m, [it.m]); }
+    }
   }
 
   function draw() {
@@ -439,16 +466,19 @@ window.MapView = (() => {
     const nonQuests = map.markers.filter(m => m.c !== 'quest' && onLayer(m));
     const ordered = nonQuests.filter(m=>m.c==='monster').concat(nonQuests.filter(m=>m.c!=='monster'), [...infos.keys()].sort((a, b) => priority(a) - priority(b)));
     drawTrackedAreas(cw, ch);
+    groupQuestMarkers(infos, cw, ch);
     for (const m of ordered) {
-      if (!visible(m)) continue;
+      if (!visible(m) || questHidden.has(m)) continue;
       const [sx, sy] = toScreen(m.x, m.y);
       if (sx < -20 || sy < -20 || sx > cw + 20 || sy > ch + 20) continue;
       const info = infos.get(m);
       if (info) {
         icons.paintQuest(ctx, sx, sy, MARKER_SIZE, info, m === hover);
+        const more = questGroups.get(m)?.length - 1;
+        if (more > 0) pill(sx + MARKER_SIZE / 2 + 2, sy + MARKER_SIZE / 2 + 1, '+' + more, '#2b2a27', '#e8dcc0');
       } else if (m.c === 'vent') {
         drawVent(sx, sy, m, m === hover);
-      } else drawIcon(sx, sy, markerSize(m), m.c, m.i, m === hover ? '#fff' : questRing(m) || targetRing(m), m.color);
+      } else drawIcon(sx, sy, markerSize(m), m.c, m.i, m === hover ? '#fff' : questRing(m) || targetRing(m) || builtRing(m), m.color);
     }
 
     drawTrackedPins(cw, ch);
@@ -649,6 +679,9 @@ window.MapView = (() => {
       dirty = true;
     },
     trackedEntry: (m) => tracked.get(m) || null,
+    // The quest places drawn as one with this one (it first when it is the one drawn), as of the last frame.
+    questGroupOf: (m) => questGroups.get(m) || [...questGroups.values()].find(g => g.includes(m)) || [m],
+    screenOf: (m) => { const [x, y] = toScreen(m.x, m.y); return { x, y }; },
     // What the minimap draws around you: the map and storey you stand on (whatever this map shows), markers
     // within `range` world units that the filters let through (search highlights aside), live creatures,
     // other players, and the nearest target of each tracked quest so it can point at those past its rim.
@@ -666,7 +699,7 @@ window.MapView = (() => {
         }
         if (!near(m) || !(t || filtered(m, false) && enabled.has(m.c))) continue;
         const info = m.c === 'quest' ? questInfo(m) : null;
-        markers.push({ x: m.x, y: m.y, c: m.c, i: m.i, color: m.color, ventType: m.ventType, ring: questRing(m) || targetRing(m),
+        markers.push({ x: m.x, y: m.y, c: m.c, i: m.i, color: m.color, ventType: m.ventType, ring: questRing(m) || targetRing(m) || builtRing(m),
           quest: info && { badge: info.badge, color: info.color, current: info.current, pickup: info.pickup },
           track: t && { index: t.index, area: t.kind !== 'goto' && m.c !== 'quest' ? t.kind : null } });
       }

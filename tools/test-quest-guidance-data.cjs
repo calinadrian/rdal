@@ -27,6 +27,12 @@ for (const marker of db.map.markers.filter(m => m.c === 'quest' && m.precision =
   assert.deepEqual([marker.x, marker.y, marker.z], [source.x, source.y, source.z], 'Interaction coordinates must match the game actor');
 }
 const q = db.entities['Highlighting the Problem'];
+const mirror = db.entities['Mirror Mirror'];
+const mirrorStarts = db.map.markers.filter(m => m.questId === mirror.id && m.qstart);
+assert.equal(mirrorStarts.length, 1, 'Mirror Mirror is accepted at one interaction, not every first-objective destination');
+assert.equal(mirrorStarts[0].target, 'Mirror');
+assert.deepEqual(mirror.guide.starts, [mirrorStarts[0].sourceId]);
+assert(db.map.markers.filter(m => m.questId === mirror.id && /Candle|Seamstress|Book/.test(m.sourceId || m.qlocation)).every(m => !m.qstart));
 const hunt = db.entities['The Wild Hunt'];
 assert(db.entities.Ratcatcher.guide.steps.find(s=>s.key==='Objective2').mapSources.includes('Giant Rat'), 'Rat kills use real Giant Rat spawns');
 assert(db.entities['Dragon Slayer'].guide.steps.find(s=>s.key==='Find and hunt a deer').mapSources.includes('Deer'), 'Monster-category prey must be linked too');

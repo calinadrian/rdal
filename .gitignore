@@ -22,3 +22,4 @@ tools/ext/c4p/**/obj/
 
 # Screenshots written by the UI tests.
 test-fixtures/*.png
+test-fixtures/quest-start-audit.json

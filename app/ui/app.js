@@ -813,7 +813,7 @@ function refreshQuestMapHighlight() {
 // every: all of a quest's places, not just its current hunting grounds or step.
 function showOnMap(name, { every = false } = {}) {
   const quest = ent(name);
-  const objective = quest.kind === 'quest' && questNextObjective(quest);
+  const objective = quest.kind === 'quest' && questStatus(quest) === 'active' && questNextObjective(quest);
   const spawns = objective && !every ? questStepSourceMarkers(quest,objective.key) : [];
   if(spawns.length) { showMapLocations(name,spawns,name);return; }
   if (state.module !== 'map') history.push(snapshot());
@@ -953,8 +953,11 @@ function questMapMarkerVisible(marker, highlighted = false) {
   const matchesQuest = questMapMode === 'selected' ? selectedMapQuests.has(marker.ref)
     : questMapMode === 'active' ? !!E[marker.ref] && questStatus(ent(marker.ref)) === 'active'
       : highlighted || !E[marker.ref] || questStatus(ent(marker.ref)) !== 'done';
-  if (!matchesQuest || questMapStepMode === 'all') return matchesQuest;
+  if (!matchesQuest) return false;
   const info = questMarkerInfo(marker);
+  // Until accepted, a quest marks only where to start, even with All steps or a map highlight.
+  if (info.status === 'unknown' || info.status === 'available') return info.pickup;
+  if (questMapStepMode === 'all') return true;
   return info.current || info.pickup;
 }
 
@@ -966,7 +969,9 @@ function questMarkerInfo(marker) {
   const status = q ? questStatus(q) : 'unknown';
   const currentKey = questLog?.quests[q?.id]?.o;
   const current = status === 'active' && steps.some(s => s.key === currentKey);
-  const start = steps.some(s => s.number === 1);
+  // Starting an objective and accepting a quest are different interactions. Prefer the
+  // actors whose dialogue actually gives this quest over all first-objective targets.
+  const start = !!marker.sourceId && !!q?.guide?.starts?.includes(marker.sourceId);
   const pickup = start && ['unknown', 'available'].includes(status);
   const color = current ? '#8acbff' : start && ['unknown', 'available'].includes(status) ? '#e4c17b' : '#b6b6b6';
   const numbers = steps.map(s => s.number).join(', ');
@@ -1289,6 +1294,11 @@ function questTrackerObjective(q) {
 function trackedMapEntries() {
   const out = [];
   const entries = (q, index, kinds) => {
+    if (['unknown', 'available'].includes(questStatus(q))) {
+      for (const m of db.map.markers) if (m.c === 'quest' && m.ref === q.name && questMarkerVisible(m) && questMarkerInfo(m).pickup)
+        out.push({ marker: m, index, quest: q.name, kind: 'goto', label: `Start ${q.name}` });
+      return;
+    }
     for (const line of questTrackerObjective(q)?.lines || []) if (kinds.includes(line.kind)) for (const m of line.markers)
       out.push({ marker: m, index, quest: q.name, kind: line.kind, label: `${line.verb} ${line.name}${line.qty ? ' ×' + line.qty : ''}` });
   };
@@ -2563,6 +2573,7 @@ function onPlayer(p) {
     if (selectedDiscoveryMarker) renderDetail();
   }
   if (p.quests) onQuestLog(p.quests, p.questLocations);
+  if (p.lodestones && db?.map) onLodestones(p.lodestones);
   // Co-op: other players arrive with the creature scan; they disappear when you leave the game.
   if (p.players) MapView.setOthers(p.players);
   else if (!p.ok) MapView.setOthers([]);
@@ -2572,6 +2583,29 @@ function onPlayer(p) {
   const el = $('#status-progress');
   if (el.dataset.importing) return;
   el.textContent = p.ok ? `● Live: ${MapView.playerDungeon()?.name || p.region || p.world} (${Math.round(p.x / 100)}, ${Math.round(p.y / 100)})` : !gameRunning ? '○ Waiting for RuneScape: Dragonwilds to start' : '◐ Game detected, waiting for your character…';
+}
+
+// Lodestones players have built: the game lists every lodestone, and the ones away from a world lodestone were built.
+// They join the map's Travel markers (kept at the end, so other markers keep their positions) and are remembered offline.
+let builtLodestones = [];
+try { builtLodestones = JSON.parse(localStorage.getItem('builtLodestones')) || []; } catch {}
+const insidePoly = (poly, x, y) => poly.reduce((inside, [ax, ay], i) => {
+  const [bx, by] = poly[(i + 1) % poly.length];
+  return (ay > y) !== (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax ? !inside : inside;
+}, false);
+function onLodestones(list) {
+  const world = db.map.markers.filter(m => m.c === 'travel' && !m.built && m.n === 'Lodestone');
+  const built = list.filter(l => !world.some(w => Math.hypot(w.x - l.x, w.y - l.y) < 1000));
+  if (JSON.stringify(built) === JSON.stringify(builtLodestones)) return;
+  builtLodestones = built;
+  try { localStorage.setItem('builtLodestones', JSON.stringify(built)); } catch {}
+  applyBuiltLodestones();
+}
+function applyBuiltLodestones() {
+  if (!db?.map) return;
+  db.map.markers = db.map.markers.filter(m => !m.built).concat(builtLodestones.map(l => ({ c: 'travel', n: 'Built lodestone', built: true,
+    x: l.x, y: l.y, z: l.z, region: db.map.regions.find(r => insidePoly(r.poly, l.x, l.y))?.name || '' })));
+  if (mapReady) { MapView.redraw(); sendMinimap(); }
 }
 
 let gameRunning = false;
@@ -2584,6 +2618,7 @@ function onGame(g) {
 async function loadDb() {
   db = await window.atlas.getDb();
   E = db ? db.entities : {};
+  applyBuiltLodestones();
 }
 
 function settingsMessage(text, kind = '') {

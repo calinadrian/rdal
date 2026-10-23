@@ -111,10 +111,11 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   the quests that need no earlier quest. Links come only from the game's quest-flow scripts. Quests that no current
   flow hands out, or only after a quest that is itself no longer given (the old tutorial's Right Tool for the Job and
   Seeking Shelter), are listed under **Removed from the game** with the reason and left out of the counts.
-- Quest map markers show a **gold circle with ?** for a confirmed first objective and **step numbers** for linked locations;
+- Quest map markers show a **gold circle with ?** at confirmed quest-giving interactions and **step numbers** for linked locations;
   your current step is blue. Hover for the objective text, or click to see the selected location and jump
   between the quest's locations in the detail panel. A **dot** means the exported quest flow does not confirm
-  a step for that marker. Starts refer to the first objective location; quest prerequisites still apply.
+  a step for that marker. Unaccepted quests show only their confirmed starting interactions, even when tracked or highlighted;
+  objective locations appear after acceptance. Some quests have multiple valid starts; quest prerequisites still apply.
 - **Lore** and **Shrines & pools** each have their own **All / Undiscovered only** selector under the
   category in the map legend. Choices and the last recorded player progress are remembered. Lore uses
   unlocked journal entries, health shrines use shrine unlocks, and pools use confirmed discovery records.
@@ -126,7 +127,7 @@ a ready update. You can also use **Settings → Check for updates**. Your saved 
   The mode and selected list are remembered. Completed quests stay hidden in All mode; you can explicitly
   include one in Selected mode. **Show on map** includes the requested quest if your current filter excludes it.
   The separate **Steps** selector switches between **All steps** and **Current step only**. Current-only
-  shows every confirmed location for the current objective, plus first-objective pickups for unstarted quests;
+  shows every confirmed location for the current objective, plus confirmed quest pickups for unstarted quests;
   unlinked steps stay hidden. Both settings are remembered. Clicking a specific earlier/later location in the
   quest details switches to All steps so the location you requested can be shown.
 - **Anima vents** has a checkbox for each rune type, plus **All types / Clear**. Select one or several;

@@ -28,6 +28,7 @@ const startHidden = process.argv.includes('--hidden') && !process.argv.includes(
 
 let win;
 let tray;
+let focusHandoff;
 let settings = { ...DEFAULTS };
 try { settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }; } catch {}
 const saveSettings = () => {
@@ -44,6 +45,8 @@ function applyMode() {
 }
 
 function reveal({ focus = true } = {}) {
+  focusHandoff?.kill();
+  focusHandoff = null;
   if (win.isMinimized()) win.restore();
   focus ? win.show() : win.showInactive();
   applyMode();
@@ -52,6 +55,16 @@ function reveal({ focus = true } = {}) {
 
 // Overlay mode hides; window mode minimises like any other app.
 function conceal() {
+  // Hiding a foreground Electron window does not reliably reactivate the game on Windows.
+  // Start the helper while we still own the foreground, so it inherits activation permission.
+  focusHandoff?.kill();
+  const handoff = execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
+    path.join(__dirname, 'focus-game.ps1')], { windowsHide: true, timeout: 5000 }, (error) => {
+    if (focusHandoff !== handoff) return;
+    focusHandoff = null;
+    if (error && !error.killed) console.warn('Could not return keyboard focus to Dragonwilds:', error.message);
+  });
+  focusHandoff = handoff;
   overlay() ? win.hide() : win.minimize();
 }
 
@@ -203,7 +216,7 @@ function startTracker() {
       try { msg = JSON.parse(line); } catch { continue; }
       if (msg.key) gameMap.key(msg.key);
       else if (win && !win.isDestroyed()) {
-        gameMap.follow(msg.ok ? msg.map ?? null : false, !!msg.focus);
+        gameMap.follow(msg.ok ? msg.map ?? null : false, !!msg.focus, !!msg.teleport);
         win.webContents.send('player', msg);
       }
     }
@@ -348,6 +361,6 @@ app.whenReady().then(() => {
   if (!process.env.ATLAS_SNAPSHOT && app.isPackaged) watchUpdates();
   if (!process.env.ATLAS_SNAPSHOT) watchGame();
 });
-app.on('before-quit', () => { app.isQuitting = true; tracker?.kill(); });
+app.on('before-quit', () => { app.isQuitting = true; focusHandoff?.kill(); tracker?.kill(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', (e) => e.preventDefault?.());
