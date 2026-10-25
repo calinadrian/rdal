@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "package": "electron-builder --win --publish never",
+    "package": "electron-builder --win --publish never -c.directories.output=dist/dev-test",
     "release": "node tools/release.js",
     "import:wayback": "node importer/cli.js --source=wayback",
     "import:wiki": "node importer/cli.js --source=wiki",

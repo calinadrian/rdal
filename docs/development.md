@@ -32,13 +32,14 @@ and the built tool binaries ship only inside the installer, so releases are buil
    `C:\Program Files\GitHub CLI\gh.exe` installation). A failed upload leaves a draft that can be
    retried with the same command. Published versions must be followed by a new version number.
 
-`npm run package` builds the same installer into `dist/` without publishing.
+`npm run package` builds the same installer into `dist/dev-test/` without publishing, for testing. A release builds
+into `dist/prod/`, which holds only the version being published; older installers stay on GitHub.
 
 Updater verification (the Electron tests use isolated profiles and never run the installer):
 
 ```powershell
 node --test tools/test-updates.cjs
-node node_modules/electron/cli.js tools/test-update-ui.cjs dist/win-unpacked/resources/app
+node node_modules/electron/cli.js tools/test-update-ui.cjs dist/dev-test/win-unpacked/resources/app
 node node_modules/electron/cli.js tools/test-update-download.cjs
 ```
 

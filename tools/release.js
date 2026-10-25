@@ -44,14 +44,17 @@ function main() {
   if (release && !JSON.parse(release).isDraft) throw Error(tag + ' is already published. Bump the version.');
   const previous = git('tag', '--list', 'v*', '--sort=-v:refname', '--merged', 'HEAD').split(/\r?\n/).find(t => t && t !== tag);
   const subjects = git('log', '--no-merges', '--pretty=%s', previous ? previous + '..HEAD' : 'HEAD').split(/\r?\n/);
-  const notesFile = path.join(ROOT, 'dist', 'release-notes.md');
-  fs.mkdirSync(path.dirname(notesFile), { recursive: true });
+  // dist\prod holds only the release being published (older ones are on GitHub); dist\dev-test is for test builds.
+  const prod = path.join(ROOT, 'dist', 'prod');
+  fs.rmSync(prod, { recursive: true, force: true });
+  const notesFile = path.join(prod, 'release-notes.md');
+  fs.mkdirSync(prod, { recursive: true });
   fs.writeFileSync(notesFile, releaseNotes(subjects) + '\n');
   // No publication happens until a complete installer and manifest exist.
-  const build = spawnSync(process.execPath, [require.resolve('electron-builder/cli.js'), '--win', '--publish', 'never', '-c.releaseInfo.releaseNotesFile=' + notesFile], { cwd: ROOT, stdio: 'inherit', windowsHide: true });
+  const build = spawnSync(process.execPath, [require.resolve('electron-builder/cli.js'), '--win', '--publish', 'never', '-c.directories.output=dist/prod', '-c.releaseInfo.releaseNotesFile=' + notesFile], { cwd: ROOT, stdio: 'inherit', windowsHide: true });
   if (build.error || build.status !== 0) throw Error('Installer build failed; nothing was published.');
-  const installer = path.join(ROOT, 'dist', 'Dragonwilds-AtlasLoot-Setup-' + version + '.exe');
-  const manifest = path.join(ROOT, 'dist', 'latest.yml');
+  const installer = path.join(prod, 'Dragonwilds-AtlasLoot-Setup-' + version + '.exe');
+  const manifest = path.join(prod, 'latest.yml');
   const assets = [installer, installer + '.blockmap', manifest];
   for (const file of assets) if (!fs.statSync(file).size) throw Error('Missing or empty asset: ' + file);
   const info = yaml.load(fs.readFileSync(manifest, 'utf8'));

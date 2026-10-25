@@ -14,7 +14,7 @@ const profile = require('./test-profile.cjs').testProfile('update-download');
 app.setPath('userData', profile);
 const version = require('../package.json').version;
 const installer = `Dragonwilds-AtlasLoot-Setup-${version}.exe`;
-const dist = path.join(root, 'dist');
+const dist = path.join(root, 'dist', 'dev-test'); // npm run package
 const hash = file => crypto.createHash('sha512').update(fs.readFileSync(file)).digest('base64');
 
 app.whenReady().then(async () => {
