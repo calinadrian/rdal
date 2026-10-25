@@ -23,6 +23,8 @@ if (args.Contains("--track"))
 {
     // Position stream for the overlay: logs go to stderr, JSON lines to stdout.
     Action<string> err = s => Console.Error.WriteLine(s);
+    // Runs beside the game for hours: the game always comes first for the CPU.
+    try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
     mem.MaxPages = 50_000; // runs beside the game, often on a modest PC: a smaller cache, a slightly slower start
     var tracker = new Tracker(eng, Layout.Discover(eng, err), err);
     tracker.Init(module);

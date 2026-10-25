@@ -18,6 +18,7 @@
   let live = null;             // your latest position straight from the tracker, newer than the scene's: { x, y, yaw }
   let shown = null;            // position drawn, gliding towards the latest sample: { x, y, yaw }
   let dirty = true;
+  let active = false, sizesShown = '';
   let areaCanvas = null;
   const updateWaypoint = Waypoint.mount('minimap-waypoint', document.getElementById('waypoint-slot'));
   const icons = MapIcons(() => { dirty = true; });
@@ -60,6 +61,7 @@
     canvas.width = canvas.height = Math.round(size * devicePixelRatio);
     zoomIn.disabled = zoom === 0; zoomOut.disabled = zoom === ZOOMS.length - 1;
     dirty = true;
+    requestAnimationFrame(reportControls);
   }
   // Tracked quests as WoW lists them: the number their targets carry on the minimap, the quest and what to do now.
   let questsShown = '';
@@ -91,7 +93,7 @@
   }
   // Long lists stop at well over half the screen; the window grows with the page (main.js keeps it in place).
   questBox.style.maxHeight = Math.round(screen.availHeight * 0.6) + 'px';
-  new ResizeObserver(() => bridge.height(Math.ceil(document.body.getBoundingClientRect().height))).observe(document.body);
+  new ResizeObserver(() => { bridge.height(Math.ceil(document.body.getBoundingClientRect().height)); reportControls(); }).observe(document.body);
 
   // The day and local time, e.g. "Fri 14:05", kept to the minute.
   const day = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
@@ -291,6 +293,7 @@
   let lastFrame = 0;
   function loop(now) {
     requestAnimationFrame(loop);
+    if (!active || document.hidden) return;
     if (now - lastFrame < 1000 / 30 - 2) return;
     const ms = Math.min(100, now - lastFrame);
     lastFrame = now;
@@ -299,10 +302,12 @@
   }
 
   bridge.onOptions(layout);
+  bridge.onActive(on => { active = !!on; if (active) { lastFrame = 0; dirty = true; } });
   bridge.onPlayer((p) => { live = p; });
   bridge.onScene((next) => {
     scene = next;
-    MapAppearance.apply(scene.displaySizes);
+    const sizes = JSON.stringify(scene.displaySizes || {});
+    if (sizes !== sizesShown) { sizesShown = sizes; MapAppearance.apply(scene.displaySizes); requestAnimationFrame(reportControls); }
     iconScale = MapAppearance.sizes().minimapIcons / 100;
     ICON = 16 * iconScale; MONSTER = 7 * iconScale; QUEST = 18 * iconScale;
     if (scene.ok) loadImage(scene.image); else shown = null;
@@ -312,11 +317,15 @@
     dirty = true;
   });
 
-  // Click-through except on the name bar, zoom buttons and quest heading, so it never gets in the way of the game.
+  // Native hit testing polls just these rectangles; game mouse events never pass through this renderer.
   let drag = null;
-  for (const el of [zone, zoomIn, zoomOut, questToggle]) {
-    el.addEventListener('mouseenter', () => bridge.interactive(true));
-    el.addEventListener('mouseleave', () => { if (!drag) bridge.interactive(false); });
+  let controlsShown = '';
+  function reportControls() {
+    const regions = [zone, zoomIn, zoomOut, questToggle].filter(el => !el.disabled && el.getClientRects().length).map(el => {
+      const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    const key = JSON.stringify(regions);
+    if (key !== controlsShown) { controlsShown = key; bridge.regions(regions); }
   }
   for (const el of [zone, zoomIn, zoomOut]) el.addEventListener('wheel', (e) => setZoom(zoom + (e.deltaY > 0 ? 1 : -1)), { passive: true });
   zoomIn.onclick = () => setZoom(zoom - 1);
@@ -325,6 +334,7 @@
   zone.addEventListener('pointerdown', (e) => {
     if (e.button) return;
     drag = { x: e.screenX - window.screenX, y: e.screenY - window.screenY, moved: false };
+    bridge.interactive(true);
     zone.setPointerCapture(e.pointerId);
   });
   zone.addEventListener('pointermove', (e) => {
@@ -335,11 +345,13 @@
   zone.addEventListener('pointerup', () => {
     if (drag?.moved) bridge.place(false);
     drag = null;
-    if (!zone.matches(':hover')) bridge.interactive(false);
+    bridge.interactive(false);
   });
+  zone.addEventListener('pointercancel', () => { drag = null; bridge.interactive(false); });
   zone.addEventListener('dblclick', () => { bridge.place(true); bridge.interactive(false); });
 
   layout({ size, rotate, zoom });
+  requestAnimationFrame(reportControls);
   tick();
   requestAnimationFrame(loop);
 })();

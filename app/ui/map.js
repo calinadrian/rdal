@@ -165,6 +165,7 @@ window.MapView = (() => {
       else placeWaypoint(e);
     });
     window.addEventListener('mousemove', (e) => {
+      lastPointer = performance.now();
       if (drag) {
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; followPause = Infinity; }
@@ -175,6 +176,7 @@ window.MapView = (() => {
     });
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
+      lastPointer = performance.now();
       const r = canvas.getBoundingClientRect();
       const f = e.deltaY < 0 ? 1.25 : 0.8;
       // While following, zoom around the player so it stays in the middle.
@@ -368,14 +370,16 @@ window.MapView = (() => {
 
   const following = () => follow && playerHere() && performance.now() > followPause;
 
-  let lastFrame = 0;
+  let lastFrame = 0, lastPointer = -Infinity;
   function loop(now) {
     requestAnimationFrame(loop);
     // Keep live data for the minimap, but never paint a retained full-size canvas behind a closed map.
     if (document.hidden || !canvas.getClientRects().length) return;
-    // High-refresh game monitors can run at 360 Hz; the companion map has a separate 60 FPS budget.
-    if (now - lastFrame < 1000 / 60 - 0.5) return;
-    const elapsed = lastFrame ? Math.min(100, now - lastFrame) : 1000 / 60;
+    // High-refresh game monitors can run at 360 Hz; the companion map has a separate 60 FPS budget. While you play
+    // (the app has no keyboard and the mouse is elsewhere) it glides at 20 FPS, leaving the graphics card to the game.
+    const fps = document.hasFocus() || now - lastPointer < 2000 ? 60 : 20;
+    if (now - lastFrame < 1000 / fps - 0.5) return;
+    const elapsed = lastFrame ? Math.min(100, now - lastFrame) : 1000 / fps;
     lastFrame = now;
     if (following()) {
       // Glide towards the player instead of snapping, so movement and returning from a drag look smooth.

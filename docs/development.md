@@ -52,7 +52,7 @@ over loopback and checks the real updater's download, SHA-512 verification and r
 | `tools/Dumper` | Our external, read-only UE5 reader: writes `Mappings.usmap` + `sdk.json`, and with `--track` streams the player position and M/Esc key presses (game window only, keys are passed through). |
 | `tools/Extractor` | CUE4Parse-based exporter (`survey`, `json`, `bulk`, `world`, `texture` modes; `floorplan` maps the dungeons from the navigation mesh, and `floorplan-style` redraws them from the cached layouts without the game). |
 | `tools/ext/c4p` | [CUE4Parse](https://github.com/FabianFG/CUE4Parse), Apache-2.0. |
-| `tools/build.ps1` | Builds both tools. The C# compiler can't handle this folder's long path, so it builds in `%LOCALAPPDATA%\dwal` (which also holds the .NET SDK) and copies the binaries back. |
+| `tools/build.ps1` | Builds both tools. The C# compiler can't handle this folder's long path, so it builds in `%LOCALAPPDATA%\dwal` (which also holds the .NET SDK) and copies the binaries back. The Dumper is published as one self-contained `Dumper.exe`, so players don't need .NET installed. |
 | `importer/game.js` | Joins the raw exports into the overlay database. |
 | `importer/*` (wiki) | The older wiki importer, kept as a fallback. |
 

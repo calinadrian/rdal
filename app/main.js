@@ -217,7 +217,11 @@ let tracker = null;
 // Samples go to the main window one at a time, merged while it is busy (samples.js).
 const samples = require('./samples').createSamples({ window: () => win });
 function startTracker() {
-  if (!fs.existsSync(DUMPER) || app.isQuitting || tracker || !gameRunning) return;
+  if (app.isQuitting || tracker || !gameRunning) return;
+  if (!fs.existsSync(DUMPER)) {
+    if (app.isPackaged) samples.send({ ok: false, offline: true, error: 'its tracker (Dumper.exe) is missing; antivirus software may have removed it' });
+    return;
+  }
   // A small young-generation budget keeps the tracker near 70 MB for hours instead of growing by the CPU's cache size.
   tracker = spawn(DUMPER, ['--track'], { windowsHide: true, env: { ...process.env, DOTNET_GCgen0size: '0x400000' } });
   let buf = '';
@@ -239,13 +243,32 @@ function startTracker() {
       }
     }
   });
-  tracker.stderr.on('data', () => {});
-  tracker.on('exit', () => {
-    tracker = null;
-    if (win && !win.isDestroyed()) { gameMap.follow(false, false); minimap.player({ ok: false }); samples.send({ ok: false, offline: true }); }
-    setTimeout(startTracker, 5000);
+  // Its last words say why it stopped (no access to the game, the game still loading, ...).
+  let lastError = '', started = Date.now(), sampled = false;
+  tracker.stdout.once('data', () => { sampled = true; });
+  tracker.stderr.on('data', (d) => {
+    const lines = String(d).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const exception = /^System\.[\w.]*Exception( \(\d+\))?:\s*/;
+    const reason = lines.find(l => l.startsWith('Unhandled exception.') || exception.test(l));
+    if (reason) lastError = reason.replace(/^Unhandled exception\.\s*/, '').replace(exception, '').slice(0, 200);
   });
+  const self = tracker;
+  const failed = (error) => {
+    if (tracker !== self) return; // 'error' and 'exit' can both come
+    tracker = null;
+    // Every start reads the whole game module again: one that keeps failing waits longer each time (up to a minute).
+    trackerRetry = sampled || Date.now() - started > 60000 ? 5000 : Math.min(60000, trackerRetry * 2);
+    if (win && !win.isDestroyed()) { gameMap.follow(false, false); minimap.player({ ok: false }); samples.send({ ok: false, offline: true, error: sampled ? '' : error }); }
+    setTimeout(startTracker, trackerRetry);
+  };
+  // Not started at all (blocked or removed by antivirus software, for one): no 'exit' follows.
+  tracker.on('error', (e) => { if (!self.pid) failed(e.message); });
+  // In plain words; a game still loading is just waiting for your character.
+  tracker.on('exit', () => failed(/GWorld not found/.test(lastError) ? ''
+    : /OpenProcess failed \(error 5\)|Access is denied/.test(lastError) ? 'Windows denied access to the game. If the game runs as administrator, run AtlasLoot as administrator too'
+    : lastError || 'its tracker stopped'));
 }
+let trackerRetry = 2500;
 
 // Full refresh from the installed game: mappings (if the game is running), raw extract, database build.
 function run(cmd, args, onLine) {

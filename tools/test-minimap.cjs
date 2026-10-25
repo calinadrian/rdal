@@ -17,6 +17,12 @@ const timer = setTimeout(() => { console.error('Minimap test timed out'); app.ex
 const tick = (ms = 300) => new Promise(r => setTimeout(r, ms));
 
 app.whenReady().then(async () => {
+  if (process.env.ATLAS_TEST_SECONDARY_DISPLAY) {
+    const primary = screen.getPrimaryDisplay();
+    const secondary = screen.getAllDisplays().find(d => d.id !== primary.id);
+    if (!secondary) throw Error('Secondary-display test requested but no second display is available');
+    screen.getPrimaryDisplay = () => secondary;
+  }
   const win = new BrowserWindow({ width: 1280, height: 850, show: false, webPreferences: { preload: path.join(target, 'app/preload.js'), sandbox: false, backgroundThrottling: false } });
   win.webContents.on('console-message', (_e, level, message) => { if (level >= 2) console.error('Renderer: ' + message); });
   const js = code => win.webContents.executeJavaScript(code);
@@ -67,12 +73,21 @@ app.whenReady().then(async () => {
     };
     await lastScene({ ...me, npcs, players });
     const north = await show({}, 'minimap.png');
+    const originalSend = north.mm.webContents.send.bind(north.mm.webContents);
+    const relay = [];let relayedPlayer=null;
+    north.mm.webContents.send = (channel, ...args) => { relay.push(channel);if(channel==='minimap:player')relayedPlayer=args[0];return originalSend(channel, ...args); };
     const area = screen.getPrimaryDisplay().workArea, at = north.mm.getBounds();
     assert.deepEqual([at.x, at.y, at.width], [area.x + area.width - 280, area.y + 16, 264], 'It starts in the top-right corner: ' + JSON.stringify(at));
     assert(!north.mm.isFocusable() && north.mm.isAlwaysOnTop() && north.mm.isVisible(), 'It floats over the game without taking focus');
     minimap.focus(false); assert(!north.mm.isVisible(), 'Alt-Tab hides the minimap over other applications');
+    relay.length = 0;minimap.player({ok:true,x:me.x+6000,y:me.y,yaw:me.yaw});
+    ipcMain.emit('minimap:scene',{sender:win.webContents},scene);
+    assert.equal(relay.length,0,'Hidden minimaps retain data without forwarding player or scene updates');
     minimap.suspend(true); minimap.suspend(false); assert(!north.mm.isVisible(), 'Closing the large map cannot reveal a minimap outside the game');
     minimap.focus(true); assert(north.mm.isVisible(), 'Returning to the game restores the minimap');
+    assert(relay.includes('minimap:active') && relay.includes('minimap:scene') && relay.includes('minimap:player'),'Resuming sends the retained scene and latest position');
+    assert.equal(relayedPlayer.x,me.x+6000,'Resuming uses the newest position received while hidden');
+    minimap.player({ok:false});await tick(200);
     const dial = await north.run(`(()=>{const r=document.querySelector('.dial').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width}})()`);
     assert.equal(Math.round(dial.x + dial.w), 264 - 8, 'The minimap keeps to the right, in the corner');
     const { width } = north.shot.getSize(), px = north.shot.toBitmap(), k = width / 264;

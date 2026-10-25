@@ -13,9 +13,12 @@ const WIDTH = 264; // room for the quest list, which is wider than the small and
 function createMinimap({ settings, update, icon }) {
   let win = null;
   let gameFocused = false;
+  let ready = false, active = false, latestPlayer = null;
   let scene = { ok: false };
   let content = 0; // the page's height with its quest list, as the minimap window reports it
   const size = () => SIZES.includes(settings().minimapSize) ? settings().minimapSize : 200;
+  const pointer = require('./minimap-pointer').createMinimapPointer({ window: () => win,
+    cursor: () => electron.screen.getCursorScreenPoint() });
   function questWidth() {
     let saved = {};
     try { saved = JSON.parse(settings().ui?.displaySizes || '{}'); } catch {}
@@ -39,7 +42,7 @@ function createMinimap({ settings, update, icon }) {
 
   // Shown while the setting is on and the game runs; closed otherwise.
   function sync(gameRunning) {
-    if (!settings().minimap || !gameRunning) { win?.destroy(); win = null; return; }
+    if (!settings().minimap || !gameRunning) { pointer.active(false); win?.destroy(); win = null; ready = active = false; return; }
     if (win) {
       win.setBounds(bounds());
       win.webContents.send('minimap:options', options());
@@ -52,22 +55,25 @@ function createMinimap({ settings, update, icon }) {
       webPreferences: { preload: path.join(__dirname, 'minimap-preload.js'), contextIsolation: true },
     });
     mm.setAlwaysOnTop(true, 'screen-saver');
-    mm.setIgnoreMouseEvents(true, { forward: true });
+    pointer.setRegions([]);
+    pointer.active(false);
     mm.loadFile(path.join(__dirname, 'ui', 'minimap.html'));
     mm.webContents.on('did-finish-load', () => {
       mm.webContents.send('minimap:options', options());
       mm.webContents.send('minimap:scene', scene);
+      mm.webContents.send('minimap:active', active);
     });
-    mm.once('ready-to-show', () => { if (!suspended && gameFocused) mm.showInactive(); });
-    mm.on('closed', () => { if (win === mm) win = null; });
+    mm.once('ready-to-show', () => { ready = true; visibility(); });
+    mm.on('closed', () => { if (win === mm) { pointer.active(false); win = null; ready = active = false; } });
   }
 
   ipcMain.on('minimap:scene', (_, next) => {
     scene = next;
     if (win && !win.isDestroyed() && win.getBounds().width !== bounds().width) win.setBounds(bounds());
-    if (win && !win.isDestroyed()) win.webContents.send('minimap:scene', scene);
+    if (win && !win.isDestroyed() && active) win.webContents.send('minimap:scene', scene);
   });
-  ipcMain.on('minimap:interactive', (_, on) => win?.setIgnoreMouseEvents(!on, { forward: true }));
+  ipcMain.on('minimap:regions', (event, regions) => { if (event.sender === win?.webContents) pointer.setRegions(regions); });
+  ipcMain.on('minimap:interactive', (event, on) => { if (event.sender === win?.webContents) pointer.capture(on); });
   ipcMain.on('minimap:move', (_, x, y) => win?.setPosition(Math.round(x), Math.round(y)));
   ipcMain.on('minimap:place', (_, reset) => {
     if (!win) return;
@@ -85,19 +91,33 @@ function createMinimap({ settings, update, icon }) {
 
   // Out of the way while the app's map covers the game's (as the game hides its own minimap with its map).
   let suspended = false;
+  function visibility() {
+    if (!win || win.isDestroyed()) return;
+    const next = ready && !suspended && gameFocused;
+    if (next === active) return;
+    active = next;
+    win.webContents.send('minimap:active', active);
+    if (active) {
+      win.webContents.send('minimap:scene', scene);
+      win.webContents.send('minimap:player', latestPlayer);
+      win.showInactive();
+    } else win.hide();
+    pointer.active(active);
+  }
   function suspend(on) {
     suspended = on;
-    if (win && !win.isDestroyed()) !on && gameFocused ? win.showInactive() : win.hide();
+    visibility();
   }
   function focus(on) {
     gameFocused = on;
-    if (win && !win.isDestroyed()) on && !suspended ? win.showInactive() : win.hide();
+    visibility();
   }
 
   // Your position straight from the tracker, so the minimap keeps moving with you even while the main window is
   // slow to work out the rest of the scene (a modest PC, or the window in the background behind the game).
   function player(sample) {
-    if (win && !win.isDestroyed() && !suspended) win.webContents.send('minimap:player', sample.ok ? { x: sample.x, y: sample.y, yaw: sample.yaw } : null);
+    latestPlayer = sample.ok ? { x: sample.x, y: sample.y, yaw: sample.yaw } : null;
+    if (win && !win.isDestroyed() && active) win.webContents.send('minimap:player', latestPlayer);
   }
 
   return { sync, suspend, focus, player, bounds, window: () => win };

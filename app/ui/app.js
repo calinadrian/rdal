@@ -2584,7 +2584,9 @@ function onPlayer(p) {
   sendMinimap();
   const el = $('#status-progress');
   if (el.dataset.importing) return;
-  el.textContent = p.ok ? `● Live: ${MapView.playerDungeon()?.name || p.region || p.world} (${Math.round(p.x / 100)}, ${Math.round(p.y / 100)})` : !gameRunning ? '○ Waiting for RuneScape: Dragonwilds to start' : '◐ Game detected, waiting for your character…';
+  el.textContent = p.ok ? `● Live: ${MapView.playerDungeon()?.name || p.region || p.world} (${Math.round(p.x / 100)}, ${Math.round(p.y / 100)})` : !gameRunning ? '○ Waiting for RuneScape: Dragonwilds to start'
+    : p.offline && p.error ? `◐ Game detected, but live tracking can't start: ${p.error}. Retrying…` : '◐ Game detected, waiting for your character…';
+  el.title = el.textContent;
 }
 
 // Lodestones players have built: the game lists every lodestone, and the ones away from a world lodestone were built.

@@ -12,7 +12,7 @@ public sealed class Tracker
     readonly Memory _m;
     readonly Action<string> _log;
     ulong _gworld; // address of the GWorld global
-    int _oGameInstance, _oLocalPlayers, _oPlayerController, _oPawn, _oRoot, _oRelLoc, _oControlRot, _oPersistentLevel;
+    int _oGameInstance, _oLocalPlayers, _oPlayerController, _oPawn, _oControllerPawn = -1, _oRoot, _oRelLoc, _oControlRot, _oPersistentLevel;
     DiscoveryReader? _discovery;
     ObjectSweep _sweep = null!;
     ObjectSweep.Want _questApis = null!, _registries = null!, _panels = null!;
@@ -49,6 +49,7 @@ public sealed class Tracker
         _oLocalPlayers = Prop("/Script/Engine.GameInstance", "LocalPlayers");
         _oPlayerController = Prop("/Script/Engine.Player", "PlayerController");
         _oPawn = Prop("/Script/Engine.PlayerController", "AcknowledgedPawn");
+        try { _oControllerPawn = Prop("/Script/Engine.Controller", "Pawn"); } catch { }
         _oControlRot = Prop("/Script/Engine.Controller", "ControlRotation");
         _oRoot = Prop("/Script/Engine.Actor", "RootComponent");
         _oRelLoc = Prop("/Script/Engine.SceneComponent", "RelativeLocation");
@@ -331,6 +332,8 @@ public sealed class Tracker
         ulong lp = lps == 0 ? 0 : _m.Ptr(lps);
         ulong pc = lp == 0 ? 0 : _m.Ptr(lp + (ulong)_oPlayerController);
         ulong pawn = pc == 0 ? 0 : _m.Ptr(pc + (ulong)_oPawn);
+        // A joining player's controller can be slow to acknowledge its character: the possessed pawn is the same one.
+        if (pawn == 0 && pc != 0 && _oControllerPawn > 0) pawn = _m.Ptr(pc + (ulong)_oControllerPawn);
         ulong root = pawn == 0 ? 0 : _m.Ptr(pawn + (ulong)_oRoot);
         if (root == 0) return new { ok = false, world = world == 0 ? null : _e.ObjName(world) };
         double x = _m.Read<double>(root + (ulong)_oRelLoc), y = _m.Read<double>(root + (ulong)_oRelLoc + 8), z = _m.Read<double>(root + (ulong)_oRelLoc + 16);

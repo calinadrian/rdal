@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('minimap', {
   onScene: (fn) => ipcRenderer.on('minimap:scene', (_, s) => fn(s)),
   onPlayer: (fn) => ipcRenderer.on('minimap:player', (_, p) => fn(p)),
   onOptions: (fn) => ipcRenderer.on('minimap:options', (_, o) => fn(o)),
+  onActive: (fn) => ipcRenderer.on('minimap:active', (_, on) => fn(on)),
+  regions: (rects) => ipcRenderer.send('minimap:regions', rects),
   interactive: (on) => ipcRenderer.send('minimap:interactive', on),
   move: (x, y) => ipcRenderer.send('minimap:move', x, y),
   place: (reset) => ipcRenderer.send('minimap:place', reset),

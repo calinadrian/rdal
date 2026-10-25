@@ -17,7 +17,11 @@ if (-not (Test-Path $dotnet)) {
 robocopy "$tools\ext\c4p" "$build\src\ext\c4p" /MIR /XD bin obj .git /NFL /NDL /NJH /NJS /NP | Out-Null
 foreach ($p in $Projects) {
     robocopy "$tools\$p" "$build\src\$p" /MIR /XD bin obj out /NFL /NDL /NJH /NJS /NP | Out-Null
-    & $dotnet build "$build\src\$p" -c Release -o "$build\out\$p" --disable-build-servers -v q -p:NuGetAudit=false
+    # The Dumper ships to players as one self-contained exe (see its project file); the Extractor runs only here.
+    $verb = if ($p -eq 'Dumper') { 'publish' } else { 'build' }
+    # Files of an earlier kind of build must not be copied back with the new ones.
+    Remove-Item -Recurse -Force "$build\out\$p" -ErrorAction SilentlyContinue
+    & $dotnet $verb "$build\src\$p" -c Release -o "$build\out\$p" --disable-build-servers -v q -p:NuGetAudit=false
     if ($LASTEXITCODE -ne 0) { throw "$p build failed" }
     robocopy "$build\out\$p" "$tools\$p\bin\out" /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
     Write-Host "$p -> $tools\$p\bin\out"

@@ -141,6 +141,7 @@ app.whenReady().then(async () => {
       webPreferences: { preload: path.join(root, 'app/minimap-preload.js'), backgroundThrottling: false } });
     await mm.loadFile(path.join(root, 'app/ui/minimap.html'));
     mm.showInactive();
+    mm.webContents.send('minimap:active', true);
     mm.webContents.send('minimap:options', {size: 200, rotate: true, zoom: 0});
     mm.webContents.send('minimap:scene', scene); await wait(700);
     const run = code => mm.webContents.executeJavaScript(code);
