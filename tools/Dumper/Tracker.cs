@@ -53,10 +53,11 @@ public sealed class Tracker
         _oControlRot = Prop("/Script/Engine.Controller", "ControlRotation");
         _oRoot = Prop("/Script/Engine.Actor", "RootComponent");
         _oRelLoc = Prop("/Script/Engine.SceneComponent", "RelativeLocation");
-        try { _oAlert = Prop("/Script/Dominion.DominionAICharacter", "CurrentAlertnessState"); } catch { }
         try
         {
-            _oPlayerState = Prop("/Script/Engine.Pawn", "PlayerState");
+            _oGameState = Prop("/Script/Engine.World", "GameState");
+            _oPlayerArray = Prop("/Script/Engine.GameStateBase", "PlayerArray");
+            _oPawnPrivate = Prop("/Script/Engine.PlayerState", "PawnPrivate");
             _oPlayerName = Prop("/Script/Engine.PlayerState", "PlayerNamePrivate");
             _oRelRot = Prop("/Script/Engine.SceneComponent", "RelativeRotation");
         }
@@ -90,37 +91,6 @@ public sealed class Tracker
         _m.MaxPages = 8192;
     }
 
-    // ULevel.Actors is a native TArray (not reflected): find the TArray whose first entries are actors owned by the level.
-    int _oLevelActors = -1;
-    int LevelActorsOffset(ulong level)
-    {
-        for (int o = 0x28; o < 0xC0; o += 8)
-        {
-            ulong data = _m.Ptr(level + (ulong)o);
-            int num = _m.I32(level + (ulong)o + 8), max = _m.I32(level + (ulong)o + 12);
-            if (data == 0 || num < 8 || num > max || max > 2_000_000) continue;
-            int owned = 0;
-            for (int i = 0; i < 8; i++)
-            {
-                ulong a = _m.Ptr(data + (ulong)(i * 8));
-                if (a != 0 && _m.Ptr(a + Engine.OOuter) == level) owned++;
-            }
-            if (owned >= 6) return o;
-        }
-        return -1;
-    }
-
-    // Class pointer -> class name if it is a character (creature/NPC), "" otherwise.
-    readonly Dictionary<ulong, string> _pawnClass = new();
-    string PawnClass(ulong cls)
-    {
-        if (_pawnClass.TryGetValue(cls, out var n)) return n;
-        n = "";
-        for (ulong c = cls; c != 0; c = _m.Ptr(c + (ulong)_l.SuperStruct))
-            if (_e.ObjName(c) == "Character") { n = _e.ObjName(cls); break; }
-        return _pawnClass[cls] = n;
-    }
-
     // FString: TCHAR* data, int count (including the terminator).
     string FString(ulong addr)
     {
@@ -131,48 +101,33 @@ public sealed class Tracker
         return System.Text.Encoding.Unicode.GetString(bytes);
     }
 
-    // Every pawn in the loaded world except the player: class, position, alertness.
-    // Other players go to `players` (name, position, facing) instead of the creature list.
-    List<object> Npcs(ulong world, ulong player, List<object> players)
+    // Other players in your world, from the game state's player list (name, position, facing). Reading just
+    // these, rather than every actor in the level, keeps each look a few dozen reads however busy the world is.
+    List<object>? Players(ulong world, ulong player)
     {
+        if (_oGameState < 0 || _oPlayerArray < 0 || _oPawnPrivate < 0) return null;
+        ulong state = _m.Ptr(world + (ulong)_oGameState);
+        if (state == 0) return null;
+        ulong data = _m.Ptr(state + (ulong)_oPlayerArray);
+        int count = _m.I32(state + (ulong)_oPlayerArray + 8);
+        if (count < 0 || count > 64 || (count > 0 && data == 0)) return null;
         var res = new List<object>();
-        ulong level = _m.Ptr(world + (ulong)_oPersistentLevel);
-        if (level == 0) return res;
-        if (_oLevelActors < 0) _oLevelActors = LevelActorsOffset(level);
-        if (_oLevelActors < 0) return res;
-        ulong data = _m.Ptr(level + (ulong)_oLevelActors);
-        // Spawned actors are added at the end and destroyed ones leave empty slots, so on a long session (a joining
-        // player's game spawns and drops actors as they come in and out of range) the list keeps growing: read
-        // its newest end.
-        int num = Math.Clamp(_m.I32(level + (ulong)_oLevelActors + 8), 0, 2_000_000), from = Math.Max(0, num - 200_000);
-        var actors = _m.Bytes(data + (ulong)from * 8, (num - from) * 8);
-        for (int i = 0; i + 8 <= actors.Length; i += 8)
+        for (int i = 0; i < count; i++)
         {
-            ulong a = BitConverter.ToUInt64(actors, i);
-            if (a == 0 || a == player) continue;
-            ulong klass = _e.ClassOf(a);
-            var cls = PawnClass(klass);
-            if (cls.Length == 0 || (_m.I32(a + Engine.OFlags) & 0x10) != 0) continue;
-            // Past 400 creatures only other players are still wanted.
-            bool isPlayer = IsA(klass, "DominionPlayerCharacter");
-            if (!isPlayer && res.Count >= 400) continue;
-            ulong root = _m.Ptr(a + (ulong)_oRoot);
+            ulong ps = _m.Ptr(data + (ulong)(i * 8));
+            ulong pawn = ps == 0 ? 0 : _m.Ptr(ps + (ulong)_oPawnPrivate);
+            if (pawn == 0 || pawn == player) continue;
+            ulong root = _m.Ptr(pawn + (ulong)_oRoot);
             if (root == 0) continue;
             double x = _m.Read<double>(root + (ulong)_oRelLoc), y = _m.Read<double>(root + (ulong)_oRelLoc + 8), z = _m.Read<double>(root + (ulong)_oRelLoc + 16);
             if (x == 0 && y == 0) continue;
-            if (isPlayer)
-            {
-                ulong state = _oPlayerState > 0 ? _m.Ptr(a + (ulong)_oPlayerState) : 0;
-                string name = state != 0 && _oPlayerName > 0 ? FString(state + (ulong)_oPlayerName) : "";
-                double yaw = _oRelRot > 0 ? _m.Read<double>(root + (ulong)_oRelRot + 8) : 0;
-                players.Add(new { n = name, x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1) });
-                continue;
-            }
-            res.Add(new { c = cls, x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), alert = _oAlert > 0 ? _m.Read<byte>(a + (ulong)_oAlert) : 0 });
+            string name = _oPlayerName > 0 ? FString(ps + (ulong)_oPlayerName) : "";
+            double yaw = _oRelRot > 0 ? _m.Read<double>(root + (ulong)_oRelRot + 8) : 0;
+            res.Add(new { n = name, x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1) });
         }
         return res;
     }
-    int _oAlert = -1, _oPlayerState = -1, _oPlayerName = -1, _oRelRot = -1;
+    int _oGameState = -1, _oPlayerArray = -1, _oPawnPrivate = -1, _oPlayerName = -1, _oRelRot = -1;
     int _tick;
 
     // Quest log: QuestUIAPI.LocalPlayerQuestProgressComponent -> Quests (TArray<FQuestProgress>, 0x38 each:
@@ -338,9 +293,8 @@ public sealed class Tracker
         if (root == 0) return new { ok = false, world = world == 0 ? null : _e.ObjName(world) };
         double x = _m.Read<double>(root + (ulong)_oRelLoc), y = _m.Read<double>(root + (ulong)_oRelLoc + 8), z = _m.Read<double>(root + (ulong)_oRelLoc + 16);
         double yaw = _m.Read<double>(pc + (ulong)_oControlRot + 8);
-        // Creatures around the player, refreshed about twice a second.
-        List<object>? players = _tick % 4 == 0 ? new() : null;
-        var npcs = players != null ? Npcs(world, pawn, players) : null;
+        // Other players, refreshed about twice a second.
+        var players = _tick % 4 == 0 ? Players(world, pawn) : null;
         // Quest log and the game's revealed quest locations, every ~3 s (they only change when a quest moves on).
         ulong questComp = _tick % 20 == 0 ? QuestComponent() : 0;
         var quests = Quests(questComp);
@@ -354,7 +308,7 @@ public sealed class Tracker
         // Opened at a lodestone to teleport: the game's map is the one to use.
         bool teleport = map == true && MapTeleporting();
         bool focus = KeyWatch.GameFocused(_m.Pid);
-        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), map, teleport, focus, npcs, players, quests, questLocations, lodestones, discovery };
+        return new { ok = true, world = _e.ObjName(world), x = Math.Round(x), y = Math.Round(y), z = Math.Round(z), yaw = Math.Round(yaw, 1), map, teleport, focus, players, quests, questLocations, lodestones, discovery };
     }
 
     public void Run(int intervalMs, CancellationToken ct)

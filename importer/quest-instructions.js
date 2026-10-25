@@ -4,7 +4,12 @@ const entry = suffix => 'QuestFlow.Entry.' + suffix;
 const step = (instruction, notes = [], entries = []) => ({ instruction, notes, entries: entries.map(entry) });
 // The standing stones' clues: Emberwood village west of the tower, Silverthorn Keep to the east, and the vault behind the waterfall.
 const seals = ['One is in the heart of Emberwood village, one at Silverthorn Keep (guarded by its last protector), and one inside Vekchenven Kara, the vault behind the tainted waterfall near the Lake of Lost Souls.'];
-const sealEntries = ['DeathQuestMain.Seals.Emberwood', 'DeathQuestMain.Seals.Silverthorn', 'DeathQuestMain.Seals.Waterfall'];
+// The Emberwood seal sits behind the village barrier, which falls once all four god shrines around it are blessed
+// (QF_EmberwoodVillagePuzzle; the Armadyl answers are the choices the game marks right).
+seals.push('Emberwood village is shut behind a barrier: pray at the four god shrines around it to bring it down. Saradomin’s shrine is missing a piece, so pick it up nearby and repair the shrine first. Guthix’s shrine is guarded by a dragon you must defeat. At Armadyl’s shrine on the lake, name the crime (a mass murder), the culprit (the Snickering Ghost) and the motive (they thought it was funny).');
+const sealEntries = ['DeathQuestMain.Seals.Emberwood', 'DeathQuestMain.Seals.Silverthorn', 'DeathQuestMain.Seals.Waterfall',
+  'EmberwoodVillagePuzzle.ZamorakStatuePray', 'EmberwoodVillagePuzzle.FindSaraHead', 'EmberwoodVillagePuzzle.SaradominStatueMissingHead',
+  'EmberwoodVillagePuzzle.GuthixStatuePray', 'EmberwoodVillagePuzzle.ArmadylStatuePray'];
 const instructions = {
   Quest_AMelodyRemebered: {
     Objective1: step('Bring an Inspiring Ring of Runecrafting to the Jewellery Box and insert it into the ring slot.', ['The ring is consumed by the box. Open its item entry below to check the recipe and how to obtain it.'], ['AMelodyRemebered']),

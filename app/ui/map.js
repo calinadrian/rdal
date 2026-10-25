@@ -15,7 +15,7 @@ window.MapView = (() => {
   let W = 1, H = 1;            // map image size in px
   let scale = 0.1, ox = 0, oy = 0; // screen = imagePx * scale + offset
   const savedCategories = Preferences.json('mapCategories', null);
-  const DEFAULT_CATEGORIES = ['monster', 'chest', 'quest', 'travel', 'shrine', 'agility', 'npc'];
+  const DEFAULT_CATEGORIES = ['monster', 'chest', 'quest', 'travel', 'shrine', 'agility'];
   const enabled = new Set(Array.isArray(savedCategories) ? savedCategories.filter(c => typeof c === 'string') : DEFAULT_CATEGORIES);
   let visibilityChanged = () => {}, lastVisibility = '';
   const savedVentTypes = Preferences.json('ventTypes', null);
@@ -50,6 +50,7 @@ window.MapView = (() => {
   let highlight = null;        // { label, markers:Set }
   let tracked = new Map();     // marker -> { index, quest, kind, label } for pinned quests' current objectives
   let player = null;
+  let paintedPlayer = null;  // visual interpolation only; live lookups keep the latest tracker coordinates
   let destination = null, updateWaypoint = () => {}, placingWaypoint = false;
   function setWaypointPlacement(on) {
     placingWaypoint = on;
@@ -83,7 +84,6 @@ window.MapView = (() => {
       : d && markerLevel(destination) !== playerLevel ? `Go to Level ${markerLevel(destination) + 1}` : null;
     return { x: destination.x, y: destination.y, n: destination.n, blocked };
   }
-  let npcs = [];               // live creatures around the player: { n, ref, hostile, alert, x, y }
   let others = [];             // other players in your world (co-op): { n, x, y, z, yaw }
   let follow = false;          // keep the player centred (stays on until toggled off)
   let followPause = 0;         // a drag pauses following until this time, then it glides back
@@ -138,6 +138,7 @@ window.MapView = (() => {
     ctx = canvas.getContext('2d');
     map = mapData;
     onSelect = selectFn;
+    document.addEventListener('visibilitychange', () => { if (document.hidden) wasVisible = hadPlayer = false; });
     updateWaypoint = Waypoint.mount('map-waypoint', canvas.parentElement, () => selectDestination(null));
     document.getElementById('map-add-waypoint').onclick = () => setWaypointPlacement(!placingWaypoint);
     window.addEventListener('keydown', e => { if (e.key === 'Escape' && placingWaypoint) setWaypointPlacement(false); });
@@ -320,7 +321,7 @@ window.MapView = (() => {
     const r = canvas.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     let best = null, bd = 100;
-    const live = [...(enabled.has('npc') && playerHere() ? npcs : []), ...others.filter(otherHere)];
+    const live = others.filter(otherHere);
     for (const m of [...(destination?.custom && onLayer(destination) ? [destination] : []), ...live, ...map.markers]) {
       if (!m.custom && !m.live && (!visible(m) || questHidden.has(m))) continue;
       const [sx, rawY] = toScreen(m.x, m.y), sy = rawY - (m.custom ? 10 : 0);
@@ -339,8 +340,7 @@ window.MapView = (() => {
       tip.style.top = my + 10 + 'px';
       const dist = hover.live && player?.ok ? ` · ${Math.round(Math.hypot(hover.x - player.x, hover.y - player.y) / 100)} m away` : '';
       const qs = hover.c === 'quest' && hover.ref ? questStatus(hover.ref) : null;
-      const mood = hover.combat ? ' · in combat' : hover.alert ? ' · suspicious'
-        : qs ? { active: ' · in progress', available: ' · not started', unknown: ' · not found yet', done: ' · completed' }[qs] : '';
+      const mood = qs ? { active: ' · in progress', available: ' · not started', unknown: ' · not found yet', done: ' · completed' }[qs] : '';
       const info = hover.c === 'quest' ? questInfo(hover) : null;
       const t = tracked.get(hover);
       if (t && hover.c !== 'quest') {
@@ -369,22 +369,42 @@ window.MapView = (() => {
   }
 
   const following = () => follow && playerHere() && performance.now() > followPause;
+  function snapPlayer() {
+    paintedPlayer = player?.ok ? { x: player.x, y: player.y, yaw: player.yaw } : null;
+  }
+  function animatePlayer(ms) {
+    if (!paintedPlayer || !playerHere()) return false;
+    const dx = player.x - paintedPlayer.x, dy = player.y - paintedPlayer.y;
+    const turn = ((player.yaw - paintedPlayer.yaw) % 360 + 540) % 360 - 180;
+    if (Math.abs(dx) + Math.abs(dy) < 0.1 && Math.abs(turn) < 0.05) {
+      if (dx === 0 && dy === 0 && turn === 0) return false;
+      snapPlayer(); return true;
+    }
+    const k = 1 - Math.pow(0.7, ms / (1000 / 60));
+    paintedPlayer.x += dx * k; paintedPlayer.y += dy * k;
+    paintedPlayer.yaw = ((paintedPlayer.yaw + turn * k + 180) % 360 + 360) % 360 - 180;
+    return true;
+  }
 
-  let lastFrame = 0, lastPointer = -Infinity;
+  let lastFrame = 0, lastPointer = -Infinity, wasVisible = false, hadPlayer = false;
   function loop(now) {
     requestAnimationFrame(loop);
     // Keep live data for the minimap, but never paint a retained full-size canvas behind a closed map.
-    if (document.hidden || !canvas.getClientRects().length) return;
-    // High-refresh game monitors can run at 360 Hz; the companion map has a separate 60 FPS budget. While you play
-    // (the app has no keyboard and the mouse is elsewhere) it glides at 20 FPS, leaving the graphics card to the game.
-    const fps = document.hasFocus() || now - lastPointer < 2000 ? 60 : 20;
+    if (document.hidden || !canvas.getClientRects().length) { wasVisible = hadPlayer = false; return; }
+    // The fullscreen map intentionally leaves keyboard focus with the game. It is still the active map view.
+    // A separate map on another monitor retains its lower budget while you play.
+    const fps = document.body.classList.contains('game-map') || document.hasFocus() || now - lastPointer < 2000 ? 60 : 20;
     if (now - lastFrame < 1000 / fps - 0.5) return;
     const elapsed = lastFrame ? Math.min(100, now - lastFrame) : 1000 / fps;
     lastFrame = now;
+    if (!wasVisible || playerHere() && !hadPlayer) { snapPlayer(); dirty = true; }
+    wasVisible = true; hadPlayer = playerHere();
+    if (animatePlayer(elapsed)) dirty = true;
     if (following()) {
       // Glide towards the player instead of snapping, so movement and returning from a drag look smooth.
       const cw = viewW, ch = viewH;
-      const [u, v] = toImg(player.x, player.y);
+      const pose = paintedPlayer || player;
+      const [u, v] = toImg(pose.x, pose.y);
       const dx = cw / 2 - u * scale - ox, dy = ch / 2 - v * scale - oy;
       if (Math.abs(dx) + Math.abs(dy) > 0.5) {
         const k = Math.abs(dx) + Math.abs(dy) > 2000 ? 1 : 1 - Math.pow(0.8, elapsed / (1000 / 60));
@@ -468,7 +488,8 @@ window.MapView = (() => {
   }
 
   function draw() {
-    updateWaypoint(waypoint(), player);
+    const pose = paintedPlayer || player;
+    updateWaypoint(waypoint(), pose);
     dirty = false;
     const dpr = devicePixelRatio;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -511,11 +532,9 @@ window.MapView = (() => {
     const layerMarkers = map.markers.filter(onLayer);
     const shown = layerMarkers.filter(visible);
     const inViewport = m => { const [x, y] = toScreen(m.x, m.y); return x >= -26 && x <= cw + 26 && y >= -26 && y <= ch + 26; };
-    const liveVisible = enabled.has('npc') && playerHere() ? npcs.filter(inViewport).length : 0;
     const zoomHidden = frame().res / scale >= DENSE_UNITS && layerMarkers.some(m => enabled.has(m.c) && RESOURCE_CATEGORIES.includes(m.c) && filtered(m, false));
-    const summary = { visible: shown.filter(inViewport).length + liveVisible,
+    const summary = { visible: shown.filter(inViewport).length,
       reason: shown.length ? 'No markers in this area. Pan the map or choose Fit map.'
-        : enabled.size === 1 && enabled.has('npc') ? player?.ok ? 'No matching live creatures nearby. Try other creature types.' : 'Live creatures are unavailable. Start the game and load your character.'
         : zoomHidden ? 'Ores, plants and trees appear when zoomed in. Zoom in to see resource locations.'
         : layerMarkers.length ? 'No locations match your filters on this map or floor. Change or reset the filters.' : 'No recorded locations on this map or floor. Try another floor or map.' };
     const visibilityKey = JSON.stringify(summary);
@@ -550,53 +569,6 @@ window.MapView = (() => {
       ctx.beginPath(); ctx.arc(0, -15, 3, 0, Math.PI * 2); ctx.fillStyle = '#362a12'; ctx.fill(); ctx.restore();
     }
 
-    // Live creatures around the player: amber, turning red with a pulsing ring when alerted/in combat.
-    if (enabled.has('npc') && playerHere()) {
-      const t = performance.now() / 300;
-      for (const n of npcs) {
-        const [sx, sy] = toScreen(n.x, n.y);
-        if (sx < -20 || sy < -20 || sx > cw + 20 || sy > ch + 20) continue;
-        const s = MARKER_SIZE;
-        ctx.save();
-        ctx.shadowColor = n.combat ? '#ff3020' : '#ffd060';
-        ctx.shadowBlur = 10;
-        if (n.alert) {
-          ctx.beginPath();
-          ctx.arc(sx, sy, s / 2 + 4 + 2 * Math.sin(t), 0, Math.PI * 2);
-          ctx.strokeStyle = n.combat ? 'rgba(255,60,40,0.9)' : 'rgba(255,190,60,0.9)';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-        ctx.beginPath();
-        ctx.arc(sx, sy, s / 2, 0, Math.PI * 2);
-        ctx.fillStyle = n.combat ? '#d03030' : '#e8a020';
-        ctx.fill();
-        ctx.restore();
-        ctx.lineWidth = n === hover ? 3 : 2;
-        ctx.strokeStyle = '#fff';
-        ctx.stroke();
-        // The creature's journal picture when there is one, else the paw glyph.
-        const face = n.face && image(n.face);
-        if (face) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(sx, sy, s / 2 - 1.5, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.fillStyle = '#2a2016';
-          ctx.fill();
-          // Journal art is full-body and not square: fit it whole, keeping its proportions.
-          const k = (s * 0.92) / Math.max(face.naturalWidth || face.width, face.naturalHeight || face.height);
-          const fw = (face.naturalWidth || face.width) * k, fh = (face.naturalHeight || face.height) * k;
-          ctx.drawImage(face, sx - fw / 2, sy - fh / 2, fw, fh);
-          ctx.restore();
-        } else {
-          const img = image('mapicons/T_Map_Icon_Animal.png');
-          if (img) ctx.drawImage(img, sx - s * 0.32, sy - s * 0.32, s * 0.64, s * 0.64);
-        }
-      }
-      if (npcs.some((n) => n.alert)) dirty = true; // keep the pulse animating
-    }
-
     // Other players: a green arrow the way their character faces, with their name above it.
     ctx.font = '600 12px Segoe UI'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     for (const o of others) {
@@ -622,7 +594,7 @@ window.MapView = (() => {
     // you find yourself at a glance.
     if (playerHere()) {
       if (destination && !waypoint().blocked && onLayer(destination)) {
-        const [px, py] = toScreen(player.x, player.y), [tx, ty] = toScreen(destination.x, destination.y);
+        const [px, py] = toScreen(pose.x, pose.y), [tx, ty] = toScreen(destination.x, destination.y);
         const angle = Math.atan2(ty - py, tx - px);
         ctx.save(); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(tx, ty);
         ctx.setLineDash([7, 7]); ctx.lineWidth = 2; ctx.strokeStyle = '#ffd040'; ctx.stroke(); ctx.setLineDash([]);
@@ -633,13 +605,13 @@ window.MapView = (() => {
         }
         ctx.restore();
       }
-      const [sx, sy] = toScreen(player.x, player.y);
+      const [sx, sy] = toScreen(pose.x, pose.y);
       ctx.beginPath(); ctx.arc(sx, sy, 22, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(60,200,255,0.16)'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(140,225,255,0.55)'; ctx.stroke();
       ctx.save();
       ctx.translate(sx, sy);
-      ctx.rotate(((player.yaw + 90) * Math.PI) / 180);
+      ctx.rotate(((pose.yaw + 90) * Math.PI) / 180);
       const img = image('mapicons/T_NavIcons_Player_Self.png');
       ctx.shadowColor = '#3cf';
       ctx.shadowBlur = 8;
@@ -732,16 +704,20 @@ window.MapView = (() => {
     // On you, on your map and floor, at least this close (as the game's own map opens).
     centerOnPlayer(minScale) {
       if (!player?.ok) return false;
+      snapPlayer();
       if (layer !== playerLayer || (layer && level !== playerLevel)) setLayer(playerLayer, playerLevel);
       const go = () => { centerOn(player.x, player.y, minScale); saveViewport(); };
       if (W > 1) go(); else pendingFocus = go;
       return true;
     },
     setPlayer(p) {
+      const previous = player;
       player = p;
       // Going through a dungeon door (either way) takes the map with you.
       const now = p?.ok ? dungeonAt(p) : playerLayer;
       const storey = now && p?.ok ? levelAt(now, p) : playerLevel;
+      if (!p?.ok || !previous?.ok || previous.world !== p.world || now !== playerLayer || storey !== playerLevel
+        || !paintedPlayer || Math.hypot(p.x - paintedPlayer.x, p.y - paintedPlayer.y) > 3000) snapPlayer();
       // Going through a dungeon door, or up/down to another storey, takes the map with you.
       if (now !== playerLayer || storey !== playerLevel) {
         const follows = now !== playerLayer || (layer === playerLayer && level >= 0);
@@ -756,7 +732,6 @@ window.MapView = (() => {
     dungeons: () => map?.dungeons || [],
     playerDungeon: () => playerLayer,
     onLayerChange(fn) { layerChanged = fn; },
-    setNpcs(list) { npcs = list; dirty = true; },
     setOthers(list) { others = list.map(o => ({ ...o, live: true, c: 'player', n: o.n || 'Another player' })); dirty = true; },
     setQuestStatus(fn) { questStatus = fn; dirty = true; },
     setQuestVisibility(fn) { questVisibility = fn; dirty = true; },
@@ -813,7 +788,6 @@ window.MapView = (() => {
         waypoint: waypoint(),
         markers,
         targets: [...targets.values()].map(({ x, y, index }) => ({ x, y, index })),
-        npcs: enabled.has('npc') ? npcs.filter(near).map(n => ({ x: n.x, y: n.y, alert: !!n.alert, combat: !!n.combat })) : [],
         others: others.filter(o => dungeonAt(o) === l && (!l || levelAt(l, o) === lv) && near(o)).map(o => ({ x: o.x, y: o.y, yaw: o.yaw })),
       };
     },

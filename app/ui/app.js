@@ -251,58 +251,12 @@ function saveQuestMapFilter() {
   MapView.redraw(); refreshQuestMapHighlight(); renderQuestMapFilter();
   updateMapFilterCount();
 }
-let liveCreatures = [];
-// null means all types; an empty Set means none. Migrate the old single selection.
-let liveCreaturePool = null;
-try {
-  const saved = Preferences.get('liveCreaturePool');
-  if (saved !== null) {
-    const names = JSON.parse(saved);
-    if (Array.isArray(names)) liveCreaturePool = new Set(names.filter(n => typeof n === 'string'));
-  } else {
-    const previous = Preferences.get('liveCreatureFilter');
-    if (previous) liveCreaturePool = new Set([previous]);
-  }
-} catch {}
-function saveCreaturePool() {
-  Preferences.setJSON('liveCreaturePool', liveCreaturePool === null ? null : [...liveCreaturePool]);
-  renderLiveCreatures();
-  updateMapFilterCount();
-}
-
-function creaturePoolDropdown() {
-  const all = h('input', { type: 'checkbox', id: 'live-creature-all', onchange: ev => {
-    liveCreaturePool = ev.target.checked ? null : new Set(); saveCreaturePool();
-  } });
-  const search = h('input', { type: 'search', placeholder: 'Find a creature…', 'aria-label': 'Find a creature type', oninput: filterCreatureChoices });
-  const dropdown = h('details', { id: 'live-creature-filter', class: 'live-creature-filter' },
-    h('summary', { 'aria-label': 'Choose live creature types' }, 'All creatures'),
-    h('div', { class: 'creature-pool-menu' },
-      h('div', { class: 'creature-pool-actions' }, h('label', {}, all, 'All creatures'),
-        h('button', { type: 'button', onclick: () => { liveCreaturePool = new Set(); saveCreaturePool(); } }, 'Clear')),
-      search, h('div', { class: 'creature-pool-options' }), h('p', { class: 'muted small creature-pool-empty', hidden: true }, 'No matching creatures')));
-  dropdown.addEventListener('keydown', ev => {
-    if (ev.key === 'Escape') { dropdown.open = false; dropdown.querySelector('summary').focus(); }
-  });
-  return dropdown;
-}
 document.addEventListener('pointerdown', ev => {
-  for (const selector of ['#live-creature-filter', '#quest-map-picker', ...MapView.resourceCategories().map(c => `#resource-filter-${c}`)]) {
+  for (const selector of ['#quest-map-picker', ...MapView.resourceCategories().map(c => `#resource-filter-${c}`)]) {
     const dropdown = $(selector);
     if (dropdown && !dropdown.contains(ev.target)) dropdown.open = false;
   }
 });
-function filterCreatureChoices() {
-  const dropdown = $('#live-creature-filter');
-  if (!dropdown) return;
-  const query = dropdown.querySelector('input[type="search"]').value.trim().toLowerCase();
-  let matches = 0;
-  for (const label of dropdown.querySelectorAll('.creature-pool-options label')) {
-    label.hidden = !label.textContent.toLowerCase().includes(query);
-    if (!label.hidden) matches++;
-  }
-  dropdown.querySelector('.creature-pool-empty').hidden = matches > 0;
-}
 function syncDungeonMapChrome(d = MapView.layer()) {
   const dungeon = !!d && document.body.classList.contains('map-mode');
   document.body.classList.toggle('dungeon-map', dungeon);
@@ -323,9 +277,9 @@ const MAP_VIEWS = {
   quests: { categories: ['quest', 'travel'], steps: 'current' },
   explore: { categories: ['travel', 'shrine', 'lore', 'chest', 'agility', 'recipe', 'vent'], steps: 'all' },
   gather: { categories: ['travel', 'ore', 'gather', 'tree', 'fishing', 'salvage'], steps: 'all' },
-  all: { categories: null, steps: 'all' }, // every category and live creatures
+  all: { categories: null, steps: 'all' }, // every category
 };
-const mapFilterIds = () => [...db.map.categories.map(c => c.id), 'npc'];
+const mapFilterIds = () => db.map.categories.map(c => c.id);
 const viewCategories = id => MAP_VIEWS[id].categories || mapFilterIds();
 function mapViewNow() {
   const on = mapFilterIds().filter(id => MapView.isEnabled(id)).sort().join();
@@ -354,8 +308,8 @@ function updateMapFilterCount() {
   if (!db?.map || !mapReady) return;
   renderMapViews();
   const defaults = MapView.defaultCategories();
-  const count = [...db.map.categories.map(c => c.id), 'npc'].filter(id => MapView.isEnabled(id) !== defaults.includes(id)).length
-    + Number(liveCreaturePool !== null) + Number(questMapMode !== 'all') + Number(questMapStepMode !== 'all')
+  const count = mapFilterIds().filter(id => MapView.isEnabled(id) !== defaults.includes(id)).length
+    + Number(questMapMode !== 'all') + Number(questMapStepMode !== 'all')
     + Number(Preferences.json('ventTypes', null) !== null)
     + MapView.resourceCategories().filter(c => MapView.isResourceFiltered(c)).length
     + ['lore', 'shrine'].filter(id => MapDiscovery.mode(id) !== 'all').length;
@@ -364,10 +318,9 @@ function updateMapFilterCount() {
 }
 function resetMapFilters() {
   const defaults = MapView.defaultCategories();
-  for (const id of [...db.map.categories.map(c => c.id), 'npc']) MapView.setEnabled(id, defaults.includes(id));
+  for (const id of mapFilterIds()) MapView.setEnabled(id, defaults.includes(id));
   MapView.setVentTypes(null);
   for (const c of MapView.resourceCategories()) MapView.setResourceTypes(c, null);
-  liveCreaturePool = null; saveCreaturePool();
   questMapMode = 'all'; questMapStepMode = 'all'; selectedMapQuests.clear(); saveQuestMapFilter();
   for (const id of ['lore', 'shrine']) MapDiscovery.setMode(id, 'all');
   MapView.setHighlight(null); syncMapHighlight(); MapView.redraw();
@@ -658,9 +611,6 @@ function renderLegend() {
       c.style !== 'circle' && c.icon ? h('img', { src: '../../data/' + c.icon }) : null);
   $('#map-legend').replaceChildren(
     h('div', { class: 'map-filter-header' }, h('strong', {}, 'Map filters'), h('button', { type: 'button', onclick: resetMapFilters }, 'Reset filters')),
-    h('h3', {}, 'Live nearby'),
-    row('npc', h('span', { class: 'legend-icon disc live' }, h('img', { src: '../../data/mapicons/T_Map_Icon_Animal.png' })), 'Live creatures', '–'),
-    creaturePoolDropdown(),
     h('h3', {}, 'Places & resources'),
     ...db.map.categories.flatMap((c) => [row(c.id, swatch(c), c.label, counts[c.id] || 0),
       c.id === 'lore' ? discoveryControls('lore', 'lore') : c.id === 'shrine' ? discoveryControls('shrine', 'shrines & pools')
@@ -674,9 +624,7 @@ function renderLegend() {
       h('span', {}, h('i', { class: 'qk' }, '3'), 'Quest step number'),
       h('span', {}, h('i', { class: 'qk' }, '·'), 'Step not confirmed')),
     h('div', { class: 'muted small' }, 'Ores, plants & trees show when zoomed in'),
-    h('div', { id: 'nearby', class: 'nearby' }),
   );
-  renderLiveCreatures();
   renderDiscoveryProgress();
   renderQuestMapFilter();
   renderVentMapFilter();
@@ -685,65 +633,6 @@ function renderLegend() {
   $('#map-legend').onchange = updateMapFilterCount;
 }
 
-// Live creatures from the tracker, named from the game data and listed by distance.
-function onNpcs(list, p) {
-  const names = db?.map?.npcNames || {};
-  liveCreatures = list.map((n) => {
-    const cls = n.c.replace(/_C$/, ''); // variants like BP_AI_Deer_Character_03 share the base creature's name
-    const name = names[cls] || names[cls.replace(/_\d+$/, '')] || words(cls.replace(/^BP_(AI_)?|_Character|_\d+$/g, ''));
-    const e = E[name];
-    const pictures = db?.map?.npcImages || {};
-    const face = pictures[cls] || pictures[cls.replace(/_\d+$/, '')] || e?.image || null;
-    // EAlertnessState: 0 ambient, 3 transition to combat, 4 combat; the rest are suspicious/searching.
-    return { live: true, n: name, ref: e ? name : null, face, alert: n.alert, combat: n.alert === 3 || n.alert === 4, x: n.x, y: n.y, d: Math.hypot(n.x - p.x, n.y - p.y) / 100 };
-  }).sort((a, b) => a.d - b.d);
-  renderLiveCreatures();
-}
-
-function renderLiveCreatures() {
-  const dropdown = $('#live-creature-filter');
-  if (dropdown) {
-    // Keep the catalogue stable as creatures enter/leave tracking range; include unknown live types.
-    const types = [...new Set([
-      ...Object.values(db?.map?.npcNames || {}),
-      ...Object.values(E).filter(e => e.kind === 'monster').map(e => e.name),
-      ...liveCreatures.map(n => n.n),
-      ...(liveCreaturePool || []),
-    ])].filter(Boolean).sort(byName);
-    const options = dropdown.querySelector('.creature-pool-options');
-    const signature = JSON.stringify(types);
-    if (options.dataset.types !== signature) {
-      options.dataset.types = signature;
-      options.replaceChildren(...types.map(name => h('label', {},
-        h('input', { type: 'checkbox', value: name, onchange: ev => {
-          if (liveCreaturePool === null) liveCreaturePool = new Set(types);
-          ev.target.checked ? liveCreaturePool.add(name) : liveCreaturePool.delete(name);
-          saveCreaturePool();
-        } }), h('span', { title: name }, name))));
-      filterCreatureChoices();
-    }
-    for (const input of options.querySelectorAll('input')) input.checked = liveCreaturePool === null || liveCreaturePool.has(input.value);
-    const all = $('#live-creature-all');
-    all.checked = liveCreaturePool === null;
-    all.indeterminate = liveCreaturePool !== null && liveCreaturePool.size > 0;
-    const summary = dropdown.querySelector('summary');
-    summary.textContent = liveCreaturePool === null ? 'All creatures' : !liveCreaturePool.size ? 'No creatures selected'
-      : liveCreaturePool.size === 1 ? [...liveCreaturePool][0] : `${liveCreaturePool.size} creature types`;
-    summary.title = liveCreaturePool === null ? 'All creatures' : [...liveCreaturePool].sort(byName).join(', ');
-  }
-  const npcs = liveCreaturePool === null ? liveCreatures : liveCreatures.filter(n => liveCreaturePool.has(n.n));
-  MapView.setNpcs(npcs);
-  const count = $('#count-npc');
-  if (count) count.textContent = npcs.length;
-  const box = $('#nearby');
-  if (!box) return;
-  box.replaceChildren(h('div', { class: 'nearby-title' }, `Nearby (${npcs.length})`), ...npcs.slice(0, 10).map((n) =>
-    h('div', { class: `nearby-row${n.ref ? ' has-drops' : ''}${n.combat ? ' alert' : ''}`, onclick: () => (n.ref ? showItem(n.ref) : null), title: n.ref ? 'Show drops' : '' },
-      n.face ? h('img', { class: 'nearby-face', src: '../../data/' + n.face, alt: '' }) : h('span', { class: 'nearby-face' }),
-      h('span', {}, n.n), h('span', { class: 'count' }, `${Math.round(n.d)} m`))));
-  if (!npcs.length) box.append(h('div', { class: 'muted small' }, liveCreaturePool?.size === 0 ? 'Select creature types above'
-    : liveCreaturePool === null ? 'No live creatures nearby' : 'No selected creatures nearby'));
-}
 const words = (s) => s.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').trim();
 
 // Markers for an entity: its own spawns/locations, or (for items) everything that drops it.
@@ -1054,11 +943,15 @@ function questStepTargets(q, key) {
   const ids = new Set(step?.targets || []);
   const linked = db.map.markers.filter(m => m.questId === q.id && questMarkerVisible(m) && (ids.has(m.qlocation) || m.qsteps?.includes(key)));
   const current = questStatus(q) === 'active' && questProgress(q).current?.key === key;
-  const exact = linked.filter(m => m.precision === 'interaction');
+  // In the order the step lists them.
+  const order = [...ids];
+  const exact = linked.filter(m => m.precision === 'interaction')
+    .sort((a, b) => (order.indexOf(a.qlocation) + 1 || Infinity) - (order.indexOf(b.qlocation) + 1 || Infinity));
   if (exact.length) {
     const done = exact.map(m => current && questTargetDone(m));
     // With every target done the objective still waits on something else (often a hand-in), so none is ticked off.
-    const all = done.every(Boolean);
+    // Places that only open the way to another (m.opens) do not count.
+    const all = exact.every((m, i) => m.opens || done[i]);
     return exact.map((marker, i) => ({ marker, done: done[i] && !all }));
   }
   let areas = linked;
@@ -1094,7 +987,8 @@ function questStepActions(q, objective) {
   const sources = questStepSourceMarkers(q, objective.key);
   const resources = questStepGuidance(q, objective.key)?.resources || [];
   // Only the objective you are on has places ticked off.
-  const counting = targets.length > 1 && targets.some(t => t.marker.precision === 'interaction')
+  const counted = targets.filter(t => !t.marker.opens);
+  const counting = counted.length > 1 && targets.some(t => t.marker.precision === 'interaction')
     && questStatus(q) === 'active' && questProgress(q).current?.key === objective.key;
   const unplaced = sources.length || resources.length ? null
     : /\b(plant|water|harvest)\b/i.test(objective.text) ? 'Do this at a farming plot you have built.'
@@ -1109,7 +1003,7 @@ function questStepActions(q, objective) {
     return h('li', { class: 'quest-target' + (done ? ' done' : '') },
       h('span', { class: 'quest-target-tick', 'aria-hidden': 'true' }, done ? '✓' : ''),
       h('span', { class: 'quest-target-text' }, h('span', { class: 'quest-target-name' }, name),
-        h('span', { class: 'quest-target-where' }, done ? `Done · ${where}` : where)),
+        h('span', { class: 'quest-target-where' }, done ? `Done · ${where}` : m.opens ? `${where} · opens the way to ${m.opens}` : where)),
       done ? null : h('span', { class: 'quest-target-actions' },
         h('button', { type: 'button', class: 'quest-pin-button', 'data-source-id': m.sourceId || m.qlocation,
           title: dungeon ? `Open ${dungeon.name} on the right floor` : `Show ${name} on the map`, onclick: () => focusQuestTarget(q, m) }, 'Map'),
@@ -1120,7 +1014,7 @@ function questStepActions(q, objective) {
   return h('div', { class: 'quest-step-actions' },
     targets.length ? h('ul', { class: 'quest-targets' }, targets.map(row)) : null,
     left.length > 1 || counting ? h('div', { class: 'quest-targets-summary' },
-      counting ? h('span', { class: 'quest-target-count' }, `${targets.length - left.length} of ${targets.length} done`) : h('span'),
+      counting ? h('span', { class: 'quest-target-count' }, `${counted.filter(t => t.done).length} of ${counted.length} done`) : h('span'),
       left.length > 1 ? h('button', { type: 'button', class: 'quest-show-left', onclick: () => showMapLocations(q.name, left, q.name) }, `Show all ${left.length} on map`) : null) : null,
     sources.length ? h('div', { class: 'quest-hunt' },
       h('p', {}, h('strong', {}, 'Hunt: '), hunted.join(', ')),
@@ -1380,7 +1274,7 @@ function syncQuestTracker() {
 // How far through the places of the objective you are on ("1 of 3 done"), when it has several.
 function questTargetProgress(q) {
   const current = questStatus(q) === 'active' && questProgress(q).current;
-  const targets = current ? questStepTargets(q, current.key).filter(t => t.marker.precision === 'interaction') : [];
+  const targets = current ? questStepTargets(q, current.key).filter(t => t.marker.precision === 'interaction' && !t.marker.opens) : [];
   return targets.length > 1 ? `${targets.filter(t => t.done).length} of ${targets.length} done` : null;
 }
 // What a quest asks of you now, in a few words: the step label (linear quests) and the rewritten instruction.
@@ -2579,8 +2473,6 @@ function onPlayer(p) {
   // Co-op: other players arrive with the creature scan; they disappear when you leave the game.
   if (p.players) MapView.setOthers(p.players);
   else if (!p.ok) MapView.setOthers([]);
-  if (p.npcs && mapReady) onNpcs(p.npcs, p);
-  else if (!p.ok && mapReady) { liveCreatures = []; renderLiveCreatures(); }
   sendMinimap();
   const el = $('#status-progress');
   if (el.dataset.importing) return;

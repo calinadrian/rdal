@@ -222,15 +222,6 @@
       if (group.length > 1) badge(sx + QUEST / 2 + 1, sy + QUEST / 2, '+' + (group.length - 1), '#2b2a27', '#e8dcc0');
     }
 
-    // Live creatures: amber dots, red in combat, with a ring while they are alert.
-    for (const n of scene.npcs) {
-      const [sx, sy] = toScreen(n.x, n.y);
-      if (!inView(sx, sy, 6)) continue;
-      if (n.alert) { ctx.beginPath(); ctx.arc(sx, sy, 6.5 * iconScale, 0, Math.PI * 2); ctx.lineWidth = 1.5; ctx.strokeStyle = n.combat ? 'rgba(255,60,40,.9)' : 'rgba(255,190,60,.9)'; ctx.stroke(); }
-      ctx.beginPath(); ctx.arc(sx, sy, 3.5 * iconScale, 0, Math.PI * 2);
-      ctx.fillStyle = n.combat ? '#d03030' : '#e8a020'; ctx.fill();
-      ctx.lineWidth = 1; ctx.strokeStyle = '#fff'; ctx.stroke();
-    }
 
     // Other players: small green arrows the way they face.
     for (const o of scene.others) {

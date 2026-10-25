@@ -24,7 +24,7 @@ app.whenReady().then(async () => {
       const wait = ms => new Promise(r => setTimeout(r, ms));
       state.module = 'map'; setMapMode(true); renderModules();
       resetMapFilters();
-      for (const c of [...db.map.categories.map(c => c.id), 'npc']) MapView.setEnabled(c, false);
+      for (const c of db.map.categories.map(c => c.id)) MapView.setEnabled(c, false);
       const picker = c => document.querySelector('#resource-filter-' + c);
       const buttons = c => picker(c).querySelectorAll('button');
       const box = (c, name) => [...picker(c).querySelectorAll('[data-resource]')].find(r => r.dataset.resource === name).querySelector('input');

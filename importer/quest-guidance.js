@@ -177,6 +177,10 @@ function interactionLabel(a) {
     const number = /\.Pedestal(\d+)$/.exec(a.entry)?.[1];
     if (number) return `Tower pedestal ${number}`;
   }
+  // The four god shrines that hold up the Emberwood village barrier, named as the game names them.
+  if (/EmberwoodVillagePuzzle\.FindSaraHead$/.test(a.entry || '')) return 'Missing shrine piece · Saradomin';
+  const god = /EmberwoodVillagePuzzle\.(Armadyl|Guthix|Saradomin|Zamorak)Statue/.exec(a.entry || '')?.[1];
+  if (god) return `Shrine to ${god}`;
   const label = sentence(a.label);
   if (label && !/^\[(TEMP|PH)\]|^NPC$|^None$/i.test(label)) return label;
   if (/UmS_Leader_Tribe[BC]/.test(a.cls)) return 'Moon Garou Elder';
@@ -220,6 +224,9 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
         ...(npcVisibility[actor.id] && { npcVisibility: npcVisibility[actor.id] }),
         ...(doneFlag(context, setters) && { doneWhen: doneFlag(context, setters) }),
         i: 'mapicons/T_NavIcons_QuestMarker_Secondary.png' };
+      // The Emberwood shrines open the way to a seal rather than being one: not counted, done with that seal.
+      if (/^QuestFlow\.Entry\.EmberwoodVillagePuzzle\./.test(actor.entry || '') && id === 'Quest_DeathQuestMain')
+        Object.assign(marker, { opens: 'the Emberwood Curse Seal', doneWhen: 'Quest_DeathQuestMain:EmberwoodSealBroken' });
       const list = targetMarkers.get(id) || []; list.push(marker); targetMarkers.set(id, list);
       markers.push(marker);
       if (context?.dialogue.length) {
@@ -253,7 +260,9 @@ function buildQuestGuidance({ entities, flows, interactions, markers, base, text
           ? reviewed.entries.some(entry => entry === m.entry || entry === m.entry?.split('.').pop()) : matchesLabel(m));
         for (const m of bound) if (!m.qsteps.includes(objective.key)) m.qsteps.push(objective.key);
         const locations = markers.filter(m => m.questId === id && m.qsteps?.includes(objective.key));
-        const exactLocations = locations.filter(m => m.precision === 'interaction');
+        // In the order the reviewed step names them (the Curse Seals before the shrines that open the way to one).
+        const order = m => { const i = (reviewed?.entries || []).findIndex(entry => entry === m.entry || entry === m.entry?.split('.').pop()); return i < 0 ? Infinity : i; };
+        const exactLocations = locations.filter(m => m.precision === 'interaction').sort((a, b) => order(a) - order(b));
         steps++; if (locations.length) mapped++; if (exactLocations.length) exact++; if (reviewed) clarified++;
         // A named interaction such as Standing Stone must not generate Stone's 439 source links.
         const interactionNames = targets.map(m => m.target).filter(name => !resourceEntities.some(e => normal(e.name) === normal(name)));

@@ -28,7 +28,7 @@
 - ⚙ Settings → **Show a minimap in the corner of the game** adds a WoW-style round minimap over the game while it runs
   (top-right by default; Small, Medium or Large). It follows your position and facing, north up or turned with the
   camera, and names the region or dungeon floor you are in. It shows what the map shows around you with the same
-  filters: places, spawns, live creatures, other players, and your quests' target areas and tracked numbered gold
+  filters: places, spawns, other players, and your quests' target areas and tracked numbered gold
   rings, with an arrow on the rim pointing at each tracked objective that is out of view. The day and local time sit
   on the bottom of the rim, and like WoW your tracked quests are listed under the minimap, numbered as on the map,
   each with what to do next (click **Quests** to fold the list away). Clicks go through it to the game; **+** and
@@ -50,7 +50,7 @@
 - Processing recipes include station-upgrade requirements and the upgrade's build materials.
   Fine Cloth uses a Loom with a nearby Loom Harness: 3 Fine Thread and 1 Gold Bar make 1 Fine Cloth.
 - Both world and dungeon maps use **Filters**, with a count of settings changed from the defaults and **Reset filters**.
-  The map explains when filters, zoom, or missing live creature data leave no markers visible. The Map and Floor selectors identify what you are viewing.
+  The map explains when filters or zoom leave no markers visible. The Map and Floor selectors identify what you are viewing.
 ### Quest journal and tracking
 
 - Quest and recipe panels label saved progress with its last-read time. Unknown progress stays explicitly unknown; active quests put the current objective and its confirmed locations first.
@@ -124,10 +124,7 @@
   your choices are remembered. Centered native rune symbols sit inside thin type-colored circles with transparent centers.
 - Map: drag to pan, wheel to zoom. **Follow me** keeps you in the middle until you turn it off (a drag lets you
   look around, then it glides back after 3 s; zooming stays centred on you). It is remembered between launches. Ores & plants appear when zoomed in.
-  Markers use the game's own map icons. **Live creatures** around you are glowing paws (amber, red when in
-  combat, with a ring when suspicious), and the legend lists the nearest ones; click one with drops to see its loot.
-  Open the dropdown under **Live creatures** and check any creature types to build a pool for the live map
-  and Nearby. Search the list, choose **All creatures**, or **Clear** the pool. Your choices are remembered between launches.
+  Markers use the game's own map icons.
 ### Dungeon maps
 
 - **Dungeon maps**: the game has none, so the app draws parchment floor plans from the game's own navigation mesh:

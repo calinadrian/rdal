@@ -88,19 +88,16 @@ app.whenReady().then(async () => {
     assert(await js(`$('#detail .current-objective') && $('#detail .progress-context').textContent.includes('Saved progress · last updated')`));
     console.log('PASS: recipe → ingredient → Back preserves context; saved and unknown progress; current quest objective');
 
-    await js(`selectModule('map'); MapView.setHighlight(null); syncMapHighlight(); for(const id of [...db.map.categories.map(c=>c.id),'npc']) MapView.setEnabled(id,false);`);
+    await js(`selectModule('map'); MapView.setHighlight(null); syncMapHighlight(); for(const id of db.map.categories.map(c=>c.id)) MapView.setEnabled(id,false);`);
     await tick();
     assert(await js(`!$('#map-empty').hidden && $('#map-empty').textContent.includes('filters')`));
     await js(`$('#map-filters').click()`);
     assert(await js(`!$('#map-legend').hidden && $('#map-filters').getAttribute('aria-expanded')==='true' && $('#map-filters').textContent.includes('(')`));
     await js(`$('#map-legend .map-filter-header button').click()`);
-    assert(await js(`MapView.isEnabled('chest') && questMapMode==='all' && liveCreaturePool===null && $('#map-filters').textContent==='Filters'`));
-    await js(`MapView.setLayer(null); for(const id of [...db.map.categories.map(c=>c.id),'npc']) MapView.setEnabled(id,id==='ore'); MapView.fit(false); MapView.zoom(.05);`);
+    assert(await js(`MapView.isEnabled('chest') && questMapMode==='all' && $('#map-filters').textContent==='Filters'`));
+    await js(`MapView.setLayer(null); for(const id of db.map.categories.map(c=>c.id)) MapView.setEnabled(id,id==='ore'); MapView.fit(false); MapView.zoom(.05);`);
     await tick();
     assert(await js(`!$('#map-empty').hidden && $('#map-empty').textContent.includes('Zoom in')`));
-    await js(`for(const id of [...db.map.categories.map(c=>c.id),'npc']) MapView.setEnabled(id,id==='npc');`);
-    await tick();
-    assert(await js(`$('#map-empty').textContent.includes('load your character')`));
     await js(`resetMapFilters(); $('#map-filters').click()`);
     await capture('desktop-map');
     await js(`$('#map-filters').click()`); await capture('desktop-map-filters'); await js(`$('#map-filters').click()`);

@@ -30,12 +30,11 @@ app.whenReady().then(async () => {
       const ctx = document.querySelector('#map').getContext('2d'), fillText = ctx.fillText;
       ctx.fillText = function (text, ...rest) { names.push(text); return fillText.call(this, text, ...rest); };
       const draw = async () => { names.length = 0; MapView.redraw(); await wait(120); };
-      // A partner next to you on the surface, another inside a dungeon. Creatures filtered out entirely.
-      liveCreaturePool = new Set(); saveCreaturePool();
-      onPlayer({ ok: true, world: 'L_World', ...me, yaw: 0, npcs: [],
+      // A partner next to you on the surface, another inside a dungeon.
+      onPlayer({ ok: true, world: 'L_World', ...me, yaw: 0,
         players: [{ n: 'dianiiix3', x: me.x + 400, y: me.y, z: me.z, yaw: 90 }, { n: 'Delver', x: inside.x, y: inside.y, z: inside.z, yaw: 0 }] });
       MapView.setFollow(true); await wait(300); await draw();
-      assert(names.includes('dianiiix3'), 'A nearby player must be drawn with their name, even with every creature filtered out');
+      assert(names.includes('dianiiix3'), 'A nearby player must be drawn with their name');
       assert(!names.includes('Delver'), 'A player inside a dungeon must not be drawn on the world map');
       const canvas = document.querySelector('#map'), r = canvas.getBoundingClientRect();
       const [px, py] = [r.x + r.width / 2, r.y + r.height / 2];
@@ -56,7 +55,6 @@ app.whenReady().then(async () => {
       await draw();
       assert(!names.includes('Delver'), 'Other players must disappear when you leave the game');
       ctx.fillText = fillText;
-      liveCreaturePool = null; saveCreaturePool();
       return 'Other players test passed';
     })()`));
     const shot = await win.webContents.capturePage();

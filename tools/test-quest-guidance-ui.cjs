@@ -31,7 +31,7 @@ app.whenReady().then(async () => {
     await js(`back(); state.filter='Highlighting'; renderList(); $('#detail').scrollTop=80; window.savedTop=$('#detail').scrollTop;
       questMapMode='selected';selectedMapQuests.clear();questMapStepMode='current';saveQuestMapFilter();
       $('#detail .current-objective .quest-pin-button').click();
-      for(const id of [...db.map.categories.map(c=>c.id),'npc'])MapView.setEnabled(id,false);`);
+      for(const id of db.map.categories.map(c=>c.id))MapView.setEnabled(id,false);`);
     await wait();
     assert(await js(`MapView.layer()?.id===password.d && selectedQuestMarker===password && selectedMapQuests.has(quest.name)`));
     assert(await js(`MapView.navigation().highlight.markers.length===1 && db.map.markers[MapView.navigation().highlight.markers[0]]===password && !$('#map-highlight').hidden`));

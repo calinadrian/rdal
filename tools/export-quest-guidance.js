@@ -10,7 +10,9 @@ function run(args) {
   const result = spawnSync(extractor, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
   if (result.error || result.status !== 0 || /(?:FAIL|ERR)\s|\([1-9]\d* failed\)/.test(result.stderr || '')) throw result.error || Error(result.stderr);
 }
-run(['bulk', raw, 'quest-actors', '/Gameplay/NPCs/.*\\.uasset$']);
+// --cached reuses earlier exports (NPC classes and level cells), so it needs no game files.
+const cached = process.argv.includes('--cached');
+if (!cached || !fs.existsSync(path.join(raw, 'quest-actors.json'))) run(['bulk', raw, 'quest-actors', '/Gameplay/NPCs/.*\\.uasset$']);
 const classes = JSON.parse(fs.readFileSync(path.join(raw, 'quest-actors.json')));
 const levels = new Set(world.filter(a => Object.keys(a.props).some(key => /Conversation|^Quest$|^QuestData$/.test(key))).map(a => a.level));
 // The streaming index also lists actors absent from older compact scans.
@@ -23,7 +25,7 @@ for (const q of world.filter(a => a.cls === 'BP_QuestLocation_C')) {
 }
 const packages = files.filter(p => p.endsWith('.umap') && !p.includes('FutureMajorVersion') && levels.has(path.basename(p, '.umap')));
 const dir = path.join(root, 'cache/quest-guidance-cells'); fs.mkdirSync(dir, { recursive: true });
-const missing = process.argv.includes('--cached') ? packages.filter(p => !fs.existsSync(path.join(dir, path.basename(p, '.umap') + '.json'))) : packages;
+const missing = cached ? packages.filter(p => !fs.existsSync(path.join(dir, path.basename(p, '.umap') + '.json'))) : packages;
 for (let i = 0; i < missing.length; i += 24) run(['json', dir, ...missing.slice(i, i + 24)]);
 const tag = value => value?.TagName && value.TagName !== 'None' ? value.TagName : null;
 const text = value => typeof value === 'string' ? value : value?.LocalizedString || value?.SourceString || null;
@@ -48,9 +50,11 @@ for (const pkg of packages) {
     if (!e.Type.endsWith('_C') || !(/PersistentLevel'?$/.test(e.Outer || '') || e.Outer?.ObjectName?.includes('PersistentLevel'))) continue;
     const d = defaults.get(e.Type) || {};
     const participant = resolve(p.DomConversationParticipant)?.Properties || {};
-    // Placed copies of one class (the three Curse Seals) set their own tags on the actor.
+    // Placed copies of one class (the three Curse Seals) set their own tags on the actor. Switchable shrines (the
+    // Emberwood barrier's four gods) number theirs, the first being the one you talk to. Other switchables (the seal
+    // door at Imaru's Lair) already have a marker of their own.
     const entry = tag(p['Conversation Entry Tag']) || tag(p.EntryPointTag) || tag(participant.EntryPointTag)
-      || tag(p.ConversationOnClosedTag) || tag(p.ConversationOnInteractionTag) || d.entry;
+      || tag(p.ConversationOnClosedTag) || tag(p.ConversationOnInteractionTag) || (/Statue/.test(e.Type) && tag(p.ConversationEntryTag_1)) || d.entry;
     if (!entry && !p.Quest && !p.QuestData) continue;
     const rootComponent = resolve(p.RootComponent);
     const loc = rootComponent?.Properties?.RelativeLocation;

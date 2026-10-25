@@ -37,16 +37,13 @@ app.whenReady().then(async () => {
     await js(`trackedQuests=[];const q=ent('The Wild Hunt');onQuestLog([{id:q.id,s:1,o:'HuntBeast'}]);setTracked(q.name,true);`);
     const spirit = await js(`(()=>{const m=db.map.markers.find(m=>m.n==='Nature Spirit'&&!m.d);return {x:m.x,y:m.y,z:m.z}})()`);
     const me = { ok: true, world: 'L_World', x: spirit.x + 2500, y: spirit.y + 1500, z: spirit.z, yaw: -30 };
-    const npcs = [{ c: 'BP_AI_Deer_Character', x: me.x + 900, y: me.y - 400, z: me.z, alert: 0 }, { c: 'BP_AI_Deer_Character', x: me.x - 1200, y: me.y + 600, z: me.z, alert: 4 }];
     const players = [{ n: 'Partner', x: me.x - 3000, y: me.y - 2000, z: me.z, yaw: 45 }];
-    const scene = await lastScene({ ...me, npcs, players });
+    const scene = await lastScene({ ...me, players });
     assert(scene?.ok, 'A live position sends a scene');
     assert.equal(scene.image, await js(`db.map.image`), 'Outside dungeons the minimap shows the world picture');
     assert(await js(`db.map.regions.some(r => r.name === ${JSON.stringify(scene.place)})`), 'The name bar names the region you are in: ' + scene.place);
     assert(scene.markers.some(m => m.track?.area === 'kill'), 'Tracked kill targets nearby are shaded');
     assert(scene.targets.some(t => t.index === 1), 'The tracked quest has a target for the rim arrow');
-    assert.equal(scene.npcs.length, 2, 'Live creatures are on the minimap');
-    assert(scene.npcs.some(n => n.combat), 'Creatures in combat are marked');
     assert.equal(scene.others.length, 1, 'Other players nearby are on the minimap');
     assert(scene.markers.every(m => Math.abs(m.x - me.x) < 27000 && Math.abs(m.y - me.y) < 27000), 'Only markers in reach are sent');
     assert.deepEqual(scene.quests.map(q => [q.index, q.name]), [[1, 'The Wild Hunt']], 'The tracked quests go with the scene');
@@ -71,7 +68,7 @@ app.whenReady().then(async () => {
       if (!process.env.ATLAS_NO_CAPTURES) fs.writeFileSync(path.join(root, 'test-fixtures', file), shot.toPNG());
       return { mm, shot, run: (code) => mm.webContents.executeJavaScript(code) };
     };
-    await lastScene({ ...me, npcs, players });
+    await lastScene({ ...me, players });
     const north = await show({}, 'minimap.png');
     const originalSend = north.mm.webContents.send.bind(north.mm.webContents);
     const relay = [];let relayedPlayer=null;
@@ -119,7 +116,7 @@ app.whenReady().then(async () => {
     await js(`onPlayer({ ok: false })`); await tick(300);
     assert.equal(await north.run(`document.getElementById('zone').textContent`), scene.place, 'The name bar keeps the last place');
     assert.equal(await north.run(`document.querySelectorAll('.quest').length`), 1, 'Quests stay listed while the character loads');
-    await lastScene({ ...me, npcs, players }); await tick(300);
+    await lastScene({ ...me, players }); await tick(300);
     const turned = await show({ minimapRotate: true, minimapZoom: 1 }, 'minimap-rotated.png');
     assert(await turned.run(`!document.getElementById('zoom-in').disabled && !document.getElementById('zoom-out').disabled`), 'Zoom buttons work between the limits');
     const close = await show({ minimapRotate: false, minimapZoom: 0 }, 'minimap-zoomed.png');
@@ -136,7 +133,7 @@ app.whenReady().then(async () => {
 
     // Inside a dungeon it shows that storey's plan and names the dungeon.
     const takla = await js(`(()=>{const d=db.map.dungeons.find(d=>d.name==='Takla Kara');const m=db.map.markers.find(m=>m.d===d.id&&m.c==='chest');return {id:d.id,x:m.x,y:m.y,z:m.z}})()`);
-    const inside = await lastScene({ ok: true, world: 'L_World', x: takla.x + 300, y: takla.y, z: takla.z, yaw: 90, npcs: [], players: [] });
+    const inside = await lastScene({ ok: true, world: 'L_World', x: takla.x + 300, y: takla.y, z: takla.z, yaw: 90, players: [] });
     assert(inside.place.startsWith('Takla Kara'), 'In a dungeon the name bar names it: ' + inside.place);
     assert(inside.image.startsWith('dungeons/'), 'In a dungeon the minimap shows its floor plan');
     assert(inside.markers.some(m => m.c === 'chest'), 'Dungeon markers are on the dungeon minimap');

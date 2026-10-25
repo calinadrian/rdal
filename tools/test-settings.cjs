@@ -19,8 +19,7 @@ run('1 saves settings', `
   state.module = 'map'; setMapMode(true); renderModules();
   await new Promise(r => setTimeout(r, 500));
   for (const c of db.map.categories) MapView.setEnabled(c.id, ['ore', 'gather'].includes(c.id));
-  MapView.setEnabled('npc', true); MapView.setFollow(false); MapView.zoom(2);
-  liveCreaturePool = new Set(['Wolf', 'Cow']); saveCreaturePool();
+  MapView.setFollow(false); MapView.zoom(2);
   Preferences.setJSON('columns', { '--w-detail': 480 });
   wish.add('Wolf'); saveWish(); showItem('Wolf');
   setTracked('The Wild Hunt', true); trackerCollapsed = true; Preferences.set('trackerCollapsed', '1');
@@ -31,7 +30,6 @@ run('1 saves settings', `
 let settings = JSON.parse(fs.readFileSync(path.join(profile, 'settings.json')));
 assert.equal(settings.opacity, 0.82);
 assert.equal(settings.mapOnM, false);
-assert.deepEqual(JSON.parse(settings.ui.liveCreaturePool).sort(), ['Cow', 'Wolf']);
 assert(JSON.parse(settings.ui.mapCategories).includes('ore'));
 assert(JSON.parse(settings.ui.mapViewport).scale > 0);
 assert.deepEqual(JSON.parse(settings.ui.trackedQuests), ['The Wild Hunt']);
@@ -46,7 +44,6 @@ run('2 restores from settings.json without browser storage', `
   check(state.module === 'map' && state.detail === 'Wolf', 'Navigation was not restored');
   check(document.body.classList.contains('map-mode'), 'Last open map was not restored');
   check(MapView.isEnabled('ore') && MapView.isEnabled('gather') && !MapView.isEnabled('chest'), 'Category choices were not restored');
-  check(liveCreaturePool?.size === 2 && liveCreaturePool.has('Wolf') && liveCreaturePool.has('Cow'), 'Creature pool was not restored');
   check(!MapView.isFollowing() && Preferences.get('mapFollow') === '0', 'Follow off was not restored');
   check(wish.has('Wolf'), 'Wishlist was not restored');
   check(isTracked('The Wild Hunt') && trackedQuests.length === 1, 'Tracked quests were not restored');
@@ -58,27 +55,25 @@ run('2 restores from settings.json without browser storage', `
   const before = Preferences.json('mapViewport', null); MapView.zoom(1);
   const after = Preferences.json('mapViewport', null);
   check(Math.abs(before.scale - after.scale) < 1e-6 && Math.abs(before.u - after.u) < 1e-6 && Math.abs(before.v - after.v) < 1e-6, 'Map position or zoom was not restored');
-  liveCreaturePool = new Set(); saveCreaturePool();
-  for (const c of [...db.map.categories.map(c => c.id), 'npc']) MapView.setEnabled(c, false);
+  for (const c of db.map.categories.map(c => c.id)) MapView.setEnabled(c, false);
   await atlas.getPreferences();
 `);
 run('3 retains deliberately empty filters', `
-  if (liveCreaturePool?.size !== 0) throw Error('Empty creature pool reset to all');
-  if ([...db.map.categories.map(c => c.id), 'npc'].some(c => MapView.isEnabled(c))) throw Error('All-off categories reset to defaults');
+  if (db.map.categories.map(c => c.id).some(c => MapView.isEnabled(c))) throw Error('All-off categories reset to defaults');
   if (MapView.isFollowing()) throw Error('Follow preference reset');
-  const liveBox = document.querySelector('#count-npc').closest('label').querySelector('input');
-  if (liveBox.checked) throw Error('Live creatures checkbox disagrees with saved off preference');
+  const chestBox = document.querySelector('#count-chest').closest('label').querySelector('input');
+  if (chestBox.checked) throw Error('Chests checkbox disagrees with saved off preference');
   await atlas.getPreferences();
 `);
 console.log('Settings survived three app processes, including disk-only recovery and empty selections.');
-run('4 clicks Live creatures off and quits immediately', `
+run('4 clicks Chests off and quits immediately', `
   // Restore a typical map first, then use the real DOM checkbox, without awaiting a save/flush.
-  for (const c of ['monster', 'chest', 'quest', 'travel', 'shrine', 'agility', 'npc']) MapView.setEnabled(c, true);
+  for (const c of ['monster', 'chest', 'quest', 'travel', 'shrine', 'agility']) MapView.setEnabled(c, true);
   renderLegend();
-  const liveBox = document.querySelector('#count-npc').closest('label').querySelector('input');
-  if (!liveBox.checked) throw Error('Checkbox must start on');
-  liveBox.click();
-  if (liveBox.checked || MapView.isEnabled('npc')) throw Error('Checkbox click did not turn live creatures off');
+  const chestBox = document.querySelector('#count-chest').closest('label').querySelector('input');
+  if (!chestBox.checked) throw Error('Checkbox must start on');
+  chestBox.click();
+  if (chestBox.checked || MapView.isEnabled('chest')) throw Error('Checkbox click did not turn chests off');
   selectModule('quests');
   onQuestLog([{ id: 'Quest_FTUE_RC', s: 2 }]);
   document.querySelector('#content .quest-group-heading[data-group="done"]').click();
@@ -88,16 +83,16 @@ run('4 clicks Live creatures off and quits immediately', `
   atlas.quit();
 `);
 settings = JSON.parse(fs.readFileSync(path.join(profile, 'settings.json')));
-assert(!JSON.parse(settings.ui.mapCategories).includes('npc'), 'Immediate quit lost Live creatures off');
+assert(!JSON.parse(settings.ui.mapCategories).includes('chest'), 'Immediate quit lost Chests off');
 assert(JSON.parse(settings.ui.mapCategories).includes('monster'), 'Other category choices were lost');
 assert(JSON.parse(settings.ui.questGroups).includes('done'), 'Immediate quit lost the opened quest section');
 assert.deepEqual(JSON.parse(settings.ui.resourceTypes), { ore: ['Gold'], gather: [], tree: ['Oak tree'] }, 'Immediate quit lost resource selections');
-run('5 keeps the visible Live creatures checkbox off after restart', `
+run('5 keeps the visible Chests checkbox off after restart', `
   if (!questGroupsOpen.has('done')) throw Error('Opened quest section was not restored');
   if (document.querySelector('#content .quest-group-heading[data-group="done"]').getAttribute('aria-expanded') !== 'true') throw Error('Visible quest section disagrees with saved preference');
   selectModule('map');
-  const liveBox = document.querySelector('#count-npc').closest('label').querySelector('input');
-  if (liveBox.checked || MapView.isEnabled('npc')) throw Error('Live creatures came back on');
+  const chestBox = document.querySelector('#count-chest').closest('label').querySelector('input');
+  if (chestBox.checked || MapView.isEnabled('chest')) throw Error('Chests came back on');
   if (!MapView.isEnabled('monster')) throw Error('Unrelated categories changed');
   if (!MapView.isResourceTypeEnabled('ore', 'Gold') || MapView.isResourceTypeEnabled('ore', 'Iron')) throw Error('Gold-only selection was not restored');
   if (!MapView.isResourceFiltered('gather') || MapView.isResourceTypeEnabled('gather', 'Flax')) throw Error('Empty plant selection was not restored');

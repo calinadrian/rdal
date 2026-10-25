@@ -1,10 +1,10 @@
 // Tracker samples to the main window, one at a time: while the window is still busy with the last one (a modest PC,
 // or the window in the background behind the game), newer ones merge into the next, so it never falls behind the
-// game however long you play. Readings that come with only some samples (creatures and players, quests, lodestones,
+// game however long you play. Readings that come with only some samples (players, quests, lodestones,
 // discovery) keep their latest. A page that never answers (still loading) is sent the next one after two seconds.
 const { ipcMain } = require('electron');
 
-const READINGS = [['npcs', 'players'], ['quests', 'questLocations'], ['lodestones'], ['discovery']];
+const READINGS = [['players'], ['quests', 'questLocations'], ['lodestones'], ['discovery']];
 
 // window() is the main window.
 function createSamples({ window }) {

@@ -108,7 +108,11 @@ assert.deepEqual(combatFixture.guide.steps[1].mapSources,[],'Reward mentions mus
 const withering = db.entities['Withering Heights'];
 const targetsOf = (quest, key) => quest.guide.steps.find(s => s.key === key).targets.map(id => db.map.markers.find(m => m.questId === quest.id && m.qlocation === id));
 for (const key of ['BreakTheThreeSeals', 'BreakRemainingtwoSeals', 'BreakTheFinalSeal']) {
-  const seals = targetsOf(withering, key);
+  const seals = targetsOf(withering, key).filter(m => !m.opens);
+  // The four god shrines (and Saradomin's missing piece) that bring down the Emberwood village barrier.
+  const shrines = targetsOf(withering, key).filter(m => m.opens);
+  assert.deepEqual(shrines.map(m => m.target).sort(), ['Missing shrine piece · Saradomin', 'Shrine to Armadyl', 'Shrine to Guthix', 'Shrine to Saradomin', 'Shrine to Zamorak'], key + ': the Emberwood barrier shrines');
+  assert(shrines.every(m => m.doneWhen === 'Quest_DeathQuestMain:EmberwoodSealBroken' && m.region === 'Emberwood'), key + ': the shrines are done with the Emberwood seal');
   assert.deepEqual(seals.map(m => m.entry.split('.').pop()).sort(), ['Emberwood', 'Silverthorn', 'Waterfall'], key + ': the seals, not the standing stones already read');
   assert.deepEqual(seals.map(m => m.doneWhen).sort(), ['Quest_DeathQuestMain:EmberwoodSealBroken', 'Quest_DeathQuestMain:SilverthornSealBroken', 'Quest_DeathQuestMain:WaterfallSealBroken']);
 }

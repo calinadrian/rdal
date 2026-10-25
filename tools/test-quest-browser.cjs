@@ -67,7 +67,14 @@ app.whenReady().then(async () => {
     // A broken seal leaves the list, the tracker and the map; the rest keep their Map buttons.
     await js(`trackedQuests=['Withering Heights'];onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'BreakTheThreeSeals',b:{SilverthornSealBroken:true}}], {VillageArea:true,FortressArea:false,FallArea:true});showItem('Withering Heights')`);
     assert(await js(`$('#detail .quest-target.done .quest-target-where').textContent==='Done · Silverthorn Keep' && $('#detail .current-objective .quest-target-count').textContent==='1 of 3 done'
-      && questTrackerObjective(E['Withering Heights']).lines.flatMap(l=>l.markers).length===2 && !questTrackerObjective(E['Withering Heights']).lines.flatMap(l=>l.markers).some(m=>m.entry.endsWith('Silverthorn'))`), 'A finished seal is ticked off everywhere');
+      && questTrackerObjective(E['Withering Heights']).lines.flatMap(l=>l.markers).filter(m=>!m.opens).length===2 && !questTrackerObjective(E['Withering Heights']).lines.flatMap(l=>l.markers).some(m=>m.entry.endsWith('Silverthorn'))`), 'A finished seal is ticked off everywhere');
+    // The four god shrines that bring down the Emberwood barrier are listed and tracked, but only the seals are counted.
+    assert(await js(`$$('#detail .current-objective .quest-target-where').filter(e=>e.textContent.includes('opens the way to the Emberwood Curse Seal')).length===5
+      && questTrackerObjective(E['Withering Heights']).lines.flatMap(l=>l.markers).filter(m=>m.opens).length===5`), 'The Emberwood barrier shrines are shown and tracked');
+    await js(`onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'BreakRemainingtwoSeals',b:{SilverthornSealBroken:true,EmberwoodSealBroken:true}}]);showItem('Withering Heights')`);
+    assert(await js(`!$$('#detail .current-objective .quest-target:not(.done) .quest-target-where').some(e=>e.textContent.includes('opens the way'))
+      && $('#detail .current-objective .quest-target-count').textContent==='2 of 3 done'`), 'With the Emberwood seal broken its shrines are done too');
+    await js(`onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'BreakTheThreeSeals',b:{SilverthornSealBroken:true}}], {VillageArea:true,FortressArea:false,FallArea:true});showItem('Withering Heights')`);
     assert(await js(`$('#content .quest-task.q-active .quest-row-progress')?.textContent.includes('1 of 3 done') || $$('#content .quest-row-progress').some(p=>p.textContent==='1 of 3 done')`), 'The journal row shows how many places are done');
     // With no exact interaction point, the areas follow the game's own map: hidden ones go, ones it shows for this quest come in.
     await js(`onQuestLog([{id:'Quest_DeathQuestMain',s:1,o:'FindACleansingPool'}], {CleansingPoolTarget:false,StandingStonesArea:true,NPCDeath:true})`);

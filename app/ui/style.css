@@ -450,16 +450,6 @@ body.game-map .map-highlight { bottom: 28px; background: var(--glass); border-co
 .legend-icon { width: 18px; height: 18px; flex: none; object-fit: contain; }
 .legend-icon.disc { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1.5px solid #000; box-sizing: border-box; }
 .legend-icon.disc img { width: 70%; height: 70%; object-fit: contain; }
-.legend-icon.live { background: #e8a020; border-color: #fff; }
-.nearby { margin-top: 6px; border-top: 1px solid var(--line); padding-top: 4px; max-width: 210px; }
-.nearby:empty { display: none; }
-.nearby-title { color: var(--text); font-weight: 600; margin-bottom: 2px; }
-.nearby-row { display: flex; gap: 8px; padding: 1px 0; cursor: default; }
-.nearby-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nearby-row.has-drops { cursor: pointer; }
-.nearby-row.has-drops:hover { color: var(--accent); }
-.nearby-row.alert { color: #ff8a7a; }
-.nearby-row.alert span:first-child::before { content: '⚠ '; color: #ff5040; }
 .map-legend .count { color: var(--muted); margin-left: auto; padding-left: 8px; }
 .map-tools { position: absolute; top: 16px; right: 16px; display: flex; justify-content: flex-end; flex-wrap: wrap; max-width: calc(100% - 32px); gap: 4px; }
 .map-tools button[hidden] { display: none; }
@@ -676,7 +666,6 @@ ol.objectives li.todo { color: #a0a0a0; }
 .creature-picture-art { display: block; max-width: 100%; height: 240px; object-fit: contain; }
 #detail .creature-picture-art { height: 180px; }
 img.icon.creature-art { object-fit: contain; padding: 2px; background: #202020; }
-.nearby-face { width: 18px; height: 18px; flex: none; border-radius: 50%; object-fit: contain; background: #252525; }
 
 /* Quiet chrome: content and game artwork carry the color. */
 ::selection { background: var(--accent-dim); color: #fff; }
