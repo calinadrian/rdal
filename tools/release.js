@@ -46,6 +46,9 @@ function main() {
   const subjects = git('log', '--no-merges', '--pretty=%s', previous ? previous + '..HEAD' : 'HEAD').split(/\r?\n/);
   // dist\prod holds only the release being published (older ones are on GitHub); dist\dev-test is for test builds.
   const prod = path.join(ROOT, 'dist', 'prod');
+  // The last release's app may be open from dist\prod: stop before anything there is removed.
+  const running = run('powershell.exe', ['-NoProfile', '-Command', `Get-Process | Where-Object { $_.Path -like '${prod.replace(/'/g, "''")}\\*' } | Select-Object -First 1 -ExpandProperty Path`], true);
+  if (running) throw Error('Close the app running from ' + running + ' first: the release rebuilds dist\\prod.');
   fs.rmSync(prod, { recursive: true, force: true });
   const notesFile = path.join(prod, 'release-notes.md');
   fs.mkdirSync(prod, { recursive: true });
