@@ -95,25 +95,33 @@ public sealed class Engine
         return false;
     }
 
+    // The pool grows while the game runs (loading a save adds the names of its quest flags), so a block past the
+    // ones known is looked up again. A name that could not be read is not remembered: it is tried again next time.
     public string Name(uint index)
     {
         if (_names.TryGetValue(index, out var s)) return s;
         uint block = index >> 16, offset = (index & 0xFFFF) * 2;
-        s = "";
-        if (block < _blocks.Length)
-        {
-            ulong e = _blocks[block] + offset;
-            ushort hdr = M.Read<ushort>(e);
-            int len = hdr >> 6;
-            bool wide = (hdr & 1) != 0;
-            if (len > 0 && len < 1024)
-            {
-                var b = M.Bytes(e + 2, wide ? len * 2 : len);
-                s = wide ? Encoding.Unicode.GetString(b) : Encoding.Latin1.GetString(b);
-            }
-        }
+        if (block >= _blocks.Length) RefreshNameBlocks();
+        if (block >= _blocks.Length || _blocks[block] == 0) return "";
+        ulong e = _blocks[block] + offset;
+        ushort hdr = M.Read<ushort>(e);
+        int len = hdr >> 6;
+        bool wide = (hdr & 1) != 0;
+        if (len <= 0 || len >= 1024) return "";
+        var b = M.Bytes(e + 2, wide ? len * 2 : len);
+        if (b.Length == 0) return "";
+        s = wide ? Encoding.Unicode.GetString(b) : Encoding.Latin1.GetString(b);
         _names[index] = s;
         return s;
+    }
+
+    void RefreshNameBlocks()
+    {
+        uint cur = M.Read<uint>(NamePool + 8);
+        if (cur == 0 || cur > 8192 || cur + 1 <= _blocks.Length) return;
+        var blocks = new ulong[cur + 1];
+        for (int b = 0; b <= cur; b++) blocks[b] = M.Ptr(NamePool + 0x10 + (ulong)b * 8);
+        _blocks = blocks;
     }
 
     // FName = { ComparisonIndex, Number }
