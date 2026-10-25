@@ -134,18 +134,43 @@ public sealed class Engine
 
     /* ---------- GUObjectArray ---------- */
 
+    // FChunkedFixedUObjectArray: Objects**, PreAllocated*, MaxElements, NumElements, MaxChunks, NumChunks.
+    // The exact chunk counts are checked first; a build or PC that sizes the array differently is still found by its
+    // objects (each knows its own index), and when nothing fits the nearest candidates are logged.
     public void FindObjectArray(byte[] module, Action<string> log)
     {
-        // FChunkedFixedUObjectArray: Objects**, PreAllocated*, MaxElements, NumElements, MaxChunks, NumChunks
+        if (FindObjectArray(module, log, strict: true) || FindObjectArray(module, log, strict: false)) return;
+        int shown = 0;
+        for (int o = 0; o + 32 <= module.Length && shown < 5; o += 8)
+        {
+            var s = module.AsSpan(o);
+            int max = BinaryPrimitives.ReadInt32LittleEndian(s[16..]), num = BinaryPrimitives.ReadInt32LittleEndian(s[20..]);
+            int maxChunks = BinaryPrimitives.ReadInt32LittleEndian(s[24..]), numChunks = BinaryPrimitives.ReadInt32LittleEndian(s[28..]);
+            ulong objects = BinaryPrimitives.ReadUInt64LittleEndian(s);
+            if (max < 0x10000 || max > (1 << 28) || num < 1000 || num > max || maxChunks < 1 || maxChunks > 8192
+                || numChunks < 1 || numChunks > maxChunks || !Memory.LooksLikePtr(objects)) continue;
+            ulong chunk0 = M.Ptr(objects), first = chunk0 == 0 ? 0 : M.Ptr(chunk0);
+            if (first == 0) continue;
+            log($"  candidate module+0x{o - 0x10:X}: max {max} num {num} chunks {maxChunks}/{numChunks}, chunk 0 at 0x{chunk0:X}, "
+                + $"object 0 at 0x{first:X} index {(first == 0 ? -1 : M.I32(first + OIndex))} name '{(first == 0 ? "" : Name(M.Read<uint>(first + OName)))}'");
+            shown++;
+        }
+        throw new Exception("GUObjectArray not found");
+    }
+
+    bool FindObjectArray(byte[] module, Action<string> log, bool strict)
+    {
         for (int o = 0; o + 32 <= module.Length; o += 4)
         {
             var s = module.AsSpan(o);
             int max = BinaryPrimitives.ReadInt32LittleEndian(s[16..]);
             int num = BinaryPrimitives.ReadInt32LittleEndian(s[20..]);
-            if (max < 0x10000 || max > (1 << 26) || num < 10000 || num > max) continue;
+            if (max < 0x10000 || max > (strict ? 1 << 26 : 1 << 28) || num < 10000 || num > max) continue;
             int maxChunks = BinaryPrimitives.ReadInt32LittleEndian(s[24..]);
             int numChunks = BinaryPrimitives.ReadInt32LittleEndian(s[28..]);
-            if (maxChunks != (max + ChunkSize - 1) / ChunkSize || numChunks != (num + ChunkSize - 1) / ChunkSize) continue;
+            int needed = (num + ChunkSize - 1) / ChunkSize;
+            if (strict ? maxChunks != (max + ChunkSize - 1) / ChunkSize || numChunks != needed
+                : numChunks < needed || maxChunks < numChunks || maxChunks > 8192) continue;
             ulong objects = BinaryPrimitives.ReadUInt64LittleEndian(s);
             if (!Memory.LooksLikePtr(objects)) continue;
 
@@ -155,12 +180,13 @@ public sealed class Engine
                 if (Validate())
                 {
                     ObjectArray = M.ModuleBase + (ulong)o - 0x10;
-                    log($"GUObjectArray at module+0x{o - 0x10:X}: {num} objects, item size {size}");
-                    return;
+                    log($"GUObjectArray at module+0x{o - 0x10:X}: {num} objects, item size {size}{(strict ? "" : $", chunks {maxChunks}/{numChunks}")}");
+                    return true;
                 }
             }
         }
-        throw new Exception("GUObjectArray not found");
+        _chunks = 0; NumObjects = 0;
+        return false;
     }
 
     bool Validate()

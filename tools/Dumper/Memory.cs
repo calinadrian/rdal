@@ -115,7 +115,9 @@ public sealed class Memory : IDisposable
         }
     }
 
-    // Reads [start, start+size) region by region; unreadable parts stay zero.
+    // Reads [start, start+size) region by region; unreadable parts stay zero. A chunk that fails as a whole is read
+    // again page by page, so one bad page does not hide the megabyte around it (the engine's globals live there).
+    public long Unreadable;
     public byte[] Snapshot(ulong start, ulong size)
     {
         var buf = new byte[size];
@@ -125,7 +127,12 @@ public sealed class Memory : IDisposable
             for (ulong a = s; a < e; a += 0x100000)
             {
                 int n = (int)Math.Min(0x100000, e - a);
-                ReadRaw(a, buf.AsSpan((int)(a - start), n));
+                if (ReadRaw(a, buf.AsSpan((int)(a - start), n))) continue;
+                for (ulong p = a; p < a + (ulong)n; p += PageSize)
+                {
+                    int m = (int)Math.Min((ulong)PageSize, a + (ulong)n - p);
+                    if (!ReadRaw(p, buf.AsSpan((int)(p - start), m))) Unreadable += m;
+                }
             }
         }
         return buf;

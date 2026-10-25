@@ -9,13 +9,17 @@ Directory.CreateDirectory(outDir);
 var sw = Stopwatch.StartNew();
 void Log(string s) => Console.Error.WriteLine($"[{sw.Elapsed.TotalSeconds,6:F1}s] {s}");
 
-var proc = Process.GetProcessesByName("RSDragonwilds-WinGDK-Shipping").Concat(Process.GetProcessesByName("RSDragonwilds-Win64-Shipping")).FirstOrDefault()
+// A copy left behind by a crash can linger without a window: the game being played is the one with a window, then
+// the one using the most memory.
+var proc = Process.GetProcessesByName("RSDragonwilds-WinGDK-Shipping").Concat(Process.GetProcessesByName("RSDragonwilds-Win64-Shipping"))
+    .OrderByDescending(p => { try { return p.MainWindowHandle != IntPtr.Zero; } catch { return false; } })
+    .ThenByDescending(p => { try { return p.WorkingSet64; } catch { return 0; } }).FirstOrDefault()
     ?? throw new Exception("RuneScape: Dragonwilds is not running.");
 using var mem = new Memory(proc);
 Log($"Attached to {proc.ProcessName} (pid {proc.Id}), module 0x{mem.ModuleBase:X} size 0x{mem.ModuleSize:X}");
 
 var module = mem.Snapshot(mem.ModuleBase, mem.ModuleSize);
-Log("Module snapshot read");
+Log(mem.Unreadable == 0 ? "Module snapshot read" : $"Module snapshot read, {mem.Unreadable / 1024} KB of it unreadable");
 var eng = new Engine(mem);
 eng.FindNamePool(module, Log);
 eng.FindObjectArray(module, Log);

@@ -14,6 +14,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'Dragonwilds AtlasLoot
 if (process.env.ATLAS_SNAPSHOT && process.env.ATLAS_TEST_PROFILE) app.setPath('userData', process.env.ATLAS_TEST_PROFILE);
 const DB_FILE = path.join(ROOT, 'data', 'db.json');
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
+const TRACKER_LOG = path.join(app.getPath('userData'), 'tracker.log');
 // mode: 'window' = normal app window (e.g. on a second monitor); 'overlay' = always on top of the game.
 // minimap: a WoW-style round map in a corner of the game while it runs (minimapPosition once dragged).
 const DEFAULTS = {
@@ -243,10 +244,14 @@ function startTracker() {
       }
     }
   });
-  // Its last words say why it stopped (no access to the game, the game still loading, ...).
+  // Its last words say why it stopped (no access to the game, the game still loading, ...). The latest run's messages
+  // are kept in tracker.log beside the settings, for a player to send when tracking will not start on their PC.
   let lastError = '', started = Date.now(), sampled = false;
+  let log = null;
+  try { log = fs.createWriteStream(TRACKER_LOG); log.on('error', () => { log = null; }); log.write(`AtlasLoot ${app.getVersion()} · ${new Date().toISOString()}\n`); } catch {}
   tracker.stdout.once('data', () => { sampled = true; });
   tracker.stderr.on('data', (d) => {
+    log?.write(d);
     const lines = String(d).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const exception = /^System\.[\w.]*Exception( \(\d+\))?:\s*/;
     const reason = lines.find(l => l.startsWith('Unhandled exception.') || exception.test(l));
@@ -256,6 +261,7 @@ function startTracker() {
   const failed = (error) => {
     if (tracker !== self) return; // 'error' and 'exit' can both come
     tracker = null;
+    log?.end(error ? `Stopped: ${error}\n` : 'Stopped\n');
     // Every start reads the whole game module again: one that keeps failing waits longer each time (up to a minute).
     trackerRetry = sampled || Date.now() - started > 60000 ? 5000 : Math.min(60000, trackerRetry * 2);
     if (win && !win.isDestroyed()) { gameMap.follow(false, false); minimap.player({ ok: false }); samples.send({ ok: false, offline: true, error: sampled ? '' : error }); }
@@ -266,7 +272,7 @@ function startTracker() {
   // In plain words; a game still loading is just waiting for your character.
   tracker.on('exit', () => failed(/GWorld not found/.test(lastError) ? ''
     : /OpenProcess failed \(error 5\)|Access is denied/.test(lastError) ? 'Windows denied access to the game. If the game runs as administrator, run AtlasLoot as administrator too'
-    : lastError || 'its tracker stopped'));
+    : `${lastError || 'its tracker stopped'} (details in ${TRACKER_LOG})`));
 }
 let trackerRetry = 2500;
 
