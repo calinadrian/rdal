@@ -43,6 +43,24 @@ app.whenReady().then(async()=>{
   assert.equal(await js(`$('#detail .current-objective').querySelectorAll('.quest-pin-button').length`),3,'Named quest enemies retain exact interaction pins');
   await js(`q=ent('The Wild Hunt');onQuestLog([{id:q.id,s:1,o:'BringHeart'}]);showItem(q.name)`);
   assert.equal(await js(`$('#detail .current-objective').querySelectorAll('.quest-targets-map').length`),0,'Hand-in must not keep hunting targets');
+  // Every body-part counter keeps the grave pins; individual quest bools mark the recovered parts.
+  for(const [key,flags,left] of [['BodyParts.0',{},3],['BodyParts.1',{HasTorso:true},2],['BodyParts.2',{HasTorso:true,HasArms:true},1]]) {
+   await js(`q=ent('The Great Body Robbery');onQuestLog([{id:q.id,s:1,o:${JSON.stringify(key)},b:${JSON.stringify(flags)}}]);showItem(q.name);questMapMode='active';questMapStepMode='current';`);
+   assert.equal(await js(`$('#detail .current-objective').querySelectorAll('.quest-target').length`),3,key+' lists the three graves');
+   assert.equal(await js(`$('#detail .current-objective').querySelectorAll('.quest-pin-button').length`),left,key+' offers maps for the remaining graves');
+   assert.equal(await js(`$('#detail .current-objective .quest-target-count').textContent`),`${3-left} of 3 done`);
+   assert(await js(`questStepMarkers(q,${JSON.stringify(key)}).every(m=>m.precision==='interaction' && m.target.startsWith('Grave · ') && questMapMarkerVisible(m))`),'Graves survive the current-step map filter');
+   await js(`$('#detail .current-objective .quest-pin-button').click()`);await tick();
+   assert(await js(`questMapStepMode==='current' && selectedQuestMarker.target.startsWith('Grave · ') && MapView.navigation().highlight.markers.length===1`),'A grave map button focuses its exact pin without switching to all steps');
+   assert(await js(`(()=>{const canvas=$('#map'),rect=canvas.getBoundingClientRect();canvas.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,clientX:rect.x+rect.width/2,clientY:rect.y+rect.height/2}));return $('#map-tip').textContent.includes(selectedQuestMarker.target);})()`),'The grave is painted and pickable with category filters disabled');
+   await js(`back()`);
+  }
+  await js(`onQuestLog([{id:q.id,s:1,o:'BodyParts.0'}]);showItem(q.name);$('#detail .current-objective .quest-show-left').click()`);await tick();
+  assert(await js(`MapView.navigation().highlight.markers.length===3 && MapView.navigation().highlight.markers.every(i=>db.map.markers[i].target.startsWith('Grave · '))`),'Show all frames exactly the three graves');
+  if(!process.env.ATLAS_NO_CAPTURES)fs.writeFileSync(path.join(root,'test-fixtures/quest-body-robbery-graves.png'),(await win.webContents.capturePage()).toPNG());
+  await js(`onQuestLog([{id:q.id,s:1,o:'AddPartsToTable',b:{HasTorso:true,HasArms:true,HasLegs:true}}]);showItem(q.name)`);
+  assert(await js(`questStepMarkers(q,'AddPartsToTable').every(m=>m.target==='Examination Table') && !$('#detail .current-objective').textContent.includes('Grave · ')`),'The next objective directs the player to the table');
+  console.log('PASS: three exact graves at every body-part counter, collected parts ticked off, current-step visibility, individual/all map actions, real map picking and table hand-in');
   console.log('PASS: monster/creature kill targets, direct quest map action, disabled filters, progress refresh, Back context, exact named-enemy pins, hand-in state and desktop/compact layouts');
   clearTimeout(timer);app.exit(0);
  }catch(e){console.error(e);clearTimeout(timer);app.exit(1)}

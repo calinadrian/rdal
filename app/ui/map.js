@@ -368,19 +368,26 @@ window.MapView = (() => {
 
   const following = () => follow && playerHere() && performance.now() > followPause;
 
-  function loop() {
+  let lastFrame = 0;
+  function loop(now) {
+    requestAnimationFrame(loop);
+    // Keep live data for the minimap, but never paint a retained full-size canvas behind a closed map.
+    if (document.hidden || !canvas.getClientRects().length) return;
+    // High-refresh game monitors can run at 360 Hz; the companion map has a separate 60 FPS budget.
+    if (now - lastFrame < 1000 / 60 - 0.5) return;
+    const elapsed = lastFrame ? Math.min(100, now - lastFrame) : 1000 / 60;
+    lastFrame = now;
     if (following()) {
       // Glide towards the player instead of snapping, so movement and returning from a drag look smooth.
       const cw = viewW, ch = viewH;
       const [u, v] = toImg(player.x, player.y);
       const dx = cw / 2 - u * scale - ox, dy = ch / 2 - v * scale - oy;
       if (Math.abs(dx) + Math.abs(dy) > 0.5) {
-        const k = Math.abs(dx) + Math.abs(dy) > 2000 ? 1 : 0.2;
+        const k = Math.abs(dx) + Math.abs(dy) > 2000 ? 1 : 1 - Math.pow(0.8, elapsed / (1000 / 60));
         ox += dx * k; oy += dy * k; dirty = true;
       }
     }
     if (dirty) draw();
-    requestAnimationFrame(loop);
   }
 
   // WoW-style quest areas: spawns of tracked kill/loot targets merge into one soft shaded region.

@@ -36,43 +36,28 @@ const saveSettings = () => {
   fs.writeFileSync(SETTINGS_FILE + '.tmp', JSON.stringify(settings, null, 2));
   fs.renameSync(SETTINGS_FILE + '.tmp', SETTINGS_FILE);
 };
-const overlay = () => settings.mode === 'overlay';
 
-function applyMode() {
-  win.setAlwaysOnTop(overlay(), 'screen-saver');
-  win.setOpacity(overlay() ? settings.opacity : 1);
-  win.setSkipTaskbar(overlay());
-}
-
-function reveal({ focus = true } = {}) {
+function cancelHandoff() {
   focusHandoff?.kill();
   focusHandoff = null;
-  if (win.isMinimized()) win.restore();
-  focus ? win.show() : win.showInactive();
-  applyMode();
-  if (focus) { win.focus(); win.webContents.send('shown'); }
 }
-
-// Overlay mode hides; window mode minimises like any other app.
-function conceal() {
+function handoff({ closeMap = false, complete } = {}) {
   // Hiding a foreground Electron window does not reliably reactivate the game on Windows.
   // Start the helper while we still own the foreground, so it inherits activation permission.
-  focusHandoff?.kill();
+  cancelHandoff();
   const handoff = execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
-    path.join(__dirname, 'focus-game.ps1')], { windowsHide: true, timeout: 5000 }, (error) => {
+    path.join(__dirname, 'focus-game.ps1'), ...(closeMap ? ['-CloseMap'] : [])], { windowsHide: true, timeout: 5000 }, (error) => {
     if (focusHandoff !== handoff) return;
     focusHandoff = null;
     if (error && !error.killed) console.warn('Could not return keyboard focus to Dragonwilds:', error.message);
+    complete?.();
   });
   focusHandoff = handoff;
-  overlay() ? win.hide() : win.minimize();
 }
-
-function toggle() {
-  if (gameMap.dismiss()) return; // back to the game's own map
-  if (win.isVisible() && !win.isMinimized() && win.isFocused()) return conceal();
-  reveal();
-}
+const applyMode = () => overlayHost.applyMode({ force: true });
+const reveal = options => overlayHost.reveal(options);
+const conceal = () => overlayHost.conceal();
+const toggle = () => overlayHost.toggle();
 
 function registerHotkey(accel) {
   globalShortcut.unregisterAll();
@@ -113,9 +98,9 @@ function createWindow() {
     });
   }
   // While it covers the game's map the window is not where you put it: nothing is remembered then.
-  const remember = () => { if (gameMap.shown()) return; if (!win.isMaximized()) settings.bounds = win.getBounds(); saveSettings(); };
-  win.on('maximize', () => { if (gameMap.shown()) return; settings.maximized = true; saveSettings(); });
-  win.on('unmaximize', () => { if (gameMap.shown()) return; settings.maximized = false; remember(); });
+  const remember = () => { if (gameMap.shown() || gameMap.restoring()) return; if (!win.isMaximized()) settings.bounds = win.getBounds(); saveSettings(); };
+  win.on('maximize', () => { if (gameMap.shown() || gameMap.restoring()) return; settings.maximized = true; saveSettings(); });
+  win.on('unmaximize', () => { if (gameMap.shown() || gameMap.restoring()) return; settings.maximized = false; remember(); });
   win.on('moved', remember);
   win.on('resized', remember);
   // Links open in the normal browser, never inside the overlay.
@@ -131,6 +116,34 @@ const minimap = require('./minimap').createMinimap({
 const syncMinimap = () => minimap.sync(gameRunning);
 // The app's map stands in for the game's own map (game-map.js), told by the tracker when that map opens and closes.
 const gameMap = require('./game-map').createGameMap({ window: () => win, settings: () => settings, applyMode, minimap });
+const overlayHost = require('./overlay').createOverlay({ window: () => win, settings: () => settings, gameMap, handoff, cancelHandoff });
+let foreground = { game: false, atlas: false }, focusWatcher = null;
+function watchFocus() {
+  if (app.isQuitting || focusWatcher) return;
+  const watcher = focusWatcher = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
+    path.join(__dirname, 'watch-game-focus.ps1'), '-AtlasPid', String(process.pid)], { windowsHide: true });
+  let pending = '';
+  watcher.stdout.on('data', chunk => {
+    pending += chunk;
+    let end;
+    while ((end = pending.indexOf('\n')) >= 0) {
+      const line = pending.slice(0, end).trim(); pending = pending.slice(end + 1);
+      try { foreground = JSON.parse(line); } catch { continue; }
+      gameMap.focus(foreground.game);
+      overlayHost.follow(foreground);
+      minimap.focus(foreground.game);
+    }
+  });
+  watcher.stderr.on('data', () => {});
+  watcher.on('error', error => console.warn('Game focus watcher:', error.message));
+  watcher.on('exit', () => {
+    if (focusWatcher !== watcher) return;
+    focusWatcher = null;
+    foreground = { game: false, atlas: false };
+    gameMap.focus(false); overlayHost.follow(foreground); minimap.focus(false);
+    if (!app.isQuitting) setTimeout(watchFocus, 3000).unref();
+  });
+}
 
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
@@ -220,6 +233,7 @@ function startTracker() {
       if (msg.key) gameMap.key(msg.key);
       else if (win && !win.isDestroyed()) {
         gameMap.follow(msg.ok ? msg.map ?? null : false, !!msg.focus, !!msg.teleport);
+        overlayHost.follow(foreground);
         minimap.player(msg);
         samples.send(msg);
       }
@@ -364,7 +378,8 @@ app.whenReady().then(() => {
   if (!process.env.ATLAS_SNAPSHOT) { if (app.isPackaged) ensureShortcuts(); setAutoStart(settings.autoStart); }
   if (!process.env.ATLAS_SNAPSHOT && app.isPackaged) watchUpdates();
   if (!process.env.ATLAS_SNAPSHOT) watchGame();
+  if (!process.env.ATLAS_SNAPSHOT) watchFocus();
 });
-app.on('before-quit', () => { app.isQuitting = true; focusHandoff?.kill(); tracker?.kill(); });
+app.on('before-quit', () => { app.isQuitting = true; focusHandoff?.kill(); focusWatcher?.kill(); tracker?.kill(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', (e) => e.preventDefault?.());

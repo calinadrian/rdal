@@ -18,7 +18,9 @@
   the keyboard, so the game keeps it; the mouse pans, zooms and hovers. It only follows the game's real map, so
   nothing opens while you are alt-tabbed or typing, and switching away from the game puts it away. Afterwards the app
   is as you left it, on the same page: an overlay stays hidden, and a window goes back where it was (minimized if it
-  was on the game's screen). The show/hide hotkey shows the game's own map instead until it next opens.
+  was on the game's screen). The show/hide hotkey closes both maps and opens the ordinary AtlasLoot overlay;
+  press it again to close the overlay and return keyboard control to the game. The overlay and minimap hide
+  when you switch to another application and return when you return to the game, unless you explicitly closed the overlay.
   It opens on you, still and uncluttered: **Quests · Explore · Gather · Everything** at the top choose what it shows
   in one click (**Customize** opens the full filters), your tracked quests sit top right (click one to see where to
   go), and **+ / − / centre on me** sit bottom right. Hovering a place says what it is, what it is for and what a

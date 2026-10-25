@@ -57,6 +57,7 @@ app.whenReady().then(async () => {
     // The real minimap window: top-right of the main screen, drawn from the relayed scene.
     let stored = { minimap: true, minimapSize: 200, minimapRotate: false, minimapZoom: 2 };
     const minimap = require(path.join(target, 'app/minimap.js')).createMinimap({ settings: () => stored, update: (p) => { stored = { ...stored, ...p }; } });
+    minimap.focus(true);
     const show = async (patch, file) => {
       stored = { ...stored, ...patch }; minimap.sync(true);
       await tick(1500);
@@ -69,6 +70,9 @@ app.whenReady().then(async () => {
     const area = screen.getPrimaryDisplay().workArea, at = north.mm.getBounds();
     assert.deepEqual([at.x, at.y, at.width], [area.x + area.width - 280, area.y + 16, 264], 'It starts in the top-right corner: ' + JSON.stringify(at));
     assert(!north.mm.isFocusable() && north.mm.isAlwaysOnTop() && north.mm.isVisible(), 'It floats over the game without taking focus');
+    minimap.focus(false); assert(!north.mm.isVisible(), 'Alt-Tab hides the minimap over other applications');
+    minimap.suspend(true); minimap.suspend(false); assert(!north.mm.isVisible(), 'Closing the large map cannot reveal a minimap outside the game');
+    minimap.focus(true); assert(north.mm.isVisible(), 'Returning to the game restores the minimap');
     const dial = await north.run(`(()=>{const r=document.querySelector('.dial').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width}})()`);
     assert.equal(Math.round(dial.x + dial.w), 264 - 8, 'The minimap keeps to the right, in the corner');
     const { width } = north.shot.getSize(), px = north.shot.toBitmap(), k = width / 264;

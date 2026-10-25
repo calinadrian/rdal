@@ -1,8 +1,9 @@
 # Explicitly return keyboard input to the game after the user hides AtlasLoot.
+param([switch]$CloseMap)
 $ErrorActionPreference = 'Stop'
 $game = Get-Process -Name 'RSDragonwilds-WinGDK-Shipping', 'RSDragonwilds-Win64-Shipping' -ErrorAction SilentlyContinue |
     Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-if (-not $game) { exit 0 }
+if (-not $game) { if ($CloseMap) { exit 1 }; exit 0 }
 
 Add-Type @'
 using System;
@@ -25,6 +26,25 @@ public static class AtlasGameFocus {
     [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hwnd, int command);
+    [StructLayout(LayoutKind.Sequential)] struct KeyboardInput {
+        public ushort key, scan; public uint flags, time; public UIntPtr extra;
+    }
+    [StructLayout(LayoutKind.Explicit, Size = 40)] struct Input {
+        [FieldOffset(0)] public uint type;
+        [FieldOffset(8)] public KeyboardInput keyboard;
+    }
+    [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint count, Input[] inputs, int size);
+    public static bool CloseMap(IntPtr hwnd) {
+        if (GetForegroundWindow() != hwnd) return false;
+        // One ordinary M press, only after the game owns the keyboard and shortcut modifiers are up.
+        var inputs = new[] {
+            new Input { type = 1, keyboard = new KeyboardInput { scan = 0x32, flags = 0x8 } },
+            new Input { type = 1, keyboard = new KeyboardInput { scan = 0x32, flags = 0xA } }
+        };
+        if (SendInput(2, inputs, Marshal.SizeOf(typeof(Input))) != 2) return false;
+        Thread.Sleep(150); // Let the game consume both events before the overlay takes focus.
+        return true;
+    }
     public static bool Activate(IntPtr hwnd) {
         // The shortcut fires on key-down. Transfer focus after its modifiers are released,
         // otherwise the game can receive only part of the Ctrl/Shift/Alt key sequence.
@@ -64,3 +84,4 @@ public static class AtlasGameFocus {
 }
 '@
 if (-not [AtlasGameFocus]::Activate($game.MainWindowHandle)) { exit 1 }
+if ($CloseMap -and -not [AtlasGameFocus]::CloseMap($game.MainWindowHandle)) { exit 1 }

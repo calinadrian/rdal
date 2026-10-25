@@ -4,8 +4,8 @@
 // the game, so nothing pops up while you are alt-tabbed. It never takes the keyboard, so M and Esc still reach the
 // game; the mouse pans, zooms and hovers as usual. Afterwards the app is put back as it was, on the page you had
 // open: an overlay hides again, and a normal window returns to where it stood (or waits in the taskbar when it
-// stood on the game's screen, so it never ends up over the game). The show/hide hotkey puts the map away until the
-// game's map next opens. A map opened at a lodestone to teleport is always left to the game.
+// stood on the game's screen, so it never ends up over the game). The show/hide hotkey switches to the ordinary
+// overlay (main.js also closes the game's map). A lodestone teleport map is always left to the game.
 const electron = require('electron');
 
 // window() is the main window, settings() the current settings; applyMode comes from main.js.
@@ -15,13 +15,21 @@ function createGameMap({ window, settings, applyMode, minimap }) {
   let dismissed = false;  // put away with the hotkey while the game's map stayed open
   let before = null;      // how the window was, to put it back
   let remaximize = null;  // maximizes it again the next time it shows
+  let foreground = null; // independent foreground watcher overrides delayed player samples
+  let restoreTimer = null;
+  let lastFocused = false;
+  let closingKey = false; // consume the helper's M when the tracker is using the key-only fallback
   const overlay = () => settings().mode === 'overlay';
 
   // teleport: the game's map was opened at a lodestone (E) to pick where to go, so the game's own map stays.
   function follow(next, focused, teleport = false) {
+    if (foreground !== null) focused = foreground;
+    lastFocused = focused;
     if (teleport) next = false;
     open = next;
-    if (!next) dismissed = false;
+    if (next !== null) closingKey = false;
+    if (next === false) dismissed = false;
+    if (restoreTimer) return;
     if (!settings().mapOnM) { if (shown) hide(); return; }
     if (next === null) { if (shown && !focused) hide(); return; } // M presses decide (key)
     const want = next && focused && !dismissed;
@@ -30,17 +38,22 @@ function createGameMap({ window, settings, applyMode, minimap }) {
   }
 
   function show() {
+    if (restoreTimer) return;
     const win = window();
     shown = true;
     if (remaximize) win.removeListener('show', remaximize);
     // The screen the game is on: where the mouse is while you play.
     const display = electron.screen.getDisplayNearestPoint(electron.screen.getCursorScreenPoint());
     const bounds = win.getNormalBounds();
-    before = { bounds, maximized: win.isMaximized(), state: !win.isVisible() ? 'hidden' : win.isMinimized() ? 'minimized' : 'shown',
+    before = { bounds, maximized: win.isMaximized(), fullscreen: win.isFullScreen(), state: !win.isVisible() ? 'hidden' : win.isMinimized() ? 'minimized' : 'shown',
       onGameScreen: electron.screen.getDisplayMatching(bounds).id === display.id };
     if (before.maximized) win.unmaximize();
     win.setFocusable(false);
-    win.setBounds(display.bounds);
+    // Move to the game's display at normal size first, so fullscreen retains valid restore bounds.
+    if (!before.onGameScreen) win.setPosition(display.bounds.x + Math.max(0, Math.round((display.bounds.width - bounds.width) / 2)),
+      display.bounds.y + Math.max(0, Math.round((display.bounds.height - bounds.height) / 2)));
+    // Native fullscreen removes the Windows resize frame, rounded corners and taskbar reservation.
+    win.setFullScreen(true);
     win.setOpacity(1);
     win.setAlwaysOnTop(true, 'screen-saver');
     win.webContents.send('game-map', true);
@@ -53,35 +66,49 @@ function createGameMap({ window, settings, applyMode, minimap }) {
     const win = window();
     win.hide();
     win.webContents.send('game-map', false);
-    win.setBounds(before.bounds);
+    win.setFullScreen(before.fullscreen);
+    // Electron restores WS_VISIBLE when leaving fullscreen on Windows, even after hide().
+    win.hide();
     win.setFocusable(true);
-    applyMode();
-    if (before.maximized) win.once('show', remaximize = () => { remaximize = null; win.maximize(); });
-    if (!overlay() && before.state !== 'hidden') {
-      if (before.state === 'shown' && !before.onGameScreen) win.showInactive();
-      else win.minimize();
-    }
-    minimap?.suspend(false);
+    // The native fullscreen restore finishes on the next Windows message-loop turn.
+    // Bounds set in that same call stack can be overwritten by its saved position.
+    const home = before;
+    restoreTimer = setTimeout(() => {
+      if (win.isDestroyed()) { restoreTimer = null; return; }
+      win.setBounds(home.bounds);
+      if (home.maximized) win.once('show', remaximize = () => { remaximize = null; win.maximize(); });
+      if (!overlay() && home.state !== 'hidden') {
+        if (home.state === 'shown' && !home.onGameScreen) win.showInactive();
+        else win.minimize();
+      }
+      minimap?.suspend(false);
+      restoreTimer = null;
+      if (open === true && lastFocused && !dismissed) follow(open, lastFocused);
+    }, 30);
     shown = false;
+    applyMode();
   }
 
   // Without a reading of the game's map, M pressed in the game stands in for it: the map comes and goes with M
   // (and goes with Esc).
   function key(k) {
     if (!settings().mapOnM || open !== null) return;
+    if (closingKey) { closingKey = false; return; }
     if (k === 'M') shown ? hide() : show();
     else if (k === 'Escape' && shown) hide();
   }
 
-  // The hotkey while it covers the game's map: back to the game's own map until it next opens.
+  // Suppress stale map-open samples while the hotkey closes that map and reveals the app.
   function dismiss() {
-    if (!shown) return false;
+    if (!shown && (open !== true || dismissed)) return false;
     dismissed = true;
-    hide();
+    closingKey = open === null;
+    if (shown) hide();
     return true;
   }
 
-  return { follow, key, dismiss, shown: () => shown };
+  function focus(focused) { foreground = focused; follow(open, focused); }
+  return { follow, key, dismiss, focus, shown: () => shown, restoring: () => !!restoreTimer };
 }
 
 module.exports = { createGameMap };

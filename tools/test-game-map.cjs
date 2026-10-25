@@ -15,7 +15,7 @@ const timer = setTimeout(() => { console.error('Game map test timed out'); app.e
 const tick = (ms = 300) => new Promise(r => setTimeout(r, ms));
 
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ x: 100, y: 100, width: 900, height: 640, show: false, webPreferences: { preload: path.join(target, 'app/preload.js'), sandbox: false, backgroundThrottling: false } });
+  const win = new BrowserWindow({ x: 100, y: 100, width: 900, height: 640, frame: false, show: false, webPreferences: { preload: path.join(target, 'app/preload.js'), sandbox: false, backgroundThrottling: false } });
   win.webContents.on('console-message', (_e, level, message) => { if (level >= 2) console.error('Renderer: ' + message); });
   const js = code => win.webContents.executeJavaScript(code);
   let settings = { mode: 'overlay', mapOnM: true };
@@ -30,6 +30,7 @@ app.whenReady().then(async () => {
     page: await js(`document.body.classList.contains('game-map') && state.module === 'map' && getComputedStyle($('.titlebar')).display === 'none' && getComputedStyle($('#modules')).display === 'none'`) });
   try {
     await win.loadFile(path.join(target, 'app/ui/index.html'));
+    if (process.env.ATLAS_TEST_ZOOM) win.webContents.setZoomFactor(Number(process.env.ATLAS_TEST_ZOOM));
     await tick(800);
     // Playing near a Nature Spirit spawn with The Wild Hunt and Dragon Slayer tracked, following on in the app's map.
     const me = await js(`(()=>{const m=db.map.markers.find(m=>m.n==='Nature Spirit'&&!m.d);return {ok:true,world:'L_World',x:m.x+2500,y:m.y+1500,z:m.z,yaw:-30}})()`);
@@ -37,8 +38,9 @@ app.whenReady().then(async () => {
       setTracked('The Wild Hunt',true);setTracked('Dragon Slayer',true);onPlayer(${JSON.stringify(me)});
       selectModule('map');MapView.setFollow(true);selectModule('quests');`);
     // The game screen is where the mouse is: keep it on the main screen whatever the real mouse does meanwhile.
-    const main = screen.getPrimaryDisplay().bounds;
+    const primary = screen.getPrimaryDisplay(), main = primary.bounds;
     screen.getCursorScreenPoint = () => ({ x: main.x + main.width / 2, y: main.y + main.height / 2 });
+    screen.getDisplayNearestPoint = () => primary;
     const home = win.getBounds();
     const screenBounds = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds;
 
@@ -52,6 +54,9 @@ app.whenReady().then(async () => {
     let now = await covering();
     assert(now.shown && now.visible && now.page, 'Opening the game map shows only the app map: ' + JSON.stringify(now));
     assert.deepEqual(now.bounds, screenBounds, 'It covers the game screen');
+    assert(win.isFullScreen(), 'The map has no desktop resize frame');
+    assert.deepEqual(win.getContentBounds(), screenBounds, 'The drawable map reaches every display edge');
+    assert(await js(`(()=>{const r=$('#mapview').getBoundingClientRect();return r.x===0 && r.y===0 && Math.abs(r.width-innerWidth)<1 && Math.abs(r.height-innerHeight)<1;})()`), 'The map fills the renderer without clipped grid rows or borders');
     assert(!now.focusable, 'It never takes the keyboard, so M and Esc reach the game');
     assert.deepEqual(suspended, [true], 'The minimap steps aside');
 
@@ -85,8 +90,9 @@ app.whenReady().then(async () => {
     await js(`[...document.querySelectorAll('#quest-tracker .tracker-quest')][0].click()`); await tick();
     assert(await js(`MapView.highlightLabel()==='The Wild Hunt' && state.module==='map' && !state.detail`), 'Clicking a quest frames its targets, nothing else opens');
     await js(`MapView.setHighlight(null); syncMapHighlight(); $('#map-center').click()`); await tick();
-    assert.deepEqual(await js(`(()=>{const v=MapView.navigation().viewport;return [Math.round(v.u*1000),Math.round(v.v*1000)]})()`),
-      [Math.round(view.center.u * 1000), Math.round(view.center.v * 1000)], 'Centre on me returns to you');
+    const centered = await js(`(()=>{const v=MapView.navigation().viewport;return [v.u,v.v]})()`);
+    assert(centered.every((value, axis) => Math.abs(value - [view.center.u, view.center.v][axis]) < 0.001),
+      'Centre on me returns to you within map-pixel rounding after the native fullscreen resize');
     await tick(200);
     if (!process.env.ATLAS_NO_CAPTURES) fs.writeFileSync(path.join(root, 'test-fixtures', 'game-map.png'), (await win.webContents.capturePage()).toPNG());
     // A hover card: what it is, what it is for, what a click does.
@@ -97,12 +103,17 @@ app.whenReady().then(async () => {
     await tick(200);
     if (!process.env.ATLAS_NO_CAPTURES) fs.writeFileSync(path.join(root, 'test-fixtures', 'game-map-hover.png'), (await win.webContents.capturePage()).toPNG());
     await js(`$('#map').dispatchEvent(new MouseEvent('mouseleave')); MapView.centerOnPlayer(0.5)`);
+    await js(`MapView.setDestination(db.map.markers.find(m=>m.n==='Nature Spirit'&&!m.d))`);await tick();
+    assert(await js(`(()=>{const r=$('#map-waypoint').getBoundingClientRect(),m=$('#mapview').getBoundingClientRect(),v=$('.game-map-views').getBoundingClientRect();return !$('#map-waypoint').hidden && r.top>=v.bottom && r.bottom<=m.bottom && r.left>=m.left && r.right<=m.right;})()`), 'The destination card sits fully inside the map below the view buttons');
+    if (!process.env.ATLAS_NO_CAPTURES) fs.writeFileSync(path.join(root, 'test-fixtures', 'game-map-edges.png'), (await win.webContents.capturePage()).toPNG());
+    await js(`MapView.setDestination(null)`);
 
     // Alt-tab away with the game's map still open: it goes; back in the game it returns.
     gameMap.follow(true, false); await tick();
     now = await covering();
-    assert(!now.shown && !now.visible && now.focusable, 'Switching away from the game puts it away');
+    assert(!now.shown && !now.visible && now.focusable, 'Switching away from the game puts it away: ' + JSON.stringify(now));
     assert.deepEqual(now.bounds, home, 'The window goes back where it was');
+    assert(!win.isFullScreen() && win.isResizable(), 'Normal window sizing is restored');
     assert(!(await js(`document.body.classList.contains('game-map')`)), 'The app layout comes back');
     assert(await js(`MapView.isFollowing() && Preferences.get('mapFollow')==='1'`), 'Following in the app comes back with your page');
     gameMap.follow(true, true); await tick();
@@ -151,6 +162,10 @@ app.whenReady().then(async () => {
     assert(!win.isVisible() && !gameMap.shown(), 'Fallback: M again makes it disappear');
     gameMap.key('M'); gameMap.key('Escape'); await tick();
     assert(!win.isVisible(), 'Fallback: Esc makes it disappear');
+    gameMap.key('M');await tick();gameMap.dismiss();await tick();gameMap.key('M');await tick();
+    assert(!gameMap.shown(), 'Fallback: the helper map-closing M must not reopen the AtlasLoot map');
+    gameMap.key('M');await tick();assert(gameMap.shown(), 'Fallback: the next player M opens the map normally');
+    gameMap.key('Escape');await tick();
     assert(await js(`state.module === 'quests'`), 'Fallback: your page is left as it was');
 
     // As a normal window it is just as immersive, and the window comes back as it was afterwards: open on another
@@ -184,6 +199,11 @@ app.whenReady().then(async () => {
     settings = { mode: 'overlay', mapOnM: false };
     win.hide(); gameMap.follow(false, true); gameMap.follow(true, true); await tick();
     assert(!win.isVisible(), 'Off means off');
+    settings = { mode: 'overlay', mapOnM: true };
+    gameMap.focus(false); gameMap.follow(true, true); await tick();
+    assert(!gameMap.shown(), 'Delayed player samples cannot reopen a map over another application');
+    gameMap.focus(true);await tick();assert(gameMap.shown(), 'Returning to the game restores its open map');
+    gameMap.follow(false, true);await tick();
     console.log('PASS: app map covers the game screen only while the game map is open and focused, no keyboard, minimap aside; disappears with the game map even when the app showed before, app page and saved page untouched; alt-tab hides, stray M ignored, hotkey dismisses until next open, immersive M fallback; window mode covers too and returns minimized on the game screen' + (screen.getAllDisplays().length > 1 ? ' or in place on another screen' : '') + '; setting off');
     clearTimeout(timer); app.exit(0);
   } catch (e) { console.error(e); clearTimeout(timer); app.exit(1); }

@@ -227,7 +227,8 @@ function clarifyObjective(id, objective) {
   if (id === 'Quest_FH_GhostQuest' && /^FindGhosts/.test(objective.key)) return step('Find the three ghosts in Fellhollow, speak to each and fulfil their requests.', [count],
     ['FH_GhostQuest.GhostOne', 'FH_GhostQuest.GhostTwo', 'FH_GhostQuest.GhostThree']);
   if (id === 'Quest_FH_LettersForTheDead' && counter) return step('Find the missing letters in Fellhollow and deliver them to the postboxes for Postie Pete.', [count]);
-  if (id === 'Quest_GreatBodyRobbery' && /^BodyParts/.test(objective.key)) return step('Dig up three body parts from graves around Bloodblight Swamp, then take them to Fenkenstrain’s tower.', [count]);
+  if (id === 'Quest_GreatBodyRobbery' && /^BodyParts/.test(objective.key)) return step('Dig up three body parts from graves around Bloodblight Swamp, then take them to Fenkenstrain’s tower.', [count],
+    ['GreatBodyRobbery.Coffin01', 'GreatBodyRobbery.Coffin02', 'GreatBodyRobbery.Coffin03']);
   if (id === 'Quest_SQ2_AnimalLover' && counter) return step('Find the three missing Journal Pages in Dowdun Reach, then return them to Vannaka.', [count]);
   if (id === 'Quest_Contact' && /^CrystalShard/.test(objective.key)) return step('Find the remaining missing Vault Guardians and recover their Crystal Helix fragments.', [count]);
   if (id === 'Quest_DR_MainQuest' && /Collect the Shards/.test(objective.text)) return step('Collect the 13 Dreaming Stone Shards around Dowdun Reach.', [count, 'The numbered variants of this objective are collection counts, not separate tasks.']);
@@ -246,6 +247,9 @@ function clarifyObjective(id, objective) {
 const labels = {
   'FTUEQuests.FTUEQ1EntryWOM': 'Wise Old Man',
   'DeathQuestMain.WomAtGFExit': 'Wise Old Man · Ashien’s Watch',
+  'GreatBodyRobbery.Coffin01': 'Grave · torso',
+  'GreatBodyRobbery.Coffin02': 'Grave · arms',
+  'GreatBodyRobbery.Coffin03': 'Grave · legs',
   'UmS_MainQuest.TribeAGarou.TaskGiver1': 'Lagra the Butcher',
   'UmS_MainQuest.TribeAGarou.TaskGiver2': 'Domri the Merchant',
   'UmS_MainQuest.TribeAGarou.TaskGiver3': 'Valas the Blacksmith',

@@ -356,7 +356,10 @@ body.quests-mode:not(.map-mode):not(.map-detail-open) #detail { display: none; }
    top, your quests on the right, zoom at the bottom right), soft dark edges, and a hint that fades away. */
 body.game-map {
   --glass: rgba(14, 12, 9, .9); --glass-line: rgba(214, 167, 86, .38); --cream: #f1dfb0; --quest: #ffd040;
+  border: 0;
 }
+body.game-map .layout { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+body.game-map .mapview { border: 0; }
 body.game-map .titlebar, body.game-map .statusbar, body.game-map #modules, body.game-map #map-navigation { display: none; }
 body.game-map.map-mode .layout { grid-template-columns: minmax(0, 1fr) var(--w-detail, clamp(220px, 24vw, 304px)); }
 body.game-map.map-mode:not(.map-detail-open) .layout { grid-template-columns: minmax(0, 1fr); }

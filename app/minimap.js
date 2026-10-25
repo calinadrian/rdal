@@ -12,6 +12,7 @@ const WIDTH = 264; // room for the quest list, which is wider than the small and
 // settings() returns the current settings; update(patch) changes and saves them.
 function createMinimap({ settings, update, icon }) {
   let win = null;
+  let gameFocused = false;
   let scene = { ok: false };
   let content = 0; // the page's height with its quest list, as the minimap window reports it
   const size = () => SIZES.includes(settings().minimapSize) ? settings().minimapSize : 200;
@@ -57,7 +58,7 @@ function createMinimap({ settings, update, icon }) {
       mm.webContents.send('minimap:options', options());
       mm.webContents.send('minimap:scene', scene);
     });
-    mm.once('ready-to-show', () => { if (!suspended) mm.showInactive(); });
+    mm.once('ready-to-show', () => { if (!suspended && gameFocused) mm.showInactive(); });
     mm.on('closed', () => { if (win === mm) win = null; });
   }
 
@@ -86,7 +87,11 @@ function createMinimap({ settings, update, icon }) {
   let suspended = false;
   function suspend(on) {
     suspended = on;
-    if (win && !win.isDestroyed()) on ? win.hide() : win.showInactive();
+    if (win && !win.isDestroyed()) !on && gameFocused ? win.showInactive() : win.hide();
+  }
+  function focus(on) {
+    gameFocused = on;
+    if (win && !win.isDestroyed()) on && !suspended ? win.showInactive() : win.hide();
   }
 
   // Your position straight from the tracker, so the minimap keeps moving with you even while the main window is
@@ -95,7 +100,7 @@ function createMinimap({ settings, update, icon }) {
     if (win && !win.isDestroyed() && !suspended) win.webContents.send('minimap:player', sample.ok ? { x: sample.x, y: sample.y, yaw: sample.yaw } : null);
   }
 
-  return { sync, suspend, player, bounds, window: () => win };
+  return { sync, suspend, focus, player, bounds, window: () => win };
 }
 
 module.exports = { createMinimap };

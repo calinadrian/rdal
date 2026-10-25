@@ -69,6 +69,17 @@ assert(fsQuest.guide.steps[0].targets.some(id => db.map.markers.some(m => m.sour
 const rune = db.entities['Rune Mysteries'];
 assert(rune.guide.steps.every(s => s.targets.some(id => db.map.markers.some(m => m.sourceId === id && m.target === 'Zanik'))));
 assert(db.entities['The Great Body Robbery'].guide.steps.find(s => s.key === 'Objective5').instruction.includes('get struck by lightning'));
+const robbery = db.entities['The Great Body Robbery'];
+const graves = db.map.markers.filter(m => m.questId === robbery.id && /\.Coffin0[123]$/.test(m.entry));
+assert.equal(graves.length, 3, 'The collection uses the three actual grave interactions');
+assert.deepEqual(graves.map(m => [m.entry.split('.').pop(), m.target, m.doneWhen.split(':')[1]]).sort(), [
+  ['Coffin01', 'Grave · torso', 'HasTorso'], ['Coffin02', 'Grave · arms', 'HasArms'], ['Coffin03', 'Grave · legs', 'HasLegs'],
+]);
+for (const key of ['BodyParts.0', 'BodyParts.1', 'BodyParts.2']) {
+  assert.deepEqual([...robbery.guide.steps.find(s => s.key === key).targets].sort(), graves.map(m => m.sourceId).sort(), key + ': every collection counter links to all three graves');
+  assert(graves.every(m => m.qsteps.includes(key)), key + ': graves must appear in the current-step map filter');
+}
+assert(!graves.some(m => m.qstart || m.qsteps.some(key => !key.startsWith('BodyParts.'))), 'Graves are collection targets, not quest pickups or later hand-ins');
 assert(db.entities['Mark Day'].guide.steps.find(s => s.key === 'ConvinceNoble.1').targets.length === 3);
 for (const name of ['Rag and Bone Garou', "The Mirror Crack'd", 'Beast in the Sand', 'Scaling Difficulties']) {
   assert(db.map.markers.filter(m => m.ref === name && m.precision === 'interaction').every(m => !m.target.includes('[PH]')), 'Remove placeholder names from actionable pins');
