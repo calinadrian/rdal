@@ -16,11 +16,11 @@ app.whenReady().then(async()=>{
  try {
   await win.loadFile(path.join(target,'app/ui/index.html'));win.showInactive();await tick();
   await js(`localStorage.removeItem('questLog');questLog=null;trackedQuests=[];selectModule('quests');`);
-  assert(await js(`!$('#content .quest-tracker') && document.querySelectorAll('#content .quest-task .track-toggle').length>0`),'Overview rows carry a Track tickbox instead of a second tracker');
+  assert(await js(`!$('#content .quest-tracker') && !$('#list .track-toggle') && !!$('#list .quest-other')`),'Quest browsing has no tracking controls');
 
   // Pin from the guide: the kill target and the item it drops are both tracked, with the amount from the objective.
   await js(`window.q=ent('The Wild Hunt');onQuestLog([{id:q.id,s:1,o:'HuntBeast'}]);showItem(q.name)`);
-  await js(`[...document.querySelectorAll('#detail .track-button')].find(b=>b.textContent==='Track quest').click()`);
+  await js(`[...document.querySelectorAll('#detail .track-button')].find(b=>b.getAttribute('aria-pressed')==='false').click()`);
   assert(await js(`isTracked('The Wild Hunt')`));
   const lines=await js(`questTrackerObjective(q).lines.map(l=>[l.kind,l.name,l.qty,l.markers.length])`);
   assert(lines.some(([k,n,,c])=>k==='kill'&&n==='Nature Spirit'&&c>0),JSON.stringify(lines));

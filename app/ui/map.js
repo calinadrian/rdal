@@ -42,12 +42,14 @@ window.MapView = (() => {
     const tip = document.getElementById('map-tip'); if (tip) tip.hidden = true;
   }
   function saveViewport() {
+    if (questLogMode) return;
     if (!fitted || W <= 1 || !canvas?.width || !canvas?.height) return;
     const view = { scale, u: (viewW / 2 - ox) / scale / W, v: (viewH / 2 - oy) / scale / H };
     if (layer) layerViews[layer.id] = view;
     else Preferences.setJSON('mapViewport', view);
   }
   let highlight = null;        // { label, markers:Set }
+  let questLogMode = false, questLogReturn = null;
   let tracked = new Map();     // marker -> { index, quest, kind, label } for pinned quests' current objectives
   let player = null;
   let paintedPlayer = null;  // visual interpolation only; live lookups keep the latest tracker coordinates
@@ -268,9 +270,9 @@ window.MapView = (() => {
     // Dungeon plans must fit in the visible area beside the legend, below the controls.
     // Fitting to the raw canvas puts the left-hand rooms behind the legend.
     const legend = document.getElementById('map-legend');
-    const left = legend && !legend.hidden ? Math.min(cw * 0.6, legend.getBoundingClientRect().width + 32) : 16;
-    const tools = document.querySelector('.map-tools');
-    const top = tools ? tools.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top + 16 : 16, bottom = 52;
+    const left = !questLogMode && legend && !legend.hidden ? Math.min(cw * 0.6, legend.getBoundingClientRect().width + 32) : 16;
+    const tools = document.querySelector(questLogMode ? '#quest-map-caption' : '.map-tools');
+    const top = tools ? tools.getBoundingClientRect().bottom - canvas.getBoundingClientRect().top + 16 : 16, bottom = questLogMode ? 16 : 52;
     const width = Math.max(1, cw - left - 16), height = Math.max(1, ch - top - bottom);
     scale = Math.min(width / W, height / H);
     ox = left + (width - W * scale) / 2; oy = top + (height - H * scale) / 2;
@@ -303,8 +305,9 @@ window.MapView = (() => {
   // Vent type, discovery and quest filters, which the minimap applies too.
   const filtered = (m, highlighted) => resourceTypeEnabled(m.c, m.n) && (m.c !== 'vent' || ventTypeEnabled(m.ventType || 'unknown')) && MapDiscovery.visible(m) && (m.c !== 'quest' || questVisibility(m, highlighted));
   // Tracked quest targets stay on the map whatever the filters or highlight, like WoW's quest areas.
-  const visible = (m) => onLayer(m) && (tracked.has(m) || filtered(m, !!highlight?.markers.has(m)) && (highlight ? highlight.markers.has(m)
-    : enabled.has(m.c) && (frame().res / scale < DENSE_UNITS || !RESOURCE_CATEGORIES.includes(m.c))));
+  const visible = (m) => onLayer(m) && (questLogMode ? !!highlight?.markers.has(m)
+    : tracked.has(m) || filtered(m, !!highlight?.markers.has(m)) && (highlight ? highlight.markers.has(m)
+      : enabled.has(m.c) && (frame().res / scale < DENSE_UNITS || !RESOURCE_CATEGORIES.includes(m.c))));
   // Ring around quest markers: blue for quests in progress, gold for givers of quests you can still take.
   const questRing = (m) => {
     if (m.c !== 'quest' || !m.ref) return null;
@@ -419,7 +422,7 @@ window.MapView = (() => {
   const AREA_UNITS = 3000;     // world radius around each recorded spawn
   let areaCanvas = null;
   function drawTrackedAreas(cw, ch) {
-    const spawns = [...tracked].filter(([m, t]) => t.kind !== 'goto' && m.c !== 'quest' && onLayer(m));
+    const spawns = [...tracked].filter(([m, t]) => t.kind !== 'goto' && m.c !== 'quest' && onLayer(m) && (!questLogMode || highlight?.markers.has(m)));
     if (!spawns.length) return;
     const dpr = devicePixelRatio;
     areaCanvas ||= document.createElement('canvas');
@@ -675,7 +678,7 @@ window.MapView = (() => {
           Math.hypot(a.x - player.x, a.y - player.y) <= Math.hypot(b.x - player.x, b.y - player.y) ? a : b) : candidates[0]);
       } else if (!markers?.length && !preserveDestination) selectDestination(null);
       highlight = markers && markers.length ? { label, markers: new Set(markers) } : null;
-      if (highlight && follow) { follow = false; followChanged(false); } // framing the results beats following
+      if (highlight && follow) { follow = false; if (!questLogMode) followChanged(false); } // framing the results beats following
       if (highlight) {
         // Results can sit in dungeons: stay on this layer if it has any, else open the one with the most.
         if (!markers.some(onLayer)) {
@@ -722,7 +725,7 @@ window.MapView = (() => {
       if (now !== playerLayer || storey !== playerLevel) {
         const follows = now !== playerLayer || (layer === playerLayer && level >= 0);
         playerLayer = now; playerLevel = storey;
-        if (canvas && follows) setLayer(now, storey);
+        if (canvas && follows && !questLogMode) setLayer(now, storey);
       }
       dirty = true;
     },
@@ -735,6 +738,19 @@ window.MapView = (() => {
     setOthers(list) { others = list.map(o => ({ ...o, live: true, c: 'player', n: o.n || 'Another player' })); dirty = true; },
     setQuestStatus(fn) { questStatus = fn; dirty = true; },
     setQuestVisibility(fn) { questVisibility = fn; dirty = true; },
+    // The quest log borrows this canvas without changing the full map's filters, viewport or follow setting.
+    setQuestLogMode(on) {
+      if (on === questLogMode) return;
+      if (on) questLogReturn = { navigation: this.navigation(), follow, destination };
+      questLogMode = on;
+      if (!on && questLogReturn) {
+        this.restoreNavigation(questLogReturn.navigation);
+        follow = questLogReturn.follow;
+        selectDestination(questLogReturn.destination);
+        questLogReturn = null;
+      }
+      dirty = true; hover = null;
+    },
     setQuestInfo(fn) { questInfo = fn; dirty = true; },
     setTracked(entries) {
       tracked = new Map();
@@ -797,7 +813,7 @@ window.MapView = (() => {
       hover = null;
       document.getElementById('map-tip').hidden = true;
       setLayer(marker.d ? map.dungeons.find(d => d.id === marker.d) : null, marker.d ? markerLevel(marker) : 0);
-      follow = false; followChanged(false);
+      follow = false; if (!questLogMode) followChanged(false);
       const focus = () => { centerOn(marker.x, marker.y, 0.45); saveViewport(); };
       if (W > 1) focus(); else pendingFocus = focus;
     },

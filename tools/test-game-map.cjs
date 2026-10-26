@@ -115,7 +115,7 @@ app.whenReady().then(async () => {
     assert.deepEqual(now.bounds, home, 'The window goes back where it was');
     assert(!win.isFullScreen() && win.isResizable(), 'Normal window sizing is restored');
     assert(!(await js(`document.body.classList.contains('game-map')`)), 'The app layout comes back');
-    assert(await js(`MapView.isFollowing() && Preferences.get('mapFollow')==='1'`), 'Following in the app comes back with your page');
+    assert(await js(`document.body.classList.contains('quest-log-map') && !MapView.isFollowing() && Preferences.get('mapFollow')==='1'`), 'Quest destination focus and the saved full-map follow setting come back with your page');
     gameMap.follow(true, true); await tick();
     assert(gameMap.shown() && win.isVisible(), 'Back in the game with its map open, it returns');
 

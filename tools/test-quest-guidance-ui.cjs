@@ -50,7 +50,7 @@ app.whenReady().then(async () => {
     assert(await js(`$('#detail').textContent.includes('Progress unknown') && !$('#detail [role=progressbar]')`));
     win.setSize(900, 780); await wait();
     await screenshot('compact');
-    assert(await js(`$('#detail').scrollWidth<=$('#detail').clientWidth+1 && $('#detail .detail-navigation').getBoundingClientRect().width>0`));
+    assert(await js(`$('#detail').scrollWidth<=$('#detail').clientWidth+1 && $('#detail .quest-back-list').getBoundingClientRect().width>0`));
     await js(`for(const q of Object.values(E).filter(e=>e.kind==='quest')){showItem(q.name,{push:false});if(!$('#detail .quest-hero h1') || !$('#detail .quest-now-card, #detail .quest-removed-note'))throw Error('Missing quest reader: '+q.name)}`);
     console.log('PASS: all quest readers; clear walkthrough/current objective; entrance vs exact interior pin; map picking with filters off; three pedestals; completed/unknown progress; Back context; desktop/compact layouts');
     clearTimeout(timeout); app.exit(0);
