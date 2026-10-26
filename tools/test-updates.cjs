@@ -36,7 +36,7 @@ test('checks are serialized; ready updates install only once and keep notes if d
   assert.equal(f.checks(), 1);
   assert.equal(f.updater.autoDownload, true);
   assert.equal(f.updater.autoInstallOnAppQuit, true);
-  assert.equal(f.updater.autoRunAppAfterInstall, true);
+  assert.equal(f.updater.autoRunAppAfterInstall, false);
   f.updater.emit('update-available', { version: '0.1.1', releaseNotes: '### Fixed\n- A crash' });
   f.updater.emit('download-progress', { percent: 42.4 });
   assert.equal(f.updates.get().percent, 42);

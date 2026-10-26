@@ -60,7 +60,7 @@ SectionEnd
 const build = spawnSync(compiler, ['/V2', script], { encoding: 'utf8', windowsHide: true });
 assert.equal(build.status, 0, build.stderr + build.stdout);
 for (const [args, expected, label] of [
-  [['/S', '--updated'], 1, 'old-client update installed on normal quit'],
+  [['/S', '--updated'], 0, 'update installed on normal quit leaves the app closed'],
   [['/S', '--updated', '--force-run'], 1, 'explicit Update now without duplicate launch'],
   [['/S'], 0, 'unrelated silent install'],
 ]) {
